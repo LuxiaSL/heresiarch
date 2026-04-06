@@ -1,0 +1,61 @@
+# --- Defensive abilities ---
+
+- id: damage_split
+  name: Damage Split
+  category: DEFENSIVE
+  target: SINGLE_ALLY
+  is_innate: false
+  description: "Absorbs a percentage of ally damage and redirects it to self. DEF scaling reduces redirected damage taken."
+  effects:
+    - def_buff: 20
+      stat_scaling: DEF
+      scaling_coefficient: 0.3
+      duration_rounds: 3
+
+- id: brace_strike
+  name: Brace Strike
+  category: DEFENSIVE
+  target: SINGLE_ENEMY
+  is_innate: false
+  description: "A disciplined attack that hardens the user's guard. Deals STR damage and grants a minor DEF buff for 1 turn."
+  effects:
+    - base_damage: 8
+      stat_scaling: STR
+      scaling_coefficient: 0.4
+    - def_buff: 15
+      duration_rounds: 1
+
+- id: anchor
+  name: Anchor
+  category: DEFENSIVE
+  target: SELF
+  is_innate: false
+  description: "Plants feet and steels resolve. Reduces effectiveness of Disrupt-quality effects for the duration."
+  effects:
+    - stat_scaling: DEF
+      scaling_coefficient: 0.0
+      duration_rounds: 3
+
+- id: endure
+  name: Endure
+  category: DEFENSIVE
+  target: SELF
+  is_innate: false
+  description: "Brace for the worst. Survive one lethal hit at 1 HP, once per fight. Scales with DEF and RES."
+  effects:
+    - stat_scaling: DEF
+      scaling_coefficient: 0.0
+      duration_rounds: 0
+
+- id: ward
+  name: Ward
+  category: DEFENSIVE
+  target: SINGLE_ALLY
+  is_innate: false
+  description: "Conjures a protective ward that bolsters RES for 3 rounds. Scales with RES."
+  effects:
+    - stat_buff:
+        RES: 30
+      stat_scaling: RES
+      scaling_coefficient: 0.0
+      duration_rounds: 3

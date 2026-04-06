@@ -1,0 +1,31 @@
+- id: minor_potion
+  name: Minor Potion
+  slot: ACCESSORY_1
+  is_consumable: true
+  heal_amount: 50
+  base_price: 30
+  description: "Restores 50 HP. Tastes like shrine water."
+
+- id: potion
+  name: Potion
+  slot: ACCESSORY_1
+  is_consumable: true
+  heal_amount: 150
+  base_price: 80
+  description: "Restores 150 HP. Standard issue."
+
+- id: major_potion
+  name: Major Potion
+  slot: ACCESSORY_1
+  is_consumable: true
+  heal_amount: 400
+  base_price: 200
+  description: "Restores 400 HP. For when it matters."
+
+- id: elixir
+  name: Elixir
+  slot: ACCESSORY_1
+  is_consumable: true
+  heal_percent: 1.0
+  base_price: 500
+  description: "Restores full HP. Liquid regret prevention."

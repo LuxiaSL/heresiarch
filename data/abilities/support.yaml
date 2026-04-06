@@ -1,0 +1,61 @@
+# --- Support abilities ---
+
+- id: bestow_split
+  name: Bestow Split
+  category: SUPPORT
+  target: SINGLE_ALLY
+  is_innate: false
+  description: "Cast Damage Split on an ally. THE support enabler — lets non-tanks protect their team."
+  effects:
+    - stat_scaling: MAG
+      scaling_coefficient: 0.0
+      duration_rounds: 3
+
+- id: haste
+  name: Haste
+  category: SUPPORT
+  target: SINGLE_ALLY
+  is_innate: false
+  description: "Accelerates an ally, granting bonus SPD for 3 rounds. Scales with MAG."
+  effects:
+    - stat_buff:
+        SPD: 50
+      stat_scaling: MAG
+      scaling_coefficient: 0.0
+      duration_rounds: 3
+
+- id: infuse
+  name: Infuse
+  category: SUPPORT
+  target: SINGLE_ALLY
+  is_innate: false
+  description: "Channels magical energy into an ally, boosting their MAG scaling on their next attack."
+  effects:
+    - stat_buff:
+        MAG: 40
+      stat_scaling: MAG
+      scaling_coefficient: 0.0
+      duration_rounds: 1
+
+- id: mark
+  name: Mark
+  category: SUPPORT
+  target: SINGLE_ENEMY
+  is_innate: false
+  description: "Marks an enemy — all attacks against the marked target deal bonus damage for 3 rounds."
+  effects:
+    - stat_scaling: MAG
+      scaling_coefficient: 0.0
+      duration_rounds: 3
+
+- id: sacrifice
+  name: Sacrifice
+  category: SUPPORT
+  target: SINGLE_ALLY
+  is_innate: false
+  description: "Transfer own HP to an ally. Heals the target for 30% of user's max HP at the cost of the same amount."
+  effects:
+    - heal_percent: 0.3
+      self_damage_ratio: 0.3
+      stat_scaling: DEF
+      scaling_coefficient: 0.0

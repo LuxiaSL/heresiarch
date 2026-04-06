@@ -55,4 +55,7 @@ class Item(BaseModel):
     extra_def_reduction: float = 0.0
     leech_percent: float = 0.0
     base_price: int = 0
+    is_consumable: bool = False
+    heal_amount: int = 0
+    heal_percent: float = 0.0
     description: str = ""

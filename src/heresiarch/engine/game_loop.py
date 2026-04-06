@@ -337,3 +337,174 @@ class GameLoop:
         new_characters[mc_id] = new_mc
         new_party = party.model_copy(update={"characters": new_characters})
         return run.model_copy(update={"party": new_party})
+
+    # --- Equipment Management ---
+
+    def equip_item(
+        self, run: RunState, character_id: str, item_id: str, slot: str
+    ) -> RunState:
+        """Equip an item from stash onto a character's slot.
+
+        If the slot is occupied, the old item goes back to stash.
+        Raises ValueError if character/item not found or slot invalid.
+        """
+        party = run.party
+        if character_id not in party.characters:
+            raise ValueError(f"Unknown character: {character_id}")
+        if item_id not in party.stash:
+            raise ValueError(f"Item '{item_id}' not in stash")
+        if slot not in ("WEAPON", "ARMOR", "ACCESSORY_1", "ACCESSORY_2"):
+            raise ValueError(f"Invalid slot: {slot}")
+
+        item = self.game_data.items.get(item_id) or party.items.get(item_id)
+        if item is None:
+            raise ValueError(f"Item data not found: {item_id}")
+        if item.is_consumable:
+            raise ValueError("Cannot equip a consumable")
+
+        char = party.characters[character_id]
+        new_stash = list(party.stash)
+        new_items = dict(party.items)
+        new_equipment = dict(char.equipment)
+
+        # Unequip current item in slot if any
+        old_item_id = new_equipment.get(slot)
+        if old_item_id:
+            new_stash.append(old_item_id)
+
+        # Equip new item
+        new_stash.remove(item_id)
+        new_equipment[slot] = item_id
+        new_items[item_id] = item
+
+        # Update abilities from equipment
+        new_abilities = [
+            a for a in char.abilities
+            if a == self.game_data.jobs[char.job_id].innate_ability_id
+        ]
+        for s, eid in new_equipment.items():
+            if eid and eid in new_items and new_items[eid].granted_ability_id:
+                new_abilities.append(new_items[eid].granted_ability_id)
+
+        new_char = char.model_copy(
+            update={"equipment": new_equipment, "abilities": new_abilities}
+        )
+        new_characters = dict(party.characters)
+        new_characters[character_id] = new_char
+        new_party = party.model_copy(
+            update={"characters": new_characters, "stash": new_stash, "items": new_items}
+        )
+        return run.model_copy(update={"party": new_party})
+
+    def unequip_item(
+        self, run: RunState, character_id: str, slot: str
+    ) -> RunState:
+        """Unequip item from a slot back to stash.
+
+        Raises ValueError if slot is empty or stash is full.
+        """
+        party = run.party
+        if character_id not in party.characters:
+            raise ValueError(f"Unknown character: {character_id}")
+
+        char = party.characters[character_id]
+        item_id = char.equipment.get(slot)
+        if not item_id:
+            raise ValueError(f"Slot '{slot}' is empty")
+        if len(party.stash) >= STASH_LIMIT:
+            raise ValueError("Stash is full")
+
+        new_stash = list(party.stash) + [item_id]
+        new_equipment = dict(char.equipment)
+        new_equipment[slot] = None
+
+        new_char = char.model_copy(update={"equipment": new_equipment})
+        new_characters = dict(party.characters)
+        new_characters[character_id] = new_char
+        new_party = party.model_copy(
+            update={"characters": new_characters, "stash": new_stash}
+        )
+        return run.model_copy(update={"party": new_party})
+
+    # --- Party Management ---
+
+    def swap_party_member(
+        self, run: RunState, active_id: str, reserve_id: str
+    ) -> RunState:
+        """Swap an active party member with a reserve member."""
+        party = run.party
+        if active_id not in party.active:
+            raise ValueError(f"'{active_id}' is not in active roster")
+        if reserve_id not in party.reserve:
+            raise ValueError(f"'{reserve_id}' is not in reserve")
+
+        new_active = [reserve_id if x == active_id else x for x in party.active]
+        new_reserve = [active_id if x == reserve_id else x for x in party.reserve]
+
+        new_party = party.model_copy(
+            update={"active": new_active, "reserve": new_reserve}
+        )
+        return run.model_copy(update={"party": new_party})
+
+    # --- Consumables ---
+
+    def use_consumable(
+        self, run: RunState, item_id: str, target_character_id: str
+    ) -> RunState:
+        """Use a consumable from stash on a character. Removes the item."""
+        party = run.party
+        if item_id not in party.stash:
+            raise ValueError(f"Item '{item_id}' not in stash")
+        if target_character_id not in party.characters:
+            raise ValueError(f"Unknown character: {target_character_id}")
+
+        item = self.game_data.items.get(item_id) or party.items.get(item_id)
+        if item is None or not item.is_consumable:
+            raise ValueError(f"'{item_id}' is not a consumable")
+
+        char = party.characters[target_character_id]
+        job = self.game_data.jobs[char.job_id]
+        max_hp = calculate_max_hp(
+            job.base_hp, job.hp_growth, char.level, char.base_stats.DEF
+        )
+
+        # Apply healing
+        heal = item.heal_amount + int(max_hp * item.heal_percent)
+        new_hp = min(char.current_hp + heal, max_hp)
+
+        new_stash = list(party.stash)
+        new_stash.remove(item_id)
+
+        new_char = char.model_copy(update={"current_hp": new_hp})
+        new_characters = dict(party.characters)
+        new_characters[target_character_id] = new_char
+        new_party = party.model_copy(
+            update={"characters": new_characters, "stash": new_stash}
+        )
+        return run.model_copy(update={"party": new_party})
+
+    # --- Safe Zone Healing ---
+
+    def enter_safe_zone(self, run: RunState) -> RunState:
+        """Heal all party members to full HP upon entering a safe zone.
+
+        Called between zones — at shops, recruitment points, zone transitions.
+        """
+        party = run.party
+        new_characters = dict(party.characters)
+
+        for char_id in party.active + party.reserve:
+            if char_id not in new_characters:
+                continue
+            char = new_characters[char_id]
+            job = self.game_data.jobs[char.job_id]
+            max_hp = calculate_max_hp(
+                job.base_hp, job.hp_growth, char.level, char.base_stats.DEF
+            )
+            if char.current_hp < max_hp:
+                new_characters[char_id] = char.model_copy(
+                    update={"current_hp": max_hp}
+                )
+
+        new_party = party.model_copy(update={"characters": new_characters})
+        return run.model_copy(update={"party": new_party})

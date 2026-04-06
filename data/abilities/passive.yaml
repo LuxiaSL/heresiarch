@@ -1,0 +1,60 @@
+# --- Passive abilities ---
+
+- id: blood_rush
+  name: Blood Rush
+  category: PASSIVE
+  target: SELF
+  trigger: HP_BELOW_THRESHOLD
+  trigger_threshold: 0.3
+  is_innate: false
+  description: "Adrenaline kicks in when HP drops below 30%. Grants a massive SPD bonus."
+  effects:
+    - stat_buff:
+        SPD: 50
+
+- id: vengeance
+  name: Vengeance
+  category: PASSIVE
+  target: SELF
+  trigger: ON_ALLY_KO
+  is_innate: false
+  description: "When an ally falls, fury surges. Massive STR and MAG buff for 3 rounds."
+  effects:
+    - stat_buff:
+        STR: 50
+        MAG: 50
+      duration_rounds: 3
+
+- id: momentum
+  name: Momentum
+  category: PASSIVE
+  target: SELF
+  trigger: ON_KILL
+  is_innate: false
+  description: "Killing an enemy refunds 1 action point, allowing an additional action this turn."
+  effects:
+    - stat_scaling: STR
+      scaling_coefficient: 0.0
+
+- id: counter_hex
+  name: Counter Hex
+  category: PASSIVE
+  target: SINGLE_ENEMY
+  trigger: RES_GATE_PASSED
+  is_innate: false
+  description: "When a RES gate check is passed, reflects the debuff back to the caster."
+  effects:
+    - quality: DISRUPT
+      stat_scaling: RES
+      scaling_coefficient: 0.3
+
+- id: siphon
+  name: Siphon
+  category: PASSIVE
+  target: SELF
+  trigger: ON_HIT_RECEIVED
+  is_innate: false
+  description: "Each hit received feeds a growing arcane hunger. Gain a small stacking MAG buff on every hit taken."
+  effects:
+    - stat_buff:
+        MAG: 5
