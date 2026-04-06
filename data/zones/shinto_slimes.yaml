@@ -1,0 +1,191 @@
+# Slime Curriculum: Shinto early game (zones 1-15)
+# Teaches basic combat, AOE value, archetype differences, boss mechanics
+
+- id: zone_01
+  name: Shrine Entrance
+  zone_level: 1
+  region: shinto_slimes
+  xp_cap_level: 5
+  loot_tier: 1
+  shop_item_pool:
+    - iron_blade
+    - spirit_lens
+  encounters:
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [1]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [2]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [2]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [3]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [1]
+      is_boss: true
+
+- id: zone_02
+  name: Mossy Path
+  zone_level: 2
+  region: shinto_slimes
+  xp_cap_level: 6
+  loot_tier: 1
+  shop_item_pool:
+    - iron_blade
+    - spirit_lens
+    - endurance_plate
+  encounters:
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [2]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [3]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [2]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [3]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [4]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [1]
+      is_boss: true
+
+- id: zone_03
+  name: Bamboo Thicket
+  zone_level: 3
+  region: shinto_slimes
+  xp_cap_level: 8
+  loot_tier: 1
+  shop_item_pool:
+    - iron_blade
+    - spirit_lens
+    - endurance_plate
+    - gale_brace
+  encounters:
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [3]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [4]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [3]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [4]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [4]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [2]
+      is_boss: true
+
+- id: zone_05
+  name: Spirit Clearing
+  zone_level: 5
+  region: shinto_slimes
+  xp_cap_level: 10
+  loot_tier: 1
+  recruitment_chance: 0.3
+  shop_item_pool:
+    - iron_blade
+    - spirit_lens
+    - endurance_plate
+    - gale_brace
+    - fortress_ring
+  encounters:
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [3]
+    - enemy_templates: [fodder_slime, brute_oni]
+      enemy_counts: [2, 1]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [4]
+    - enemy_templates: [fodder_slime, caster_kitsune]
+      enemy_counts: [2, 1]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [3]
+    - enemy_templates: [brute_oni]
+      enemy_counts: [1]
+      is_boss: true
+
+- id: zone_08
+  name: Torii Descent
+  zone_level: 8
+  region: shinto_slimes
+  xp_cap_level: 14
+  loot_tier: 2
+  recruitment_chance: 0.3
+  shop_item_pool:
+    - runic_edge
+    - spirit_lens
+    - endurance_plate
+    - gale_brace
+    - fortress_ring
+    - leech_fang
+  encounters:
+    - enemy_templates: [fodder_slime, caster_kitsune]
+      enemy_counts: [2, 1]
+    - enemy_templates: [brute_oni, fodder_slime]
+      enemy_counts: [1, 2]
+    - enemy_templates: [speeder_tengu, fodder_slime]
+      enemy_counts: [1, 2]
+    - enemy_templates: [caster_kitsune, fodder_slime]
+      enemy_counts: [1, 3]
+    - enemy_templates: [brute_oni, speeder_tengu]
+      enemy_counts: [1, 1]
+    - enemy_templates: [fodder_slime, support_tanuki]
+      enemy_counts: [3, 1]
+    - enemy_templates: [brute_oni, caster_kitsune]
+      enemy_counts: [1, 1]
+      is_boss: true
+
+- id: zone_12
+  name: Inner Sanctum
+  zone_level: 12
+  region: shinto_slimes
+  xp_cap_level: 18
+  loot_tier: 2
+  recruitment_chance: 0.3
+  shop_item_pool:
+    - runic_edge
+    - resonance_orb
+    - endurance_plate
+    - gale_brace
+    - fortress_ring
+    - leech_fang
+  encounters:
+    - enemy_templates: [brute_oni, caster_kitsune]
+      enemy_counts: [1, 1]
+    - enemy_templates: [speeder_tengu, fodder_slime, support_tanuki]
+      enemy_counts: [1, 2, 1]
+    - enemy_templates: [brute_oni, speeder_tengu]
+      enemy_counts: [1, 1]
+    - enemy_templates: [caster_kitsune, support_tanuki]
+      enemy_counts: [2, 1]
+    - enemy_templates: [brute_oni, caster_kitsune, speeder_tengu]
+      enemy_counts: [1, 1, 1]
+    - enemy_templates: [brute_oni, support_tanuki]
+      enemy_counts: [1, 2]
+      is_boss: true
+
+- id: zone_15
+  name: Giga Slime Lair
+  zone_level: 15
+  region: shinto_slimes
+  xp_cap_level: 20
+  loot_tier: 3
+  shop_item_pool:
+    - runic_edge
+    - resonance_orb
+    - endurance_plate
+    - gale_brace
+    - fortress_ring
+    - leech_fang
+  encounters:
+    - enemy_templates: [brute_oni, caster_kitsune, fodder_slime]
+      enemy_counts: [1, 1, 2]
+    - enemy_templates: [speeder_tengu, caster_kitsune, support_tanuki]
+      enemy_counts: [1, 1, 1]
+    - enemy_templates: [brute_oni, speeder_tengu, fodder_slime]
+      enemy_counts: [1, 1, 3]
+    - enemy_templates: [caster_kitsune, support_tanuki, fodder_slime]
+      enemy_counts: [2, 1, 2]
+    - enemy_templates: [brute_oni, caster_kitsune, speeder_tengu]
+      enemy_counts: [1, 1, 1]
+    - enemy_templates: [brute_oni, support_tanuki]
+      enemy_counts: [1, 2]
+      is_boss: true

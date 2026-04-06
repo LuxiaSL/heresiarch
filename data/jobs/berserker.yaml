@@ -1,0 +1,13 @@
+id: berserker
+name: Berserker
+origin: Norse
+description: "Fast physical striker. Glass cannon, lives in Cheat windows."
+growth:
+  STR: 4
+  MAG: 0
+  DEF: 0
+  RES: 0
+  SPD: 6
+base_hp: 25
+hp_growth: 4
+innate_ability_id: frenzy

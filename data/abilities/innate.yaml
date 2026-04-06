@@ -1,0 +1,41 @@
+- id: retaliate
+  name: Retaliate
+  category: PASSIVE
+  target: SINGLE_ENEMY
+  trigger: ON_HIT_RECEIVED
+  is_innate: true
+  description: "Passive counter-attack when hit. Scales with STR."
+  effects:
+    - base_damage: 5
+      stat_scaling: STR
+      scaling_coefficient: 0.3
+
+- id: foresight
+  name: Foresight
+  category: SUPPORT
+  target: ALL_ENEMIES
+  cooldown: 0
+  is_innate: true
+  is_partial_action: true
+  description: "Reveals enemy action weights for the next turn."
+  effects: []
+
+- id: taunt
+  name: Taunt
+  category: DEFENSIVE
+  target: SELF
+  cooldown: 3
+  is_innate: true
+  description: "Forces all enemies to target this character for 1 round."
+  effects:
+    - duration_rounds: 1
+
+- id: frenzy
+  name: Frenzy
+  category: PASSIVE
+  target: SELF
+  trigger: ON_CONSECUTIVE_ATTACK
+  is_innate: true
+  description: "Each consecutive attack in the same turn deals increasing damage."
+  effects:
+    - surge_stack_bonus: 0.15

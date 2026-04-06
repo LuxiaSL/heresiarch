@@ -1,0 +1,55 @@
+- id: iron_blade
+  name: Iron Blade
+  slot: WEAPON
+  description: "Reliable. Gets you home."
+  base_price: 100
+  scaling:
+    scaling_type: LINEAR
+    stat: STR
+    base: 20.0
+    linear_coeff: 1.0
+
+- id: runic_edge
+  name: Runic Edge
+  slot: WEAPON
+  description: "Investment piece. Mid-game spike."
+  base_price: 350
+  scaling:
+    scaling_type: SUPERLINEAR
+    stat: STR
+    base: 15.0
+    linear_coeff: 0.3
+    quadratic_coeff: 0.004
+
+- id: void_fang
+  name: Void Fang
+  slot: WEAPON
+  description: "Hurts you early. Kills god late."
+  base_price: 800
+  scaling:
+    scaling_type: DEGENERATE
+    stat: STR
+    constant_offset: -200.0
+    quadratic_coeff: 0.01
+
+- id: spirit_lens
+  name: Spirit Lens
+  slot: WEAPON
+  description: "Caster equivalent of Iron Blade."
+  base_price: 100
+  scaling:
+    scaling_type: LINEAR
+    stat: MAG
+    base: 20.0
+    linear_coeff: 1.0
+
+- id: resonance_orb
+  name: Resonance Orb
+  slot: WEAPON
+  description: "Deep MAG commitment. Onmyoji dream."
+  base_price: 500
+  scaling:
+    scaling_type: QUADRATIC
+    stat: MAG
+    base: 15.0
+    quadratic_coeff: 0.008

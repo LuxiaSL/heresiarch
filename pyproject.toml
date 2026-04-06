@@ -1,0 +1,22 @@
+[project]
+name = "heresiarch"
+version = "0.1.0"
+description = "A text-based roguelike JRPG. Pick a world, pick a job, descend, build synergy, kill god."
+readme = "README.md"
+authors = [
+    { name = "LuxiaSL", email = "mail.luxia@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.12.5",
+    "pyyaml>=6.0.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.2,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

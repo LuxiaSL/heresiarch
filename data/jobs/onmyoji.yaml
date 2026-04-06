@@ -1,0 +1,13 @@
+id: onmyoji
+name: Onmyoji
+origin: Shinto
+description: "Spiritual diviner. Setup-dependent magic, strong ward against magical effects."
+growth:
+  STR: 0
+  MAG: 4
+  DEF: 0
+  RES: 4
+  SPD: 2
+base_hp: 30
+hp_growth: 5
+innate_ability_id: foresight

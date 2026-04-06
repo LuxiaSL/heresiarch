@@ -1,0 +1,149 @@
+- id: fodder_slime
+  name: Fodder Slime
+  archetype: FODDER
+  budget_multiplier: 8.0
+  stat_distribution:
+    STR: 0.30
+    MAG: 0.05
+    DEF: 0.25
+    RES: 0.10
+    SPD: 0.30
+  base_hp: 20
+  hp_per_budget: 2.0
+  abilities:
+    - basic_attack
+  description: "Weak blob. Comes in numbers. Tutorial enemy."
+  action_table:
+    base_weights:
+      - ability_id: basic_attack
+        weight: 1.0
+
+- id: brute_oni
+  name: Brute Oni
+  archetype: BRUTE
+  budget_multiplier: 14.0
+  stat_distribution:
+    STR: 0.33
+    MAG: 0.05
+    DEF: 0.29
+    RES: 0.05
+    SPD: 0.07
+  base_hp: 40
+  hp_per_budget: 3.0
+  abilities:
+    - heavy_strike
+    - arc_slash
+    - basic_attack
+  description: "Slow heavy hitter. Punishes post-Cheat vulnerability."
+  action_table:
+    base_weights:
+      - ability_id: heavy_strike
+        weight: 0.80
+      - ability_id: arc_slash
+        weight: 0.15
+      - ability_id: basic_attack
+        weight: 0.05
+    conditions:
+      - condition_type: player_hp_below
+        threshold: 0.30
+        weight_overrides:
+          - ability_id: heavy_strike
+            weight: 0.95
+          - ability_id: arc_slash
+            weight: 0.05
+          - ability_id: basic_attack
+            weight: 0.0
+      - condition_type: self_hp_below
+        threshold: 0.25
+        weight_overrides:
+          - ability_id: heavy_strike
+            weight: 0.40
+          - ability_id: arc_slash
+            weight: 0.10
+          - ability_id: basic_attack
+            weight: 0.50
+      - condition_type: player_post_cheat
+        weight_overrides:
+          - ability_id: heavy_strike
+            weight: 0.95
+          - ability_id: arc_slash
+            weight: 0.05
+          - ability_id: basic_attack
+            weight: 0.0
+
+- id: caster_kitsune
+  name: Caster Kitsune
+  archetype: CASTER
+  budget_multiplier: 12.0
+  stat_distribution:
+    STR: 0.05
+    MAG: 0.45
+    DEF: 0.10
+    RES: 0.15
+    SPD: 0.25
+  base_hp: 25
+  hp_per_budget: 1.5
+  abilities:
+    - bolt
+    - hex
+    - basic_attack
+  target_preference: lowest_def
+  description: "Applies DOTs and debuffs. Tests RES gate."
+  action_table:
+    base_weights:
+      - ability_id: bolt
+        weight: 0.50
+      - ability_id: hex
+        weight: 0.30
+      - ability_id: basic_attack
+        weight: 0.20
+
+- id: speeder_tengu
+  name: Speeder Tengu
+  archetype: SPEEDER
+  budget_multiplier: 11.0
+  stat_distribution:
+    STR: 0.30
+    MAG: 0.05
+    DEF: 0.10
+    RES: 0.05
+    SPD: 0.50
+  base_hp: 25
+  hp_per_budget: 1.5
+  abilities:
+    - quick_strike
+    - double_hit
+    - basic_attack
+  target_preference: lowest_def
+  description: "Targets squishy party members. Acts early and often."
+  action_table:
+    base_weights:
+      - ability_id: quick_strike
+        weight: 0.60
+      - ability_id: double_hit
+        weight: 0.25
+      - ability_id: basic_attack
+        weight: 0.15
+
+- id: support_tanuki
+  name: Support Tanuki
+  archetype: SUPPORT
+  budget_multiplier: 10.0
+  stat_distribution:
+    STR: 0.10
+    MAG: 0.30
+    DEF: 0.20
+    RES: 0.25
+    SPD: 0.15
+  base_hp: 30
+  hp_per_budget: 2.5
+  abilities:
+    - bolt
+    - basic_attack
+  description: "Heals and buffs allies. Extends fights."
+  action_table:
+    base_weights:
+      - ability_id: bolt
+        weight: 0.60
+      - ability_id: basic_attack
+        weight: 0.40

@@ -1,0 +1,28 @@
+- id: fortress_ring
+  name: Fortress Ring
+  slot: ACCESSORY_1
+  description: "Martyr becomes a caster? Off-label enabler."
+  base_price: 400
+  conversion:
+    source_stat: DEF
+    target_stat: MAG
+    scaling_type: QUADRATIC
+    quadratic_coeff: 0.004
+
+- id: gale_brace
+  name: Gale Brace
+  slot: ACCESSORY_1
+  description: "Berserker's speed feeds damage."
+  base_price: 300
+  conversion:
+    source_stat: SPD
+    target_stat: STR
+    scaling_type: LINEAR
+    linear_coeff: 0.3
+
+- id: leech_fang
+  name: Leech Fang
+  slot: ACCESSORY_1
+  description: "Sustain. Enables Retaliate loop."
+  base_price: 450
+  leech_percent: 0.15

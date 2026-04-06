@@ -1,0 +1,9 @@
+- id: endurance_plate
+  name: Endurance Plate
+  slot: ARMOR
+  description: "Tank item. Stacks with natural DEF."
+  base_price: 250
+  flat_stat_bonus:
+    DEF: 10
+  extra_def_reduction: 0.5
+  hp_bonus: 20

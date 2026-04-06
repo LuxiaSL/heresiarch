@@ -1,0 +1,13 @@
+id: einherjar
+name: Einherjar
+origin: Norse
+description: "The chosen dead. Hits hard, takes hits, doesn't care about speed. Reliable."
+growth:
+  STR: 4
+  MAG: 0
+  DEF: 4
+  RES: 0
+  SPD: 2
+base_hp: 50
+hp_growth: 8
+innate_ability_id: retaliate

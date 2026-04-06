@@ -1,0 +1,162 @@
+# --- Enemy basic abilities ---
+
+- id: basic_attack
+  name: Basic Attack
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "A simple physical attack."
+  effects:
+    - base_damage: 5
+      stat_scaling: STR
+      scaling_coefficient: 0.5
+
+- id: heavy_strike
+  name: Heavy Strike
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "A powerful but slow strike."
+  effects:
+    - base_damage: 15
+      stat_scaling: STR
+      scaling_coefficient: 0.8
+
+- id: bolt
+  name: Bolt
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "A bolt of magical energy."
+  effects:
+    - base_damage: 10
+      stat_scaling: MAG
+      scaling_coefficient: 0.7
+
+- id: quick_strike
+  name: Quick Strike
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "A fast physical strike that favours speed."
+  effects:
+    - base_damage: 3
+      stat_scaling: STR
+      scaling_coefficient: 0.4
+
+- id: double_hit
+  name: Double Hit
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "Two rapid strikes in succession."
+  effects:
+    - base_damage: 2
+      stat_scaling: STR
+      scaling_coefficient: 0.3
+    - base_damage: 2
+      stat_scaling: STR
+      scaling_coefficient: 0.3
+
+# --- Droppable offensive abilities (seed pool) ---
+
+- id: searing_edge
+  name: Searing Edge
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "Burn over N rounds, bypasses DEF. Bread and butter vs high-DEF."
+  effects:
+    - quality: DOT
+      base_damage: 4
+      stat_scaling: STR
+      scaling_coefficient: 0.4
+      duration_rounds: 3
+
+- id: fracture
+  name: Fracture
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "Reduces target DEF for N rounds. Enabler for STR allies."
+  effects:
+    - quality: SHATTER
+      base_damage: 5
+      stat_scaling: STR
+      scaling_coefficient: 0.3
+      shatter_amount: 0.25
+      duration_rounds: 2
+
+- id: arc_slash
+  name: Arc Slash
+  category: OFFENSIVE
+  target: ALL_ENEMIES
+  description: "Hits all enemies at reduced power. Mob clear."
+  effects:
+    - quality: CHAIN
+      base_damage: 4
+      stat_scaling: STR
+      scaling_coefficient: 0.3
+      chain_damage_ratio: 0.6
+
+- id: thrust
+  name: Thrust
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "Ignores a percentage of DEF. Direct, good vs armor."
+  effects:
+    - quality: PIERCE
+      base_damage: 8
+      stat_scaling: STR
+      scaling_coefficient: 0.5
+      pierce_percent: 0.4
+
+- id: hex
+  name: Hex
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "Shifts enemy action weights and delays. Tempo control, pairs with Foresight."
+  effects:
+    - quality: DISRUPT
+      base_damage: 3
+      stat_scaling: MAG
+      scaling_coefficient: 0.4
+      duration_rounds: 2
+
+- id: drain
+  name: Drain
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "Heals for a percentage of damage dealt. Sustain, enables low-DEF builds."
+  effects:
+    - quality: LEECH
+      base_damage: 6
+      stat_scaling: MAG
+      scaling_coefficient: 0.5
+      leech_percent: 0.3
+
+- id: crescendo
+  name: Crescendo
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "Scaling damage with consecutive uses. Extended boss fight ability."
+  effects:
+    - quality: SURGE
+      base_damage: 4
+      stat_scaling: MAG
+      scaling_coefficient: 0.4
+      surge_stack_bonus: 0.2
+
+- id: reckless_blow
+  name: Reckless Blow
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "Big damage plus self-damage. Risk/reward, pairs with Leech."
+  effects:
+    - base_damage: 20
+      stat_scaling: STR
+      scaling_coefficient: 0.9
+      self_damage_ratio: 0.25
+
+- id: void_bolt
+  name: Void Bolt
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "Degenerate scaling: weak early, monstrous late. Trust the curve."
+  effects:
+    - base_damage: -5
+      stat_scaling: MAG
+      scaling_coefficient: 1.5

@@ -1,0 +1,47 @@
+- enemy_template_id: fodder_slime
+  guaranteed_money: true
+  common_item_ids: []
+  common_drop_chance: 0.1
+  rare_item_ids: []
+  rare_drop_chance: 0.0
+  equipment_drop_chance: 0.0
+
+- enemy_template_id: brute_oni
+  guaranteed_money: true
+  common_item_ids:
+    - iron_blade
+    - endurance_plate
+  common_drop_chance: 0.2
+  rare_item_ids:
+    - runic_edge
+  rare_drop_chance: 0.05
+  equipment_drop_chance: 0.1
+
+- enemy_template_id: caster_kitsune
+  guaranteed_money: true
+  common_item_ids:
+    - spirit_lens
+  common_drop_chance: 0.2
+  rare_item_ids:
+    - resonance_orb
+  rare_drop_chance: 0.05
+  equipment_drop_chance: 0.1
+
+- enemy_template_id: speeder_tengu
+  guaranteed_money: true
+  common_item_ids:
+    - gale_brace
+  common_drop_chance: 0.15
+  rare_item_ids: []
+  rare_drop_chance: 0.0
+  equipment_drop_chance: 0.1
+
+- enemy_template_id: support_tanuki
+  guaranteed_money: true
+  common_item_ids:
+    - fortress_ring
+  common_drop_chance: 0.15
+  rare_item_ids:
+    - leech_fang
+  rare_drop_chance: 0.03
+  equipment_drop_chance: 0.05

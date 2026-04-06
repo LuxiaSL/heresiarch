@@ -1,0 +1,13 @@
+id: martyr
+name: Martyr
+origin: Abrahamic
+description: "The wall. Absorbs suffering for the party."
+growth:
+  STR: 0
+  MAG: 0
+  DEF: 5
+  RES: 4
+  SPD: 1
+base_hp: 70
+hp_growth: 12
+innate_ability_id: taunt
