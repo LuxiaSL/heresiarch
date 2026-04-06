@@ -185,7 +185,7 @@ class CombatEngine:
 
         return EnemyInstance(
             template_id=template.id,
-            name=template.name,
+            name=instance_id if instance_id else template.name,
             level=zone_level,
             stats=stats,
             max_hp=hp,
