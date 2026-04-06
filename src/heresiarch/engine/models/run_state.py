@@ -11,6 +11,7 @@ class CombatResult(BaseModel):
 
     player_won: bool
     surviving_character_ids: list[str] = Field(default_factory=list)
+    surviving_character_hp: dict[str, int] = Field(default_factory=dict)
     defeated_enemy_template_ids: list[str] = Field(default_factory=list)
     defeated_enemy_budget_multipliers: list[float] = Field(default_factory=list)
     rounds_taken: int = 0

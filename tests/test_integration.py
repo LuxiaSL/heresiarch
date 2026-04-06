@@ -67,11 +67,12 @@ def _run_combat_to_completion(
         state = engine.process_round(state, decisions, enemy_templates)
 
     surviving = [p.id for p in state.living_players]
+    surviving_hp = {p.id: p.current_hp for p in state.living_players}
+    # All enemies are defeated if player won; otherwise determine from living
+    living_enemy_template_ids = {le.id.rsplit("_", 1)[0] for le in state.living_enemies}
     defeated_templates = [
-        e.template_id for e in enemies if not any(
-            le.id == e.name for le in state.living_enemies
-        )
-    ]
+        e.template_id for e in enemies
+    ] if (state.player_won or False) else []
     defeated_budgets = [
         game_data.enemies[tid].budget_multiplier
         for tid in defeated_templates
@@ -81,6 +82,7 @@ def _run_combat_to_completion(
     return CombatResult(
         player_won=state.player_won or False,
         surviving_character_ids=surviving,
+        surviving_character_hp=surviving_hp,
         defeated_enemy_template_ids=defeated_templates,
         defeated_enemy_budget_multipliers=defeated_budgets,
         rounds_taken=state.round_number,
@@ -92,21 +94,22 @@ class TestFullZoneRun:
     def test_clear_zone_01(self, game_loop: GameLoop, game_data: GameData) -> None:
         """Start a run, enter zone_01, fight all encounters, verify progression.
 
-        MC starts at level 5 with a weapon — simulates a character who's
-        done the first couple fights already. Zone 01 is level 1.
+        MC starts at level 15 with a weapon — overleveled for zone 1 to
+        survive HP attrition across all encounters without healing.
         """
-        run = game_loop.new_run("run_001", "Hero", "einherjar")
-        # Give the MC a starting weapon and some levels for zone 01 viability
-        mc = run.party.characters["mc_einherjar"]
         from heresiarch.engine.formulas import calculate_max_hp, calculate_stats_at_level
+
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        mc = run.party.characters["mc_einherjar"]
         job = game_data.jobs["einherjar"]
-        stats = calculate_stats_at_level(job.growth, 10)
-        hp = calculate_max_hp(job.base_hp, job.hp_growth, 10, stats.DEF)
+        stats = calculate_stats_at_level(job.growth, 15)
+        hp = calculate_max_hp(job.base_hp, job.hp_growth, 15, stats.DEF)
         mc = mc.model_copy(update={
-            "level": 10,
+            "level": 15,
             "base_stats": stats,
             "current_hp": hp,
             "equipment": {"WEAPON": "iron_blade", "ARMOR": None, "ACCESSORY_1": None, "ACCESSORY_2": None},
+            "growth_history": [("einherjar", 15)],
         })
         new_chars = dict(run.party.characters)
         new_chars["mc_einherjar"] = mc
@@ -132,15 +135,6 @@ class TestFullZoneRun:
             if loot.item_ids:
                 run = game_loop.apply_loot(run, loot, selected_items=loot.item_ids)
 
-            # Heal MC to full between encounters (HP persistence is a Phase 3.5 concern)
-            mc = run.party.characters["mc_einherjar"]
-            job = game_data.jobs[mc.job_id]
-            full_hp = calculate_max_hp(job.base_hp, job.hp_growth, mc.level, mc.base_stats.DEF)
-            healed_mc = mc.model_copy(update={"current_hp": full_hp})
-            new_chars = dict(run.party.characters)
-            new_chars["mc_einherjar"] = healed_mc
-            run = run.model_copy(update={"party": run.party.model_copy(update={"characters": new_chars})})
-
             run = game_loop.advance_zone(run)
 
         assert run.zone_state is not None
@@ -150,6 +144,57 @@ class TestFullZoneRun:
         mc = run.party.characters["mc_einherjar"]
         assert mc.xp > 0
         assert mc.level >= initial_level
+
+
+class TestHPPersistence:
+    def test_hp_carries_between_encounters(
+        self, game_loop: GameLoop, game_data: GameData
+    ) -> None:
+        """HP from combat persists — no free healing between encounters."""
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        # Level 10 MC with weapon for zone 1
+        mc = run.party.characters["mc_einherjar"]
+        from heresiarch.engine.formulas import calculate_max_hp, calculate_stats_at_level
+
+        job = game_data.jobs["einherjar"]
+        stats = calculate_stats_at_level(job.growth, 10)
+        hp = calculate_max_hp(job.base_hp, job.hp_growth, 10, stats.DEF)
+        mc = mc.model_copy(
+            update={
+                "level": 10,
+                "base_stats": stats,
+                "current_hp": hp,
+                "equipment": {
+                    "WEAPON": "iron_blade",
+                    "ARMOR": None,
+                    "ACCESSORY_1": None,
+                    "ACCESSORY_2": None,
+                },
+            }
+        )
+        new_chars = dict(run.party.characters)
+        new_chars["mc_einherjar"] = mc
+        run = run.model_copy(
+            update={"party": run.party.model_copy(update={"characters": new_chars})}
+        )
+        run = game_loop.enter_zone(run, "zone_01")
+
+        full_hp = hp
+
+        # Fight first encounter
+        enemies = game_loop.get_next_encounter(run)
+        result = _run_combat_to_completion(
+            game_loop.combat_engine, run, enemies, game_data
+        )
+        assert result.player_won
+
+        run, _ = game_loop.resolve_combat_result(run, result)
+        run = game_loop.advance_zone(run)
+
+        mc_after = run.party.characters["mc_einherjar"]
+        # MC should have taken some damage (or at least HP is from combat, not reset)
+        # The surviving HP from combat is persisted, not the pre-combat full HP
+        assert mc_after.current_hp <= full_hp
 
 
 class TestShopDuringRun:

@@ -140,7 +140,7 @@ class GameLoop:
         if not combat_result.player_won:
             return self.handle_death(run), LootResult()
 
-        # --- XP Distribution ---
+        # --- XP Distribution + HP Persistence ---
         new_characters = dict(party.characters)
         for char_id in combat_result.surviving_character_ids:
             if char_id not in new_characters:
@@ -159,40 +159,60 @@ class GameLoop:
             levels_gained = calculate_levels_gained(new_xp, char.level)
             new_level = char.level + levels_gained
 
-            # Recalculate stats at new level
-            job = self.game_data.jobs[char.job_id]
-            if char.is_mc and char.growth_history:
-                # MC Mimic: update levels in current job segment
-                history = list(char.growth_history)
-                if history:
-                    job_id, prev_levels = history[-1]
-                    history[-1] = (job_id, prev_levels + levels_gained)
-                new_stats = calculate_stats_from_history(history, self.game_data.jobs)
-                new_hp = calculate_max_hp(
-                    job.base_hp, job.hp_growth, new_level, new_stats.DEF
+            # Post-combat HP: use surviving HP from combat, capped at current max
+            surviving_hp = combat_result.surviving_character_hp.get(
+                char_id, char.current_hp
+            )
+
+            if levels_gained == 0:
+                # No level-up: just persist XP and surviving HP
+                job = self.game_data.jobs[char.job_id]
+                current_max = calculate_max_hp(
+                    job.base_hp, job.hp_growth, char.level, char.base_stats.DEF
                 )
                 new_characters[char_id] = char.model_copy(
                     update={
                         "xp": new_xp,
-                        "level": new_level,
-                        "base_stats": new_stats,
-                        "current_hp": min(char.current_hp, new_hp),
-                        "growth_history": history,
+                        "current_hp": min(surviving_hp, current_max),
                     }
                 )
             else:
-                new_stats = calculate_stats_at_level(job.growth, new_level)
-                new_hp = calculate_max_hp(
-                    job.base_hp, job.hp_growth, new_level, new_stats.DEF
-                )
-                new_characters[char_id] = char.model_copy(
-                    update={
-                        "xp": new_xp,
-                        "level": new_level,
-                        "base_stats": new_stats,
-                        "current_hp": min(char.current_hp, new_hp),
-                    }
-                )
+                # Recalculate stats at new level
+                job = self.game_data.jobs[char.job_id]
+                if char.is_mc and char.growth_history:
+                    # MC Mimic: update levels in current job segment
+                    history = list(char.growth_history)
+                    if history:
+                        job_id, prev_levels = history[-1]
+                        history[-1] = (job_id, prev_levels + levels_gained)
+                    new_stats = calculate_stats_from_history(
+                        history, self.game_data.jobs
+                    )
+                    new_max_hp = calculate_max_hp(
+                        job.base_hp, job.hp_growth, new_level, new_stats.DEF
+                    )
+                    new_characters[char_id] = char.model_copy(
+                        update={
+                            "xp": new_xp,
+                            "level": new_level,
+                            "base_stats": new_stats,
+                            "current_hp": min(surviving_hp, new_max_hp),
+                            "growth_history": history,
+                        }
+                    )
+                else:
+                    new_stats = calculate_stats_at_level(job.growth, new_level)
+                    new_max_hp = calculate_max_hp(
+                        job.base_hp, job.hp_growth, new_level, new_stats.DEF
+                    )
+                    new_characters[char_id] = char.model_copy(
+                        update={
+                            "xp": new_xp,
+                            "level": new_level,
+                            "base_stats": new_stats,
+                            "current_hp": min(surviving_hp, new_max_hp),
+                        }
+                    )
 
         # --- Loot ---
         defeated_instances: list[EnemyInstance] = []
