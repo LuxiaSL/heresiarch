@@ -30,12 +30,14 @@ from .items import ConversionEffect, EquipSlot, Item, ItemScaling, ScalingType
 from .jobs import CharacterInstance, JobTemplate
 from .loot import DropTable, LootResult
 from .party import Party
+from .battle_record import BattleRecord, EncounterRecord, RoundRecord
 from .run_state import CombatResult, RunState
 from .stats import GrowthVector, StatBlock, StatType
 from .zone import EncounterTemplate, ZoneState, ZoneTemplate
 
 __all__ = [
     "Ability",
+    "BattleRecord",
     "AbilityCategory",
     "AbilityEffect",
     "ActionCondition",
@@ -52,6 +54,7 @@ __all__ = [
     "ConversionEffect",
     "DamageQuality",
     "DropTable",
+    "EncounterRecord",
     "EncounterTemplate",
     "EnemyArchetype",
     "EnemyInstance",
@@ -64,6 +67,7 @@ __all__ = [
     "LootResult",
     "Party",
     "PlayerTurnDecision",
+    "RoundRecord",
     "RunState",
     "ScalingType",
     "StatBlock",

@@ -90,6 +90,7 @@ class CombatEngine:
                     max_hp=max_hp,
                     base_stats=char.base_stats,
                     effective_stats=effective,
+                    ability_ids=list(char.abilities),
                 )
             )
 
@@ -103,6 +104,7 @@ class CombatEngine:
                     max_hp=enemy.max_hp,
                     base_stats=enemy.stats,
                     effective_stats=enemy.stats,
+                    ability_ids=list(enemy.abilities),
                 )
             )
 
@@ -273,11 +275,16 @@ class CombatEngine:
                         state, combatant_id, decision.primary_action
                     )
 
-                # Extra actions from Cheat
+                # Extra actions from Cheat — use individually chosen actions
                 for i in range(actions_to_spend):
                     if state.is_finished:
                         break
-                    if decision.primary_action:
+                    if i < len(decision.cheat_extra_actions):
+                        state = self._resolve_action(
+                            state, combatant_id, decision.cheat_extra_actions[i]
+                        )
+                    elif decision.primary_action:
+                        # Fallback: repeat primary if no extra actions specified
                         state = self._resolve_action(
                             state, combatant_id, decision.primary_action
                         )
@@ -380,9 +387,25 @@ class CombatEngine:
         )
 
         # For SELF-targeting abilities (like Taunt), use actor as target
-        effective_target_ids = action.target_ids
+        effective_target_ids = list(action.target_ids)
         if ability.target == TargetType.SELF and not effective_target_ids:
             effective_target_ids = [actor_id]
+
+        # Auto-retarget dead targets to next living enemy/ally
+        retargeted: list[str] = []
+        for tid in effective_target_ids:
+            target = state.get_combatant(tid)
+            if target is not None and target.is_alive:
+                retargeted.append(tid)
+            else:
+                # Find a replacement from the same side
+                if actor.is_player:
+                    replacements = [e.id for e in state.living_enemies if e.id not in retargeted]
+                else:
+                    replacements = [p.id for p in state.living_players if p.id not in retargeted]
+                if replacements:
+                    retargeted.append(replacements[0])
+        effective_target_ids = retargeted
 
         for effect in ability.effects:
             if state.is_finished:
@@ -843,25 +866,17 @@ class CombatEngine:
     ) -> Ability | None:
         """Find a passive ability with the given trigger on a combatant.
 
-        Checks based on whether combatant is player or enemy.
+        Only returns abilities the combatant actually has.
         """
-        # For players, we need to find their character to get ability list
-        # For now, check all passive abilities in registry that match
-        for ability_id, ability in self.abilities.items():
+        for ability_id in combatant.ability_ids:
+            ability = self.abilities.get(ability_id)
+            if ability is None:
+                continue
             if (
                 ability.category == AbilityCategory.PASSIVE
                 and ability.trigger == trigger
-                and ability.is_innate
             ):
-                # Check if this combatant would have this ability
-                # Simplified: check if any job has this as innate
-                for job in self.jobs.values():
-                    if job.innate_ability_id == ability_id:
-                        # Check if the combatant's stats suggest this job
-                        # This is a simplification — proper implementation would
-                        # track abilities on CombatantState
-                        if combatant.is_player:
-                            return ability
+                return ability
         return None
 
     def _get_item_leech(self, combatant: CombatantState, state: CombatState) -> float:

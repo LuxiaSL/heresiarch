@@ -42,6 +42,7 @@ class PlayerTurnDecision(BaseModel):
     cheat_survive: CheatSurviveChoice = CheatSurviveChoice.NORMAL
     cheat_actions: int = 0
     primary_action: CombatAction | None = None
+    cheat_extra_actions: list[CombatAction] = Field(default_factory=list)
     partial_actions: list[CombatAction] = Field(default_factory=list)
 
 
@@ -84,6 +85,7 @@ class CombatantState(BaseModel):
     max_hp: int
     base_stats: StatBlock
     effective_stats: StatBlock
+    ability_ids: list[str] = Field(default_factory=list)
     action_points: int = 0
     cheat_debt: int = 0
     active_statuses: list[StatusEffect] = Field(default_factory=list)

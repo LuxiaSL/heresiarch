@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, Field
 
+from .battle_record import BattleRecord
 from .party import Party
 from .zone import ZoneState
 
@@ -26,5 +27,6 @@ class RunState(BaseModel):
     current_zone_id: str | None = None
     zone_state: ZoneState | None = None
     zones_completed: list[str] = Field(default_factory=list)
+    battle_record: BattleRecord = Field(default_factory=BattleRecord)
     is_dead: bool = False
     created_at: str = ""

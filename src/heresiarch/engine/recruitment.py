@@ -81,7 +81,7 @@ class RecruitmentEngine:
             level=zone_level,
             base_stats=stats,
             current_hp=max_hp,
-            abilities=[job.innate_ability_id],
+            abilities=["basic_attack", job.innate_ability_id],
         )
 
         return RecruitCandidate(character=character, growth=randomized_growth)

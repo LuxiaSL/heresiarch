@@ -1,0 +1,127 @@
+/* Heresiarch — dark theme with muted lavender and gold accents.
+   Tone: functional, understated, scrappy. Not flashy. */
+
+Screen {
+    background: #0a0a0a;
+    color: #d4d4d4;
+}
+
+Header {
+    background: #1a1a2e;
+    color: #c8a2c8;
+}
+
+Footer {
+    background: #1a1a2e;
+    color: #6b6b6b;
+}
+
+/* Primary action buttons */
+Button {
+    background: #1a1a2e;
+    color: #d4d4d4;
+    border: tall #333355;
+    margin: 0 1;
+}
+
+Button:hover {
+    background: #2a2a4e;
+    border: tall #c8a2c8;
+}
+
+Button:focus {
+    border: tall #e6c566;
+}
+
+Button.-primary {
+    background: #2a1a3e;
+    color: #e6c566;
+    border: tall #e6c566;
+}
+
+/* Combat colors — applied via classes */
+.damage {
+    color: #cc4444;
+}
+
+.heal {
+    color: #44aa44;
+}
+
+.buff {
+    color: #4488cc;
+}
+
+.debuff {
+    color: #cc8844;
+}
+
+.death-text {
+    color: #880000;
+}
+
+.muted {
+    color: #6b6b6b;
+}
+
+.accent {
+    color: #e6c566;
+}
+
+.primary-color {
+    color: #c8a2c8;
+}
+
+/* HP bar color states */
+.hp-full {
+    color: #44aa44;
+}
+
+.hp-mid {
+    color: #cccc44;
+}
+
+.hp-low {
+    color: #cc4444;
+}
+
+.hp-critical {
+    color: #880000;
+}
+
+/* Combat highlight states */
+.active-turn {
+    border: tall #e6c566;
+}
+
+.dead {
+    opacity: 0.4;
+}
+
+/* Selection highlight */
+.selected {
+    background: #2a2a4e;
+    border: tall #c8a2c8;
+}
+
+/* Stat display */
+.stat-label {
+    color: #6b6b6b;
+    width: 4;
+}
+
+.stat-value {
+    color: #d4d4d4;
+}
+
+.stat-high {
+    color: #e6c566;
+}
+
+.stat-buffed {
+    color: #44aa44;
+}
+
+.stat-debuffed {
+    color: #cc4444;
+}

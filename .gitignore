@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Game saves and screenshots
+saves/
+screenshots/

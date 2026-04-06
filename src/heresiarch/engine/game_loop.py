@@ -85,7 +85,7 @@ class GameLoop:
             xp=0,
             base_stats=stats,
             current_hp=max_hp,
-            abilities=[job.innate_ability_id],
+            abilities=["basic_attack", job.innate_ability_id],
             is_mc=True,
             growth_history=[(mc_job_id, 0)],
         )
