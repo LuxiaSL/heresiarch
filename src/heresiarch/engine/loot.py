@@ -13,6 +13,9 @@ from heresiarch.engine.models.loot import DropTable, LootResult
 CHA_COMMON_BONUS_PER_POINT: float = 0.002
 CHA_RARE_BONUS_PER_POINT: float = 0.001
 
+# Overstay penalty: flat reduction per battle past zone clear
+OVERSTAY_PENALTY_PER_BATTLE: float = 0.05
+
 
 class LootResolver:
     """Resolves drops after combat. Injected RNG, injected registries."""
@@ -32,16 +35,23 @@ class LootResolver:
         defeated_enemies: list[EnemyInstance],
         zone_level: int,
         party_cha: int = 0,
+        overstay_battles: int = 0,
     ) -> LootResult:
-        """Roll drops for all defeated enemies in an encounter."""
+        """Roll drops for all defeated enemies in an encounter.
+
+        ``overstay_battles`` applies a flat -5 % penalty per battle to all
+        item drop chances (common, rare, equipment).  Money is unaffected.
+        """
         total_money = 0
         dropped_items: list[str] = []
         seen_items: set[str] = set()
 
+        overstay_reduction = OVERSTAY_PENALTY_PER_BATTLE * overstay_battles
+
         for enemy in defeated_enemies:
             dt = self.drop_tables.get(enemy.template_id)
 
-            # Money: always roll if guaranteed (or no drop table)
+            # Money: always roll if guaranteed (or no drop table) — no overstay penalty
             if dt is None or dt.guaranteed_money:
                 total_money += calculate_money_drop(zone_level, self.rng)
 
@@ -51,6 +61,7 @@ class LootResolver:
             # Common drop
             if dt.common_item_ids:
                 chance = dt.common_drop_chance + (CHA_COMMON_BONUS_PER_POINT * party_cha)
+                chance = max(0.0, chance - overstay_reduction)
                 if self.rng.random() < chance:
                     item_id = self.rng.choice(dt.common_item_ids)
                     if item_id not in seen_items and item_id in self.item_registry:
@@ -60,6 +71,7 @@ class LootResolver:
             # Rare drop
             if dt.rare_item_ids:
                 chance = dt.rare_drop_chance + (CHA_RARE_BONUS_PER_POINT * party_cha)
+                chance = max(0.0, chance - overstay_reduction)
                 if self.rng.random() < chance:
                     item_id = self.rng.choice(dt.rare_item_ids)
                     if item_id not in seen_items and item_id in self.item_registry:
@@ -68,7 +80,8 @@ class LootResolver:
 
             # Equipment drop
             if enemy.equipment and dt.equipment_drop_chance > 0:
-                if self.rng.random() < dt.equipment_drop_chance:
+                chance = max(0.0, dt.equipment_drop_chance - overstay_reduction)
+                if self.rng.random() < chance:
                     item_id = self.rng.choice(enemy.equipment)
                     if item_id not in seen_items and item_id in self.item_registry:
                         dropped_items.append(item_id)

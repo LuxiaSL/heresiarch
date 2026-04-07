@@ -5,9 +5,9 @@ from __future__ import annotations
 import uuid
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Input, Label, OptionList, Static
+from textual.widgets import Footer, Input, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
 
@@ -38,14 +38,11 @@ class JobSelectScreen(Screen):
     #mc-name-input {
         margin-bottom: 1;
     }
-    .job-btn-row {
-        height: 3;
-        align: center middle;
-    }
     """
 
     BINDINGS = [
         ("escape", "go_back", "Back"),
+        ("backspace", "go_back", "Back"),
     ]
 
     def __init__(self) -> None:
@@ -77,13 +74,13 @@ class JobSelectScreen(Screen):
             yield Static("", id="job-detail")
             yield Label("Name your character:")
             yield Input(placeholder="Heresiarch", id="mc-name-input", max_length=20)
-            with Horizontal(classes="job-btn-row"):
-                yield Button("Back", id="btn-back")
-                yield Button("Begin Run", variant="primary", id="btn-begin", disabled=True)
+            yield Label("[dim]Enter to begin  |  Esc to go back[/dim]", id="hint")
         yield Footer()
 
     def on_mount(self) -> None:
-        self.query_one("#job-list", OptionList).focus()
+        job_list = self.query_one("#job-list", OptionList)
+        job_list.focus()
+        job_list.highlighted = 0
 
     def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
         """Show job detail when highlighted (arrow keys)."""
@@ -91,13 +88,16 @@ class JobSelectScreen(Screen):
             self._show_job_detail(event.option.id)
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        """Select job on Enter."""
+        """Select job on Enter, move to name input."""
         if event.option.id:
             self._selected_job_id = event.option.id
             self._show_job_detail(event.option.id)
-            self.query_one("#btn-begin", Button).disabled = False
-            # Move focus to name input
             self.query_one("#mc-name-input", Input).focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Enter in name input begins the run."""
+        if event.input.id == "mc-name-input":
+            self._begin_run()
 
     def _show_job_detail(self, job_id: str) -> None:
         """Render detailed job info in the detail panel."""
@@ -123,13 +123,6 @@ class JobSelectScreen(Screen):
 
         self.query_one("#job-detail", Static).update("\n".join(lines))
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        match event.button.id:
-            case "btn-begin":
-                self._begin_run()
-            case "btn-back":
-                self.action_go_back()
-
     def _begin_run(self) -> None:
         if self._selected_job_id is None:
             return
@@ -141,14 +134,9 @@ class JobSelectScreen(Screen):
         app = self.app
         app.run_state = app.game_loop.new_run(run_id, mc_name, self._selected_job_id)
 
-        # Enter the first zone
-        zones = list(app.game_data.zones.keys())
-        if zones:
-            app.run_state = app.game_loop.enter_zone(app.run_state, zones[0])
+        from heresiarch.tui.screens.zone_select import ZoneSelectScreen
 
-        from heresiarch.tui.screens.zone import ZoneScreen
-
-        self.app.switch_screen(ZoneScreen())
+        self.app.switch_screen(ZoneSelectScreen())
 
     def action_go_back(self) -> None:
         self.app.pop_screen()

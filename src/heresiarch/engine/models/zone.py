@@ -1,5 +1,7 @@
 """Zone models: zone templates, encounter blueprints, zone state."""
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 
 
@@ -9,6 +11,21 @@ class EncounterTemplate(BaseModel):
     enemy_templates: list[str]
     enemy_counts: list[int]
     is_boss: bool = False
+
+
+class ZoneUnlockRequirement(BaseModel):
+    """Single requirement to unlock a zone.
+
+    Extensible via ``type`` field:
+      - ``zone_clear``: requires ``zone_id`` to be in zones_completed
+      - ``item``: requires ``item_id`` in party stash (future)
+      - ``level``: requires MC level >= ``level`` (future)
+    """
+
+    type: str
+    zone_id: str | None = None
+    item_id: str | None = None
+    level: int | None = None
 
 
 class ZoneTemplate(BaseModel):
@@ -23,6 +40,8 @@ class ZoneTemplate(BaseModel):
     recruitment_chance: float = 0.0
     xp_cap_level: int = 0
     loot_tier: int = 1
+    unlock_requires: list[ZoneUnlockRequirement] = Field(default_factory=list)
+    is_final: bool = False
 
 
 class ZoneState(BaseModel):
@@ -32,3 +51,5 @@ class ZoneState(BaseModel):
     current_encounter_index: int = 0
     encounters_completed: list[int] = Field(default_factory=list)
     is_cleared: bool = False
+    overstay_battles: int = 0
+    recruitment_offered: bool = False

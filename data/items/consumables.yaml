@@ -29,3 +29,63 @@
   heal_percent: 1.0
   base_price: 500
   description: "Restores full HP. Liquid regret prevention."
+
+# --- Teach Scrolls (permanent ability grant) ---
+
+- id: scroll_arc_slash
+  name: Scroll of Arc Slash
+  slot: ACCESSORY_1
+  is_consumable: true
+  teaches_ability_id: arc_slash
+  base_price: 300
+  description: "Teaches Arc Slash permanently. STR chain attack — hits all enemies."
+
+- id: scroll_drain
+  name: Scroll of Drain
+  slot: ACCESSORY_1
+  is_consumable: true
+  teaches_ability_id: drain
+  base_price: 350
+  description: "Teaches Drain permanently. MAG leech — heals for damage dealt."
+
+- id: scroll_mark
+  name: Scroll of Mark
+  slot: ACCESSORY_1
+  is_consumable: true
+  teaches_ability_id: mark
+  base_price: 400
+  description: "Teaches Mark permanently. Focus fire enabler — bonus damage on target."
+
+- id: scroll_haste
+  name: Scroll of Haste
+  slot: ACCESSORY_1
+  is_consumable: true
+  teaches_ability_id: haste
+  base_price: 400
+  description: "Teaches Haste permanently. Grant ally massive SPD boost."
+
+- id: scroll_searing_edge
+  name: Scroll of Searing Edge
+  slot: ACCESSORY_1
+  is_consumable: true
+  teaches_ability_id: searing_edge
+  base_price: 250
+  description: "Teaches Searing Edge permanently. STR DOT — bypasses DEF."
+
+# --- One-Time Cast Scrolls (single use, performs ability) ---
+
+- id: blast_scroll
+  name: Blast Scroll
+  slot: ACCESSORY_1
+  is_consumable: true
+  casts_ability_id: void_bolt
+  base_price: 150
+  description: "Casts Void Bolt once. Massive degenerate MAG damage, then gone."
+
+- id: shatter_scroll
+  name: Shatter Scroll
+  slot: ACCESSORY_1
+  is_consumable: true
+  casts_ability_id: fracture
+  base_price: 120
+  description: "Casts Fracture once. Shatters enemy DEF for your follow-up."

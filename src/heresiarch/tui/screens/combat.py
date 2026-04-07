@@ -11,10 +11,10 @@ from enum import Enum, auto
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Label, OptionList, RichLog, Static
+from textual.widgets import Footer, Label, OptionList, RichLog, Static
 from textual.widgets.option_list import Option
 
-from heresiarch.engine.formulas import calculate_bonus_actions
+from heresiarch.engine.formulas import MAX_ACTION_POINT_BANK, calculate_bonus_actions
 from heresiarch.engine.models.abilities import AbilityCategory, TargetType
 from heresiarch.engine.models.battle_record import EncounterRecord, RoundRecord
 from heresiarch.engine.models.combat_state import (
@@ -35,8 +35,11 @@ from heresiarch.tui.event_renderer import (
 class CombatPhase(Enum):
     PLANNING_CHEAT_SURVIVE = auto()
     PLANNING_CHEAT_AP = auto()      # Choose how many AP to spend
+    PLANNING_ACTION_MENU = auto()   # Basic Attack / Abilities / Items
     PLANNING_ABILITY = auto()
     PLANNING_TARGET = auto()
+    PLANNING_ITEM = auto()          # Choose a consumable from stash
+    PLANNING_ITEM_TARGET = auto()   # Choose who to use the item on
     PLANNING_CHEAT_ACTION = auto()  # Choose extra actions from Cheat
     PLANNING_CHEAT_TARGET = auto()  # Target for cheat extra action
     PLANNING_PARTIAL = auto()
@@ -52,35 +55,44 @@ class CombatScreen(Screen):
     #combat-layout {
         height: 100%;
     }
+    #status-bar {
+        height: auto;
+    }
     #party-panel {
-        width: 32;
-        height: 100%;
-        padding: 0 1;
-    }
-    #center-panel {
         width: 1fr;
-        height: 100%;
+        height: auto;
+        border: round #4488cc;
+        border-title-color: #4488cc;
+        border-title-align: left;
         padding: 0 1;
     }
-    #log-panel {
-        width: 32;
-        height: 100%;
+    #enemy-panel {
+        width: 1fr;
+        height: auto;
+        border: round #cc4444;
+        border-title-color: #cc4444;
+        border-title-align: left;
         padding: 0 1;
-        border-left: tall #333355;
     }
-    #combat-log {
-        height: 1fr;
+    #action-area {
+        height: auto;
+        padding: 0 1;
+        border-bottom: tall #333355;
     }
     #action-choices {
         height: auto;
-        max-height: 12;
-        margin-top: 1;
+        max-height: 6;
+    }
+    #combat-log {
+        height: 1fr;
+        padding: 0 1;
     }
     """
 
     BINDINGS = [
         ("v", "toggle_verbose", "Toggle Log"),
         ("escape", "go_back", "Back"),
+        ("backspace", "go_back", "Back"),
     ]
 
     def __init__(self) -> None:
@@ -97,7 +109,16 @@ class CombatScreen(Screen):
         self._cheat_actions_remaining: int = 0
         self._verbose: bool = True
         self._playback_queue: list = []
+        self._raw_event_queue: list = []
         self._event_delays: list[int] = []
+        # Progressive display state — used during event playback
+        self._display_hp: dict[str, int] = {}
+        self._display_alive: dict[str, bool] = {}
+        self._display_max_hp: dict[str, int] = {}
+        # Target cursor — shows arrow in status panels during target selection
+        self._highlighted_target_id: str | None = None
+        # Item use in combat
+        self._selected_item_id: str | None = None
         self._combatant_names: dict[str, str] = {}
         self._ability_names: dict[str, str] = {}
         self._encounter_record: EncounterRecord | None = None
@@ -105,22 +126,19 @@ class CombatScreen(Screen):
         self._choice_keys: list[str] = []
 
     def compose(self) -> ComposeResult:
-        with Horizontal(id="combat-layout"):
-            with Vertical(id="party-panel"):
-                yield Static("[bold]Party[/bold]")
-                yield Static("", id="party-display")
+        with Vertical(id="combat-layout"):
+            with Horizontal(id="status-bar"):
+                with Vertical(id="party-panel"):
+                    yield Static("", id="party-display")
+                with Vertical(id="enemy-panel"):
+                    yield Static("", id="enemy-display")
 
-            with Vertical(id="center-panel"):
-                yield Static("[bold]Enemies[/bold]")
-                yield Static("", id="enemy-display")
+            with Vertical(id="action-area"):
                 yield Label("", id="round-indicator")
                 yield Label("", id="phase-prompt")
                 yield OptionList(id="action-choices")
-                yield Button("Execute Round", variant="primary", id="btn-execute")
 
-            with Vertical(id="log-panel"):
-                yield Static("[bold]Combat Log[/bold]")
-                yield RichLog(id="combat-log", wrap=True, markup=True)
+            yield RichLog(id="combat-log", wrap=True, markup=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -170,6 +188,11 @@ class CombatScreen(Screen):
         )
 
         self._round_events_start = 0
+
+        # Set panel titles
+        self.query_one("#party-panel").border_title = "Party"
+        self.query_one("#enemy-panel").border_title = "Enemies"
+
         self._start_planning()
 
     # --- Planning State Machine ---
@@ -205,8 +228,7 @@ class CombatScreen(Screen):
         choices = self.query_one("#action-choices", OptionList)
         choices.clear_options()
         self._choice_keys = []
-        execute_btn = self.query_one("#btn-execute", Button)
-        execute_btn.display = False
+        self._highlighted_target_id = None
 
         match self._phase:
             case CombatPhase.PLANNING_CHEAT_SURVIVE:
@@ -223,9 +245,10 @@ class CombatScreen(Screen):
                     choices.add_option(Option(f"Cheat — spend AP for extra actions ({ap} AP banked)"))
                     self._choice_keys.append("cs:cheat")
 
-                choices.add_option(Option(f"Survive — bank AP, reduce damage (AP: {ap + 1})"))
+                next_ap = min(ap + 1, MAX_ACTION_POINT_BANK)
+                cap_note = " MAX" if next_ap == ap else ""
+                choices.add_option(Option(f"Survive — bank AP, reduce damage (AP: {next_ap}{cap_note})"))
                 self._choice_keys.append("cs:survive")
-                choices.focus()
 
             case CombatPhase.PLANNING_CHEAT_AP:
                 combatant = None
@@ -236,22 +259,82 @@ class CombatScreen(Screen):
                 for n in range(1, ap + 1):
                     choices.add_option(Option(f"Spend {n} AP ({n} extra action{'s' if n > 1 else ''})"))
                     self._choice_keys.append(f"cheat_ap:{n}")
-                choices.focus()
+
+            case CombatPhase.PLANNING_ACTION_MENU:
+                self._populate_action_menu(choices)
 
             case CombatPhase.PLANNING_ABILITY | CombatPhase.PLANNING_PARTIAL | CombatPhase.PLANNING_CHEAT_ACTION:
                 self._populate_ability_options(choices)
-                choices.focus()
 
             case CombatPhase.PLANNING_TARGET | CombatPhase.PLANNING_CHEAT_TARGET:
                 self._populate_target_options(choices)
-                choices.focus()
+
+            case CombatPhase.PLANNING_ITEM:
+                self._populate_item_options(choices)
+
+            case CombatPhase.PLANNING_ITEM_TARGET:
+                self._populate_item_target_options(choices)
 
             case CombatPhase.PLANNING_CONFIRM:
-                execute_btn.display = True
-                execute_btn.focus()
+                choices.add_option(Option("[bold]Execute Round[/bold]"))
+                self._choice_keys.append("execute")
 
             case CombatPhase.EXECUTING | CombatPhase.COMBAT_OVER:
-                pass
+                return
+
+        # Focus and highlight first option for all planning phases
+        if self._choice_keys:
+            choices.focus()
+            choices.highlighted = 0
+
+    def _populate_action_menu(self, choices: OptionList) -> None:
+        """Show top-level action categories: Basic Attack, Abilities, Items."""
+        if self._current_decision is None:
+            return
+        run = self.app.run_state
+        combat = self.app.combat_state
+        if run is None or combat is None:
+            return
+
+        char = run.party.characters.get(self._current_decision.combatant_id)
+        if char is None:
+            return
+
+        combatant = combat.get_combatant(self._current_decision.combatant_id)
+
+        # Basic Attack — always available (no sub-menu)
+        choices.add_option(Option("Basic Attack"))
+        self._choice_keys.append("action:basic_attack")
+
+        # Abilities — enabled only if character has non-basic_attack, non-passive abilities
+        has_extra_abilities = False
+        for ability_id in char.abilities:
+            if ability_id == "basic_attack":
+                continue
+            ability = self.app.game_data.abilities.get(ability_id)
+            if ability is not None and ability.category != AbilityCategory.PASSIVE:
+                has_extra_abilities = True
+                break
+
+        if has_extra_abilities:
+            choices.add_option(Option("Abilities"))
+            self._choice_keys.append("action:abilities")
+        else:
+            choices.add_option(Option("[dim]Abilities (none available)[/dim]"))
+            self._choice_keys.append("disabled")
+
+        # Items — enabled only if party stash has consumables
+        has_consumables = any(
+            (item := (run.party.items.get(iid) or self.app.game_data.items.get(iid)))
+            and item.is_consumable
+            for iid in run.party.stash
+        )
+        if has_consumables:
+            choices.add_option(Option("[#44aa44]Items[/#44aa44]"))
+            self._choice_keys.append("action:items")
+        else:
+            choices.add_option(Option("[dim]Items (none)[/dim]"))
+            self._choice_keys.append("disabled")
 
     def _populate_ability_options(self, choices: OptionList) -> None:
         """Shared ability list population for primary, cheat, and partial phases."""
@@ -269,6 +352,8 @@ class CombatScreen(Screen):
         combatant = combat.get_combatant(self._current_decision.combatant_id)
 
         for ability_id in char.abilities:
+            if ability_id == "basic_attack":
+                continue  # basic_attack is handled by the action menu
             ability = self.app.game_data.abilities.get(ability_id)
             if ability is None or ability.category == AbilityCategory.PASSIVE:
                 continue
@@ -278,10 +363,41 @@ class CombatScreen(Screen):
             if ability.description:
                 label += f" — {ability.description}"
             if cd > 0:
-                label += f" [CD: {cd}]"
+                label += f" [dim][CD: {cd}][/dim]"
 
             choices.add_option(Option(label))
             self._choice_keys.append(f"ability:{ability_id}" if cd == 0 else "cooldown")
+
+    def _populate_item_options(self, choices: OptionList) -> None:
+        """List consumable items from party stash."""
+        run = self.app.run_state
+        if run is None:
+            return
+
+        for item_id in run.party.stash:
+            item = run.party.items.get(item_id) or self.app.game_data.items.get(item_id)
+            if item is None or not item.is_consumable:
+                continue
+            label = item.name
+            if item.heal_amount > 0:
+                label += f" (heals {item.heal_amount} HP)"
+            elif item.heal_percent > 0:
+                label += f" (heals {int(item.heal_percent * 100)}% HP)"
+            choices.add_option(Option(label))
+            self._choice_keys.append(f"item:{item_id}")
+
+    def _populate_item_target_options(self, choices: OptionList) -> None:
+        """List party members to use an item on."""
+        combat = self.app.combat_state
+        if combat is None:
+            return
+
+        for p in combat.living_players:
+            name = self._combatant_names.get(p.id, p.id)
+            hp_pct = p.current_hp / max(p.max_hp, 1)
+            hp_color = "#44aa44" if hp_pct > 0.5 else "#cccc44" if hp_pct > 0.25 else "#cc4444"
+            choices.add_option(Option(f"{name} [{hp_color}]{p.current_hp}/{p.max_hp}[/{hp_color}]"))
+            self._choice_keys.append(f"item_target:{p.id}")
 
     def _populate_target_options(self, choices: OptionList) -> None:
         """Shared target list population."""
@@ -304,6 +420,29 @@ class CombatScreen(Screen):
             choices.add_option(Option(name))
             self._choice_keys.append(f"target:{tid}")
 
+    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
+        """Update target cursor in status panels as player browses targets."""
+        if event.option_list.id != "action-choices":
+            return
+        idx = event.option_index
+        if idx < 0 or idx >= len(self._choice_keys):
+            return
+
+        key = self._choice_keys[idx]
+        old_target = self._highlighted_target_id
+
+        if key.startswith("target:"):
+            self._highlighted_target_id = key.split(":", 1)[1]
+        else:
+            self._highlighted_target_id = None
+
+        # Re-render panels if cursor moved
+        if self._highlighted_target_id != old_target:
+            combat = self.app.combat_state
+            if combat:
+                self._render_party_panel(combat)
+                self._render_enemy_panel(combat)
+
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         if event.option_list.id != "action-choices":
             return
@@ -312,7 +451,11 @@ class CombatScreen(Screen):
             return
 
         key = self._choice_keys[idx]
-        if key == "cooldown":
+        if key in ("cooldown", "disabled"):
+            return
+
+        if key == "execute":
+            self._execute_round()
             return
 
         parts = key.split(":", 1)
@@ -321,10 +464,116 @@ class CombatScreen(Screen):
                 self._handle_cs(parts[1])
             case "cheat_ap":
                 self._handle_cheat_ap(int(parts[1]))
+            case "action":
+                self._handle_action_menu(parts[1])
             case "ability":
                 self._handle_ability(parts[1])
             case "target":
                 self._handle_target(parts[1])
+            case "item":
+                self._selected_item_id = parts[1]
+                self._phase = CombatPhase.PLANNING_ITEM_TARGET
+                self._populate_choices()
+                self._update_display()
+            case "item_target":
+                self._handle_item_use(parts[1])
+
+    def _handle_item_use(self, target_id: str) -> None:
+        """Apply a consumable item to a combatant mid-combat."""
+        run = self.app.run_state
+        combat = self.app.combat_state
+        if run is None or combat is None or self._selected_item_id is None:
+            return
+
+        item = run.party.items.get(self._selected_item_id) or self.app.game_data.items.get(self._selected_item_id)
+        if item is None:
+            return
+
+        # Apply healing to combatant in combat state
+        combatant = combat.get_combatant(target_id)
+        if combatant and combatant.is_alive:
+            heal = 0
+            if item.heal_amount > 0:
+                heal = item.heal_amount
+            elif item.heal_percent > 0:
+                heal = int(combatant.max_hp * item.heal_percent)
+            if heal > 0:
+                combatant.current_hp = min(combatant.max_hp, combatant.current_hp + heal)
+
+        # Remove item from stash
+        new_stash = list(run.party.stash)
+        if self._selected_item_id in new_stash:
+            new_stash.remove(self._selected_item_id)
+        party = run.party.model_copy(update={"stash": new_stash})
+        self.app.run_state = run.model_copy(update={"party": party})
+
+        # Log the item use
+        log = self.query_one("#combat-log", RichLog)
+        user_name = self._combatant_names.get(self._current_decision.combatant_id, "") if self._current_decision else ""
+        target_name = self._combatant_names.get(target_id, target_id)
+        log.write(f"[#44aa44]{user_name} uses {item.name} on {target_name}[/#44aa44]")
+
+        self._selected_item_id = None
+
+        # Route back into the turn flow — don't skip remaining actions
+        if self._current_decision is None:
+            return
+
+        # If this was during cheat extra actions, consume one and continue
+        if self._cheat_actions_remaining > 0 and self._current_decision.primary_action is not None:
+            self._cheat_actions_remaining -= 1
+            if self._cheat_actions_remaining > 0:
+                self._phase = CombatPhase.PLANNING_ACTION_MENU
+                self._selected_ability_id = None
+                self._populate_choices()
+                self._update_display()
+                return
+            self._current_decision.cheat_extra_actions = self._cheat_extra_actions
+            self._check_partial_actions()
+            return
+
+        # If this was during partial (SPD bonus) actions, consume one and continue
+        if self._partial_actions_remaining > 0 and self._current_decision.primary_action is not None:
+            self._partial_actions_remaining -= 1
+            if self._partial_actions_remaining > 0:
+                self._phase = CombatPhase.PLANNING_ACTION_MENU
+                self._selected_ability_id = None
+                self._populate_choices()
+                self._update_display()
+                return
+            self._current_decision.partial_actions = self._partial_actions
+            self._finalize_character()
+            return
+
+        # Primary action slot — item replaces attack
+        self._current_decision.primary_action = None
+
+        # Still need cheat extra actions?
+        if self._cheat_actions_remaining > 0:
+            self._phase = CombatPhase.PLANNING_ACTION_MENU
+            self._selected_ability_id = None
+            self._populate_choices()
+            self._update_display()
+            return
+
+        self._check_partial_actions()
+
+    def _handle_action_menu(self, choice: str) -> None:
+        """Handle selection from the action menu (Basic Attack / Abilities / Items)."""
+        match choice:
+            case "basic_attack":
+                # Route through the same ability handler for consistent targeting
+                self._handle_ability("basic_attack")
+            case "abilities":
+                self._phase = CombatPhase.PLANNING_ABILITY
+                self._selected_ability_id = None
+                self._populate_choices()
+                self._update_display()
+            case "items":
+                self._phase = CombatPhase.PLANNING_ITEM
+                self._selected_ability_id = None
+                self._populate_choices()
+                self._update_display()
 
     def _handle_cs(self, choice: str) -> None:
         if self._current_decision is None:
@@ -346,7 +595,7 @@ class CombatScreen(Screen):
             case "normal":
                 self._current_decision.cheat_survive = CheatSurviveChoice.NORMAL
 
-        self._phase = CombatPhase.PLANNING_ABILITY
+        self._phase = CombatPhase.PLANNING_ACTION_MENU
         self._selected_ability_id = None
         self._partial_actions = []
         self._partial_actions_remaining = 0
@@ -364,7 +613,7 @@ class CombatScreen(Screen):
         self._cheat_extra_actions = []
 
         # Now choose primary action
-        self._phase = CombatPhase.PLANNING_ABILITY
+        self._phase = CombatPhase.PLANNING_ACTION_MENU
         self._selected_ability_id = None
         self._populate_choices()
         self._update_display()
@@ -374,11 +623,6 @@ class CombatScreen(Screen):
         ability = self.app.game_data.abilities.get(ability_id)
         if ability is None:
             return
-
-        # Determine which target phase to go to
-        target_phase = CombatPhase.PLANNING_TARGET
-        if self._phase == CombatPhase.PLANNING_CHEAT_ACTION:
-            target_phase = CombatPhase.PLANNING_CHEAT_TARGET
 
         # Auto-target for non-single target types
         match ability.target:
@@ -394,7 +638,7 @@ class CombatScreen(Screen):
                 if combat:
                     self._apply_action(ability_id, [p.id for p in combat.living_players])
             case _:
-                self._phase = target_phase
+                self._phase = CombatPhase.PLANNING_TARGET
                 self._populate_choices()
                 self._update_display()
 
@@ -413,12 +657,12 @@ class CombatScreen(Screen):
             target_ids=target_ids,
         )
 
-        # Cheat extra action
-        if self._phase in (CombatPhase.PLANNING_CHEAT_ACTION, CombatPhase.PLANNING_CHEAT_TARGET):
+        # Cheat extra action (primary already set, cheat slots remaining)
+        if self._cheat_actions_remaining > 0 and self._current_decision.primary_action is not None:
             self._cheat_extra_actions.append(action)
             self._cheat_actions_remaining -= 1
             if self._cheat_actions_remaining > 0:
-                self._phase = CombatPhase.PLANNING_CHEAT_ACTION
+                self._phase = CombatPhase.PLANNING_ACTION_MENU
                 self._selected_ability_id = None
                 self._populate_choices()
                 self._update_display()
@@ -428,12 +672,12 @@ class CombatScreen(Screen):
             self._check_partial_actions()
             return
 
-        # Partial (SPD bonus) action
-        if self._phase in (CombatPhase.PLANNING_PARTIAL, CombatPhase.PLANNING_TARGET) and self._partial_actions_remaining > 0 and self._current_decision.primary_action is not None:
+        # Partial (SPD bonus) action (primary already set, partial slots remaining)
+        if self._partial_actions_remaining > 0 and self._current_decision.primary_action is not None:
             self._partial_actions.append(action)
             self._partial_actions_remaining -= 1
             if self._partial_actions_remaining > 0:
-                self._phase = CombatPhase.PLANNING_PARTIAL
+                self._phase = CombatPhase.PLANNING_ACTION_MENU
                 self._selected_ability_id = None
                 self._populate_choices()
                 self._update_display()
@@ -447,7 +691,7 @@ class CombatScreen(Screen):
 
         # If cheating, now choose extra actions
         if self._cheat_actions_remaining > 0:
-            self._phase = CombatPhase.PLANNING_CHEAT_ACTION
+            self._phase = CombatPhase.PLANNING_ACTION_MENU
             self._selected_ability_id = None
             self._populate_choices()
             self._update_display()
@@ -465,7 +709,7 @@ class CombatScreen(Screen):
                 if bonus > 0:
                     self._partial_actions_remaining = bonus
                     self._partial_actions = []
-                    self._phase = CombatPhase.PLANNING_PARTIAL
+                    self._phase = CombatPhase.PLANNING_ACTION_MENU
                     self._selected_ability_id = None
                     self._populate_choices()
                     self._update_display()
@@ -492,12 +736,29 @@ class CombatScreen(Screen):
                 self._phase = CombatPhase.PLANNING_CHEAT_SURVIVE
                 self._populate_choices()
                 self._update_display()
-            case CombatPhase.PLANNING_ABILITY:
+            case CombatPhase.PLANNING_ACTION_MENU:
                 self._phase = CombatPhase.PLANNING_CHEAT_SURVIVE
                 self._populate_choices()
                 self._update_display()
+            case CombatPhase.PLANNING_ABILITY:
+                self._phase = CombatPhase.PLANNING_ACTION_MENU
+                self._populate_choices()
+                self._update_display()
             case CombatPhase.PLANNING_TARGET:
-                self._phase = CombatPhase.PLANNING_ABILITY
+                # If targeting for basic_attack (from action menu), go back to action menu
+                if self._selected_ability_id == "basic_attack":
+                    self._phase = CombatPhase.PLANNING_ACTION_MENU
+                else:
+                    self._phase = CombatPhase.PLANNING_ABILITY
+                self._populate_choices()
+                self._update_display()
+            case CombatPhase.PLANNING_ITEM:
+                self._selected_item_id = None
+                self._phase = CombatPhase.PLANNING_ACTION_MENU
+                self._populate_choices()
+                self._update_display()
+            case CombatPhase.PLANNING_ITEM_TARGET:
+                self._phase = CombatPhase.PLANNING_ITEM
                 self._populate_choices()
                 self._update_display()
             case CombatPhase.PLANNING_CHEAT_ACTION:
@@ -505,11 +766,11 @@ class CombatScreen(Screen):
                     self._cheat_extra_actions.pop()
                     self._cheat_actions_remaining += 1
                 else:
-                    self._phase = CombatPhase.PLANNING_ABILITY
+                    self._phase = CombatPhase.PLANNING_ACTION_MENU
                 self._populate_choices()
                 self._update_display()
             case CombatPhase.PLANNING_CHEAT_TARGET:
-                self._phase = CombatPhase.PLANNING_CHEAT_ACTION
+                self._phase = CombatPhase.PLANNING_ACTION_MENU
                 self._populate_choices()
                 self._update_display()
             case CombatPhase.PLANNING_CONFIRM:
@@ -568,11 +829,27 @@ class CombatScreen(Screen):
                 prompt.update(f"[bold #e6c566]{name}[/bold #e6c566] — Cheat, Survive, or Normal?")
             case CombatPhase.PLANNING_CHEAT_AP:
                 prompt.update(f"[bold #e6c566]{name}[/bold #e6c566] — How many AP to spend?")
+            case CombatPhase.PLANNING_ACTION_MENU:
+                # Context-aware prompt for action menu
+                if self._cheat_actions_remaining > 0 and self._current_decision and self._current_decision.primary_action is not None:
+                    n = len(self._cheat_extra_actions) + 1
+                    total = self._current_decision.cheat_actions if self._current_decision else 0
+                    prompt.update(f"[bold #e6c566]{name}[/bold #e6c566] — Cheat action {n}/{total}")
+                elif self._partial_actions_remaining > 0 and self._current_decision and self._current_decision.primary_action is not None:
+                    prompt.update(f"[bold #e6c566]{name}[/bold #e6c566] — Bonus action ({self._partial_actions_remaining} remaining)")
+                else:
+                    prompt.update(f"[bold #e6c566]{name}[/bold #e6c566] — Choose action")
             case CombatPhase.PLANNING_ABILITY:
                 prompt.update(f"[bold #e6c566]{name}[/bold #e6c566] — Choose ability")
             case CombatPhase.PLANNING_TARGET:
                 aname = self._ability_names.get(self._selected_ability_id or "", "")
                 prompt.update(f"[bold #e6c566]{name}[/bold #e6c566] — {aname} → Select target")
+            case CombatPhase.PLANNING_ITEM:
+                prompt.update(f"[bold #e6c566]{name}[/bold #e6c566] — Choose item to use")
+            case CombatPhase.PLANNING_ITEM_TARGET:
+                item = self.app.game_data.items.get(self._selected_item_id or "")
+                iname = item.name if item else "Item"
+                prompt.update(f"[bold #e6c566]{name}[/bold #e6c566] — {iname} → Use on who?")
             case CombatPhase.PLANNING_CHEAT_ACTION:
                 n = len(self._cheat_extra_actions) + 1
                 total = self._current_decision.cheat_actions if self._current_decision else 0
@@ -600,46 +877,71 @@ class CombatScreen(Screen):
             job_name = ""
             if char:
                 job = self.app.game_data.jobs.get(char.job_id)
-                job_name = f" ({job.name})" if job else ""
+                job_name = job.name if job else ""
 
-            hp_pct = p.current_hp / max(p.max_hp, 1)
+            # Use progressive display state if available (during playback)
+            hp = self._display_hp.get(p.id, p.current_hp)
+            max_hp = self._display_max_hp.get(p.id, p.max_hp)
+            alive = self._display_alive.get(p.id, p.is_alive)
+
+            if not alive:
+                lines.append(f"[#880000]{name} ({job_name} Lv{char.level if char else '?'}) DEAD[/#880000]")
+                continue
+
+            # Markers: ◄ for active turn, ► for target cursor
+            is_active = self._current_combatant_id() == p.id and self._phase not in (CombatPhase.EXECUTING, CombatPhase.COMBAT_OVER)
+            is_targeted = self._highlighted_target_id == p.id
+
+            if is_targeted:
+                marker = "[bold #e6c566]►[/bold #e6c566] "
+            elif is_active:
+                marker = "[bold #e6c566]◄[/bold #e6c566] "
+            else:
+                marker = "  "
+
+            ap_str = f"  AP:{p.action_points}" if p.action_points > 0 else ""
+            debt_str = f" D:{p.cheat_debt}" if p.cheat_debt > 0 else ""
+
+            hp_pct = hp / max(max_hp, 1)
             hp_color = "#44aa44" if hp_pct > 0.5 else "#cccc44" if hp_pct > 0.25 else "#cc4444"
-            bar_w = 20
+            bar_w = 12
             filled = int(hp_pct * bar_w)
             bar = f"[{hp_color}]{'█' * filled}[/{hp_color}][#333333]{'░' * (bar_w - filled)}[/#333333]"
 
-            alive = "" if p.is_alive else " [#880000][DEAD][/#880000]"
-            active = " ◄" if (self._current_combatant_id() == p.id and self._phase not in (CombatPhase.EXECUTING, CombatPhase.COMBAT_OVER)) else ""
-            ap_str = f"  AP:{p.action_points}" if p.action_points > 0 else ""
-            debt_str = f"  Debt:{p.cheat_debt}" if p.cheat_debt > 0 else ""
+            lines.append(f"{marker}[bold]{name}[/bold] ({job_name} Lv{char.level if char else '?'})")
+            lines.append(f"  {bar} {hp}/{max_hp}{ap_str}{debt_str}")
 
-            lines.append(
-                f"[bold]{name}[/bold]{job_name} Lv{char.level if char else '?'}{active}{alive}\n"
-                f"  {bar} {p.current_hp}/{p.max_hp}{ap_str}{debt_str}"
-            )
-
-        self.query_one("#party-display", Static).update("\n\n".join(lines))
+        self.query_one("#party-display", Static).update("\n".join(lines))
 
     def _render_enemy_panel(self, combat: CombatState) -> None:
         lines: list[str] = []
         for e in combat.enemy_combatants:
             name = self._combatant_names.get(e.id, e.id)
-            hp_pct = e.current_hp / max(e.max_hp, 1)
+
+            # Use progressive display state if available (during playback)
+            hp = self._display_hp.get(e.id, e.current_hp)
+            max_hp = self._display_max_hp.get(e.id, e.max_hp)
+            alive = self._display_alive.get(e.id, e.is_alive)
+
+            if not alive:
+                lines.append(f"[#880000]{name} DEAD[/#880000]")
+                continue
+
+            is_targeted = self._highlighted_target_id == e.id
+            marker = "[bold #e6c566]►[/bold #e6c566] " if is_targeted else "  "
+
+            hp_pct = hp / max(max_hp, 1)
             hp_color = "#cc4444" if hp_pct > 0.5 else "#cccc44" if hp_pct > 0.25 else "#44aa44"
-            bar_w = 20
+            bar_w = 12
             filled = int(hp_pct * bar_w)
             bar = f"[{hp_color}]{'█' * filled}[/{hp_color}][#333333]{'░' * (bar_w - filled)}[/#333333]"
-            alive = "" if e.is_alive else " [#880000][DEAD][/#880000]"
 
-            lines.append(f"[bold]{name}[/bold]{alive}\n  {bar} {e.current_hp}/{e.max_hp}")
+            lines.append(f"{marker}[bold]{name}[/bold]")
+            lines.append(f"  {bar} {hp}/{max_hp}")
 
-        self.query_one("#enemy-display", Static).update("\n\n".join(lines))
+        self.query_one("#enemy-display", Static).update("\n".join(lines))
 
     # --- Round Execution ---
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-execute":
-            self._execute_round()
 
     def _execute_round(self) -> None:
         self._phase = CombatPhase.EXECUTING
@@ -649,6 +951,15 @@ class CombatScreen(Screen):
         combat = self.app.combat_state
         if combat is None:
             return
+
+        # Snapshot HP before processing — playback will apply changes progressively
+        self._display_hp = {}
+        self._display_alive = {}
+        self._display_max_hp = {}
+        for c in combat.player_combatants + combat.enemy_combatants:
+            self._display_hp[c.id] = c.current_hp
+            self._display_alive[c.id] = c.is_alive
+            self._display_max_hp[c.id] = c.max_hp
 
         self._round_events_start = len(combat.log)
 
@@ -697,14 +1008,41 @@ class CombatScreen(Screen):
                 render_event(e, self._combatant_names, self._ability_names, verbose=True)
                 for e in events
             ]
+            self._raw_event_queue = list(events)
             self._event_delays = [get_event_delay(e) for e in events]
         else:
             self._playback_queue = render_events_summary(
                 events, self._combatant_names, self._ability_names
             )
+            self._raw_event_queue = []
             self._event_delays = [300] * len(self._playback_queue)
+            # Summary mode: apply all changes up front (can't sync per-line)
+            for e in events:
+                self._apply_display_event(e)
 
         self._play_next_event()
+
+    def _apply_display_event(self, event) -> None:
+        """Apply a combat event to the progressive display state."""
+        match event.event_type:
+            case CombatEventType.DAMAGE_DEALT:
+                tid = event.actor_id if event.details.get("self_damage") else event.target_id
+                if tid in self._display_hp:
+                    self._display_hp[tid] = max(0, self._display_hp[tid] - event.value)
+            case CombatEventType.DOT_TICK:
+                if event.target_id in self._display_hp:
+                    self._display_hp[event.target_id] = max(0, self._display_hp[event.target_id] - event.value)
+            case CombatEventType.HEALING:
+                if event.target_id in self._display_hp:
+                    cap = self._display_max_hp.get(event.target_id, 9999)
+                    self._display_hp[event.target_id] = min(cap, self._display_hp[event.target_id] + event.value)
+            case CombatEventType.DEATH:
+                if event.target_id in self._display_alive:
+                    self._display_alive[event.target_id] = False
+                    self._display_hp[event.target_id] = 0
+            case CombatEventType.RETALIATE_TRIGGERED:
+                if event.target_id in self._display_hp:
+                    self._display_hp[event.target_id] = max(0, self._display_hp[event.target_id] - event.value)
 
     def _play_next_event(self) -> None:
         if not self._playback_queue:
@@ -714,9 +1052,15 @@ class CombatScreen(Screen):
         rendered = self._playback_queue.pop(0)
         delay = self._event_delays.pop(0) if self._event_delays else 250
 
+        # Apply raw event to display state (verbose mode — 1:1 with rendered)
+        if self._raw_event_queue:
+            raw = self._raw_event_queue.pop(0)
+            self._apply_display_event(raw)
+
         log = self.query_one("#combat-log", RichLog)
         log.write(rendered.text)
 
+        # Re-render panels with progressive display state
         combat = self.app.combat_state
         if combat:
             self._render_party_panel(combat)
@@ -725,6 +1069,11 @@ class CombatScreen(Screen):
         self.set_timer(delay / 1000.0, self._play_next_event)
 
     def _on_playback_complete(self) -> None:
+        # Clear progressive display — panels now read from actual combat state
+        self._display_hp.clear()
+        self._display_alive.clear()
+        self._display_max_hp.clear()
+
         combat = self.app.combat_state
         if combat is None:
             return

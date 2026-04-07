@@ -101,6 +101,20 @@ class EnemyAI:
                         return True
                 return False
 
+            case "ally_hp_below":
+                for other_enemy in combat_state.living_enemies:
+                    if other_enemy.id != enemy.id and other_enemy.max_hp > 0:
+                        if other_enemy.current_hp / other_enemy.max_hp < condition.threshold:
+                            return True
+                return False
+
+            case "no_damaged_allies":
+                for other_enemy in combat_state.living_enemies:
+                    if other_enemy.id != enemy.id:
+                        if other_enemy.current_hp < other_enemy.max_hp:
+                            return False
+                return True
+
             case "last_standing":
                 return len(combat_state.living_enemies) == 1
 
@@ -132,6 +146,12 @@ class EnemyAI:
             if ability.target == TargetType.ALL_ALLIES:
                 return [e.id for e in living_enemies]
             if living_enemies:
+                # For heals, prefer the most damaged ally
+                if ability.category.value == "SUPPORT":
+                    allies_excl_self = [e for e in living_enemies if e.id != enemy_template.id]
+                    if allies_excl_self:
+                        target = min(allies_excl_self, key=lambda e: e.current_hp / max(e.max_hp, 1))
+                        return [target.id]
                 return [self.rng.choice(living_enemies).id]
             return []
 

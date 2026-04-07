@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Label, Static
+from textual.widgets import Footer, Label, OptionList, Static
+from textual.widgets.option_list import Option
 
-from heresiarch.engine.formulas import calculate_max_hp
 
 
 class ZoneScreen(Screen):
@@ -25,12 +25,10 @@ class ZoneScreen(Screen):
     #party-summary {
         margin: 1 0;
     }
-    .zone-btn-row {
+    #zone-actions {
         height: auto;
+        max-height: 10;
         margin-top: 1;
-    }
-    .zone-btn {
-        margin: 0 1 0 0;
     }
     """
 
@@ -39,7 +37,12 @@ class ZoneScreen(Screen):
         ("p", "party", "Party"),
         ("i", "inventory", "Inventory"),
         ("s", "shop", "Shop"),
+        ("l", "leave", "Leave Zone"),
     ]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._action_keys: list[str] = []
 
     def compose(self) -> ComposeResult:
         with Vertical(id="zone-box"):
@@ -47,16 +50,12 @@ class ZoneScreen(Screen):
             yield Label("", id="zone-progress")
             yield Label("", id="zone-level")
             yield Static("", id="party-summary")
-            with Horizontal(classes="zone-btn-row"):
-                yield Button("[f] Fight", variant="primary", id="btn-fight", classes="zone-btn")
-                yield Button("[p] Party", id="btn-party", classes="zone-btn")
-                yield Button("[i] Inventory", id="btn-inventory", classes="zone-btn")
-                yield Button("[s] Shop", id="btn-shop", classes="zone-btn", disabled=True)
+            yield OptionList(id="zone-actions")
         yield Footer()
 
     def on_mount(self) -> None:
         self._refresh_display()
-        self.query_one("#btn-fight", Button).focus()
+        self.query_one("#zone-actions", OptionList).focus()
 
     def on_screen_resume(self) -> None:
         self._refresh_display()
@@ -77,7 +76,14 @@ class ZoneScreen(Screen):
         )
 
         progress = self.query_one("#zone-progress", Label)
-        if cleared:
+        if cleared and zs.overstay_battles > 0:
+            penalty_pct = min(zs.overstay_battles * 5, 100)
+            progress.update(
+                f"[bold #44aa44]Zone Cleared![/bold #44aa44]  "
+                f"[dim]Overstay: {zs.overstay_battles} battles "
+                f"(-{penalty_pct}% loot)[/dim]"
+            )
+        elif cleared:
             progress.update("[bold #44aa44]Zone Cleared![/bold #44aa44]")
         else:
             progress.update(f"Encounters: {current}/{total}")
@@ -94,9 +100,7 @@ class ZoneScreen(Screen):
             job = self.app.game_data.jobs.get(char.job_id)
             if job is None:
                 continue
-            max_hp = calculate_max_hp(
-                job.base_hp, job.hp_growth, char.level, char.base_stats.DEF
-            )
+            max_hp = char.max_hp or 1
             hp_pct = char.current_hp / max(max_hp, 1)
             hp_color = "#44aa44" if hp_pct > 0.5 else "#cccc44" if hp_pct > 0.25 else "#cc4444"
             lines.append(
@@ -107,20 +111,52 @@ class ZoneScreen(Screen):
             lines.append(f"  Money: [bold #e6c566]{party.money}G[/bold #e6c566]")
         self.query_one("#party-summary", Static).update("\n".join(lines))
 
-        # Button states
-        self.query_one("#btn-fight", Button).disabled = cleared
-        self.query_one("#btn-shop", Button).disabled = len(zone.shop_item_pool) == 0
+        # Action list
+        action_list = self.query_one("#zone-actions", OptionList)
+        action_list.clear_options()
+        self._action_keys = []
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        match event.button.id:
-            case "btn-fight":
+        if cleared:
+            action_list.add_option(Option("[f] Keep Fighting (overstay)"))
+            self._action_keys.append("fight")
+        else:
+            action_list.add_option(Option("[f] Fight"))
+            self._action_keys.append("fight")
+
+        action_list.add_option(Option("[p] Party"))
+        self._action_keys.append("party")
+
+        action_list.add_option(Option("[i] Inventory"))
+        self._action_keys.append("inventory")
+
+        if len(zone.shop_item_pool) > 0:
+            action_list.add_option(Option("[s] Shop"))
+            self._action_keys.append("shop")
+
+        action_list.add_option(Option("[l] Leave Zone"))
+        self._action_keys.append("leave")
+
+        action_list.focus()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        if event.option_list.id != "zone-actions":
+            return
+        idx = event.option_index
+        if idx < 0 or idx >= len(self._action_keys):
+            return
+
+        action = self._action_keys[idx]
+        match action:
+            case "fight":
                 self.action_fight()
-            case "btn-party":
+            case "party":
                 self.action_party()
-            case "btn-inventory":
+            case "inventory":
                 self.action_inventory()
-            case "btn-shop":
+            case "shop":
                 self.action_shop()
+            case "leave":
+                self.action_leave()
 
     def action_fight(self) -> None:
         from heresiarch.tui.screens.combat import CombatScreen
@@ -141,3 +177,21 @@ class ZoneScreen(Screen):
         from heresiarch.tui.screens.shop import ShopScreen
 
         self.app.push_screen(ShopScreen())
+
+    def action_leave(self) -> None:
+        """Exit the current zone, heal, return to zone selection."""
+        run = self.app.run_state
+        if run is None:
+            return
+
+        run = self.app.game_loop.leave_zone(run)
+        self.app.run_state = run
+
+        try:
+            self.app.save_manager.autosave(run)
+        except Exception:
+            pass
+
+        from heresiarch.tui.screens.zone_select import ZoneSelectScreen
+
+        self.app.switch_screen(ZoneSelectScreen())

@@ -8,7 +8,12 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from heresiarch.engine.formulas import calculate_max_hp, calculate_stats_at_level
+from heresiarch.engine.formulas import (
+    calculate_effective_stats,
+    calculate_max_hp,
+    calculate_stats_at_level,
+)
+from heresiarch.engine.models.items import EquipSlot, Item
 from heresiarch.engine.models.jobs import CharacterInstance, JobTemplate
 from heresiarch.engine.models.party import Party
 from heresiarch.engine.models.stats import GrowthVector, StatType
@@ -21,7 +26,12 @@ CHA_FULL_THRESHOLD: int = 70
 GROWTH_VARIANCE: int = 2
 
 # --- Party Limits ---
-MAX_PARTY_SIZE: int = 4
+MAX_ACTIVE_SIZE: int = 3
+MAX_PARTY_SIZE: int = 4  # total active + reserve (3 active + 1 reserve)
+
+# --- Recruit Equipment Probabilities ---
+RECRUIT_WEAPON_CHANCE: float = 0.8
+RECRUIT_ARMOR_CHANCE: float = 0.5
 
 
 class InspectionLevel(str, Enum):
@@ -43,21 +53,30 @@ class RecruitmentEngine:
     def __init__(
         self,
         job_registry: dict[str, JobTemplate],
+        item_registry: dict[str, Item] | None = None,
         rng: random.Random | None = None,
     ):
         self.job_registry = job_registry
+        self.item_registry = item_registry or {}
         self.rng = rng or random.Random()
 
     def generate_candidate(
         self,
         zone_level: int,
         exclude_job_ids: list[str] | None = None,
+        shop_pool: list[str] | None = None,
     ) -> RecruitCandidate:
         """Create a random recruit at zone-appropriate level with randomized growth.
 
         Growth variance: each stat = job_template_growth +/- randint(-2, 2),
         clamped to [0, job_template_growth + GROWTH_VARIANCE].
         Character level = zone_level.
+
+        If ``shop_pool`` is provided, equips the recruit with job-appropriate
+        items from that pool (weapon 80%, armor 50%).
+
+        If ``exclude_job_ids`` is provided, those jobs are excluded from the
+        candidate pool (rolling-window duplicate prevention).
         """
         exclude = set(exclude_job_ids or [])
         available_jobs = [
@@ -71,7 +90,24 @@ class RecruitmentEngine:
 
         randomized_growth = self._randomize_growth(job.growth)
         stats = calculate_stats_at_level(randomized_growth, zone_level)
-        max_hp = calculate_max_hp(job.base_hp, job.hp_growth, zone_level, stats.DEF)
+
+        # Select equipment based on job affinity and zone shop pool
+        equipment = self._select_recruit_equipment(job, shop_pool or [])
+
+        # Compute effective stats with equipment
+        equipped_items: list[Item] = []
+        for slot, item_id in equipment.items():
+            if item_id and item_id in self.item_registry:
+                equipped_items.append(self.item_registry[item_id])
+        effective = calculate_effective_stats(stats, equipped_items, [])
+
+        max_hp = calculate_max_hp(job.base_hp, job.hp_growth, zone_level, effective.DEF)
+
+        # Build ability list from job innate + equipment-granted
+        abilities = ["basic_attack", job.innate_ability_id]
+        for item in equipped_items:
+            if item.granted_ability_id:
+                abilities.append(item.granted_ability_id)
 
         char_id = f"recruit_{job_id}_{self.rng.randint(1000, 9999)}"
         character = CharacterInstance(
@@ -80,11 +116,64 @@ class RecruitmentEngine:
             job_id=job_id,
             level=zone_level,
             base_stats=stats,
+            effective_stats=effective,
             current_hp=max_hp,
-            abilities=["basic_attack", job.innate_ability_id],
+            max_hp=max_hp,
+            abilities=abilities,
+            equipment=equipment,
         )
 
         return RecruitCandidate(character=character, growth=randomized_growth)
+
+    def _select_recruit_equipment(
+        self,
+        job: JobTemplate,
+        shop_pool: list[str],
+    ) -> dict[str, str | None]:
+        """Select random equipment for a recruit from the zone's shop pool.
+
+        Uses job growth to determine affinity:
+          - If STR >= MAG: prefer STR-scaling weapons, else MAG-scaling
+          - If DEF >= RES: prefer DEF-scaling armor, else RES-scaling
+        """
+        equipment: dict[str, str | None] = {
+            "WEAPON": None,
+            "ARMOR": None,
+            "ACCESSORY_1": None,
+            "ACCESSORY_2": None,
+        }
+
+        if not shop_pool or not self.item_registry:
+            return equipment
+
+        prefers_str = job.growth.STR >= job.growth.MAG
+        prefers_def = job.growth.DEF >= job.growth.RES
+
+        weapons: list[str] = []
+        armors: list[str] = []
+
+        for item_id in shop_pool:
+            item = self.item_registry.get(item_id)
+            if item is None or item.is_consumable:
+                continue
+            if item.slot == EquipSlot.WEAPON and item.scaling:
+                if prefers_str and item.scaling.stat == StatType.STR:
+                    weapons.append(item_id)
+                elif not prefers_str and item.scaling.stat == StatType.MAG:
+                    weapons.append(item_id)
+            elif item.slot == EquipSlot.ARMOR and item.scaling:
+                if prefers_def and item.scaling.stat == StatType.DEF:
+                    armors.append(item_id)
+                elif not prefers_def and item.scaling.stat == StatType.RES:
+                    armors.append(item_id)
+
+        if weapons and self.rng.random() < RECRUIT_WEAPON_CHANCE:
+            equipment["WEAPON"] = self.rng.choice(weapons)
+
+        if armors and self.rng.random() < RECRUIT_ARMOR_CHANCE:
+            equipment["ARMOR"] = self.rng.choice(armors)
+
+        return equipment
 
     def get_inspection_level(self, cha: int) -> InspectionLevel:
         """CHA < 30: MINIMAL. CHA 30-69: MODERATE. CHA >= 70: FULL."""
@@ -112,14 +201,14 @@ class RecruitmentEngine:
         }
 
         if level in (InspectionLevel.MODERATE, InspectionLevel.FULL):
-            info["growth"] = candidate.growth.model_dump()
+            info["growth"] = candidate.growth
 
         if level == InspectionLevel.FULL:
             info["level"] = candidate.character.level
-            info["current_stats"] = candidate.character.base_stats.model_dump()
-            info["current_hp"] = candidate.character.current_hp
+            info["stats"] = candidate.character.base_stats
+            info["hp"] = candidate.character.current_hp
             projected_stats = calculate_stats_at_level(candidate.growth, 99)
-            info["projected_stats_99"] = projected_stats.model_dump()
+            info["projected_stats_99"] = projected_stats
 
         return info
 
@@ -128,7 +217,7 @@ class RecruitmentEngine:
         party: Party,
         candidate: RecruitCandidate,
     ) -> Party:
-        """Add candidate to party reserve.
+        """Add candidate to active party if there's room, otherwise reserve.
 
         Raises ValueError if party already has MAX_PARTY_SIZE characters.
         """
@@ -141,10 +230,30 @@ class RecruitmentEngine:
 
         new_characters = dict(party.characters)
         new_characters[candidate.character.id] = candidate.character
-        new_reserve = list(party.reserve) + [candidate.character.id]
 
+        # Add equipped items to party inventory so they resolve during combat
+        new_items = dict(party.items)
+        for slot, item_id in candidate.character.equipment.items():
+            if item_id and item_id in self.item_registry:
+                new_items[item_id] = self.item_registry[item_id]
+
+        if len(party.active) < MAX_ACTIVE_SIZE:
+            new_active = list(party.active) + [candidate.character.id]
+            return party.model_copy(
+                update={
+                    "characters": new_characters,
+                    "active": new_active,
+                    "items": new_items,
+                }
+            )
+
+        new_reserve = list(party.reserve) + [candidate.character.id]
         return party.model_copy(
-            update={"characters": new_characters, "reserve": new_reserve}
+            update={
+                "characters": new_characters,
+                "reserve": new_reserve,
+                "items": new_items,
+            }
         )
 
     def _randomize_growth(self, base_growth: GrowthVector) -> GrowthVector:

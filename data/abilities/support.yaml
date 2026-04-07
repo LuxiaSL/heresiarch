@@ -59,3 +59,30 @@
       self_damage_ratio: 0.3
       stat_scaling: DEF
       scaling_coefficient: 0.0
+
+# --- Enemy support abilities ---
+
+- id: heal_ally
+  name: Heal Ally
+  category: SUPPORT
+  target: SINGLE_ALLY
+  cooldown: 2
+  description: "Channels restorative energy into a wounded ally."
+  effects:
+    - heal_percent: 0.25
+      stat_scaling: MAG
+      scaling_coefficient: 0.0
+
+- id: rally
+  name: Rally
+  category: SUPPORT
+  target: SINGLE_ALLY
+  cooldown: 3
+  description: "Bolsters an ally's offensive power for 2 rounds."
+  effects:
+    - stat_buff:
+        STR: 20
+        MAG: 20
+      duration_rounds: 2
+      stat_scaling: MAG
+      scaling_coefficient: 0.0

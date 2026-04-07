@@ -5,7 +5,8 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Static
+from textual.widgets import Footer, OptionList, Static
+from textual.widgets.option_list import Option
 
 
 TITLE_ART = """\
@@ -40,8 +41,10 @@ class TitleScreen(Screen):
         color: #6b6b6b;
         margin: 1 0;
     }
-    .title-btn {
-        width: 100%;
+    #title-actions {
+        height: auto;
+        max-height: 6;
+        margin-top: 1;
     }
     """
 
@@ -51,6 +54,10 @@ class TitleScreen(Screen):
         ("q", "quit_game", "Quit"),
     ]
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._action_keys: list[str] = []
+
     def compose(self) -> ComposeResult:
         with Vertical(id="title-box"):
             yield Static(TITLE_ART, id="title-art")
@@ -58,27 +65,51 @@ class TitleScreen(Screen):
                 "[dim]Pick a world, pick a job, descend, build synergy, kill god.[/dim]",
                 id="tagline",
             )
-            yield Button("New Run", variant="primary", id="btn-new-run", classes="title-btn")
-            yield Button("Continue", id="btn-continue", classes="title-btn")
-            yield Button("Quit", id="btn-quit", classes="title-btn")
+            yield OptionList(id="title-actions")
         yield Footer()
 
     def on_mount(self) -> None:
-        self.query_one("#btn-new-run", Button).focus()
+        self._populate_actions()
 
+    def _populate_actions(self) -> None:
+        action_list = self.query_one("#title-actions", OptionList)
+        action_list.clear_options()
+        self._action_keys = []
+
+        action_list.add_option(Option("[n] New Run"))
+        self._action_keys.append("new_run")
+
+        has_saves = False
         try:
             runs = self.app.save_manager.list_runs()
-            self.query_one("#btn-continue", Button).disabled = len(runs) == 0
+            has_saves = len(runs) > 0
         except Exception:
-            self.query_one("#btn-continue", Button).disabled = True
+            pass
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        match event.button.id:
-            case "btn-new-run":
+        if has_saves:
+            action_list.add_option(Option("[c] Continue"))
+            self._action_keys.append("continue_run")
+
+        action_list.add_option(Option("[q] Quit"))
+        self._action_keys.append("quit_game")
+
+        action_list.focus()
+        action_list.highlighted = 0
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        if event.option_list.id != "title-actions":
+            return
+        idx = event.option_index
+        if idx < 0 or idx >= len(self._action_keys):
+            return
+
+        action = self._action_keys[idx]
+        match action:
+            case "new_run":
                 self.action_new_run()
-            case "btn-continue":
+            case "continue_run":
                 self.action_continue_run()
-            case "btn-quit":
+            case "quit_game":
                 self.action_quit_game()
 
     def action_new_run(self) -> None:
@@ -93,11 +124,16 @@ class TitleScreen(Screen):
                 return
             run_id = runs[-1]
             run_state = self.app.save_manager.load_run(run_id, "autosave")
-            self.app.run_state = run_state
+            self.app.run_state = self.app.game_loop.rehydrate_run(run_state)
 
-            from heresiarch.tui.screens.zone import ZoneScreen
+            if self.app.run_state.current_zone_id is not None:
+                from heresiarch.tui.screens.zone import ZoneScreen
 
-            self.app.push_screen(ZoneScreen())
+                self.app.push_screen(ZoneScreen())
+            else:
+                from heresiarch.tui.screens.zone_select import ZoneSelectScreen
+
+                self.app.push_screen(ZoneSelectScreen())
         except Exception:
             pass
 

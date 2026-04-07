@@ -30,7 +30,7 @@ class TestNewRun:
     def test_mc_has_growth_history(self, game_loop: GameLoop) -> None:
         run = game_loop.new_run("run_001", "Hero", "einherjar")
         mc = run.party.characters["mc_einherjar"]
-        assert mc.growth_history == [("einherjar", 0)]
+        assert mc.growth_history == [("einherjar", 1)]
 
     def test_invalid_job_raises(self, game_loop: GameLoop) -> None:
         with pytest.raises(KeyError):
@@ -176,6 +176,59 @@ class TestZoneProgression:
         assert run.zone_state is not None
         assert run.zone_state.is_cleared is True
         assert "zone_01" in run.zones_completed
+
+
+class TestAbilityBreakpoints:
+    def test_onmyoji_starts_with_bolt(self, game_loop: GameLoop) -> None:
+        """Onmyoji has bolt as a Lv1 breakpoint — should have it from the start."""
+        run = game_loop.new_run("run_001", "Hero", "onmyoji")
+        mc = run.party.characters["mc_onmyoji"]
+        assert "bolt" in mc.abilities
+
+    def test_einherjar_no_early_unlocks(self, game_loop: GameLoop) -> None:
+        """Einherjar's first breakpoint is Lv3 — nothing extra at Lv1."""
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        mc = run.party.characters["mc_einherjar"]
+        assert mc.abilities == ["basic_attack", "retaliate"]
+
+    def test_level_up_grants_ability(self, game_loop: GameLoop) -> None:
+        """Leveling past a breakpoint should grant the ability."""
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        run = game_loop.enter_zone(run, "zone_05")
+
+        # Big XP to level up past 3
+        result = CombatResult(
+            player_won=True,
+            surviving_character_ids=["mc_einherjar"],
+            surviving_character_hp={"mc_einherjar": 100},
+            defeated_enemy_template_ids=["brute_oni"] * 5,
+            defeated_enemy_budget_multipliers=[14.0] * 5,
+            rounds_taken=10,
+            zone_level=5,
+        )
+        new_run, loot = game_loop.resolve_combat_result(run, result)
+        mc = new_run.party.characters["mc_einherjar"]
+        if mc.level >= 3:
+            assert "brace_strike" in mc.abilities
+
+    def test_multiple_unlocks_in_one_levelup(self, game_loop: GameLoop) -> None:
+        """Gaining multiple levels should grant all intermediate breakpoints."""
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        mc = run.party.characters["mc_einherjar"]
+
+        # Simulate: check_ability_unlocks from Lv1 to Lv10
+        updated = game_loop._check_ability_unlocks(mc, 1, 10)
+        # Einherjar gets brace_strike at 3 and thrust at 8
+        assert "brace_strike" in updated.abilities
+        assert "thrust" in updated.abilities
+
+    def test_no_duplicate_abilities(self, game_loop: GameLoop) -> None:
+        """Checking unlocks twice shouldn't add duplicates."""
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        mc = run.party.characters["mc_einherjar"]
+        updated = game_loop._check_ability_unlocks(mc, 1, 5)
+        updated = game_loop._check_ability_unlocks(updated, 1, 5)
+        assert updated.abilities.count("brace_strike") == 1
 
 
 class TestMCJobSwap:

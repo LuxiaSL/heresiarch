@@ -1,47 +1,84 @@
+# Loot drop tables per enemy archetype
+# Accessories come ONLY from drops, never shops
+# Equipment drops = items the enemy is carrying (matching their class)
+
 - enemy_template_id: fodder_slime
   guaranteed_money: true
-  common_item_ids: []
+  common_item_ids:
+    - minor_potion
   common_drop_chance: 0.1
   rare_item_ids: []
   rare_drop_chance: 0.0
   equipment_drop_chance: 0.0
 
+- enemy_template_id: alpha_slime
+  guaranteed_money: true
+  common_item_ids:
+    - minor_potion
+    - potion
+  common_drop_chance: 0.3
+  rare_item_ids:
+    - endurance_plate
+    - gale_brace
+    - scroll_searing_edge
+  rare_drop_chance: 0.1
+  equipment_drop_chance: 0.15
+
 - enemy_template_id: brute_oni
   guaranteed_money: true
   common_item_ids:
+    - potion
     - iron_blade
-    - endurance_plate
+    - iron_guard
   common_drop_chance: 0.2
   rare_item_ids:
-    - runic_edge
+    - endurance_plate
+    - leech_fang
+    - void_fang
   rare_drop_chance: 0.05
   equipment_drop_chance: 0.1
 
 - enemy_template_id: caster_kitsune
   guaranteed_money: true
   common_item_ids:
+    - potion
     - spirit_lens
+    - spirit_mantle
   common_drop_chance: 0.2
   rare_item_ids:
+    - fortress_ring
     - resonance_orb
+    - scroll_drain
+    - scroll_mark
   rare_drop_chance: 0.05
   equipment_drop_chance: 0.1
 
 - enemy_template_id: speeder_tengu
   guaranteed_money: true
   common_item_ids:
-    - gale_brace
+    - potion
+    - iron_blade
   common_drop_chance: 0.15
-  rare_item_ids: []
-  rare_drop_chance: 0.0
+  rare_item_ids:
+    - gale_brace
+    - leech_fang
+    - scroll_arc_slash
+    - blast_scroll
+  rare_drop_chance: 0.05
   equipment_drop_chance: 0.1
 
 - enemy_template_id: support_tanuki
   guaranteed_money: true
   common_item_ids:
-    - fortress_ring
+    - potion
+    - spirit_lens
+    - spirit_mantle
   common_drop_chance: 0.15
   rare_item_ids:
-    - leech_fang
+    - fortress_ring
+    - endurance_plate
+    - void_bastion
+    - scroll_haste
+    - shatter_scroll
   rare_drop_chance: 0.03
   equipment_drop_chance: 0.05

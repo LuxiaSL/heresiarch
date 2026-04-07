@@ -11,3 +11,10 @@ growth:
 base_hp: 50
 hp_growth: 8
 innate_ability_id: retaliate
+ability_unlocks:
+  - level: 3
+    ability_id: brace_strike
+  - level: 8
+    ability_id: thrust
+  - level: 15
+    ability_id: fracture

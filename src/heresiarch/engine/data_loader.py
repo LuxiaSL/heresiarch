@@ -35,6 +35,11 @@ class GameData(BaseModel):
                 errors.append(
                     f"Job '{job_id}' references unknown ability '{job.innate_ability_id}'"
                 )
+            for unlock in job.ability_unlocks:
+                if unlock.ability_id not in self.abilities:
+                    errors.append(
+                        f"Job '{job_id}' ability_unlock references unknown ability '{unlock.ability_id}'"
+                    )
 
         for enemy_id, enemy in self.enemies.items():
             for ability_id in enemy.abilities:
@@ -75,6 +80,26 @@ class GameData(BaseModel):
                 if item_id not in self.items:
                     errors.append(
                         f"Zone '{zone_id}' shop references unknown item '{item_id}'"
+                    )
+
+        # Validate scroll ability references
+        for item_id, item in self.items.items():
+            if item.teaches_ability_id and item.teaches_ability_id not in self.abilities:
+                errors.append(
+                    f"Item '{item_id}' teaches unknown ability '{item.teaches_ability_id}'"
+                )
+            if item.casts_ability_id and item.casts_ability_id not in self.abilities:
+                errors.append(
+                    f"Item '{item_id}' casts unknown ability '{item.casts_ability_id}'"
+                )
+            for req in zone.unlock_requires:
+                if req.type == "zone_clear" and req.zone_id not in self.zones:
+                    errors.append(
+                        f"Zone '{zone_id}' unlock requires unknown zone '{req.zone_id}'"
+                    )
+                if req.type == "item" and req.item_id not in self.items:
+                    errors.append(
+                        f"Zone '{zone_id}' unlock requires unknown item '{req.item_id}'"
                     )
 
         return errors

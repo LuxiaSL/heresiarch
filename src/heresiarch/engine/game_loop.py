@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.formulas import (
+    calculate_effective_stats,
     calculate_levels_gained,
     calculate_max_hp,
     calculate_stats_at_level,
@@ -23,12 +24,12 @@ from heresiarch.engine.formulas import (
 from heresiarch.engine.models.combat_state import CombatState
 from heresiarch.engine.models.enemies import EnemyInstance
 from heresiarch.engine.models.items import Item
-from heresiarch.engine.models.jobs import CharacterInstance
+from heresiarch.engine.models.jobs import AbilityUnlock, CharacterInstance
 from heresiarch.engine.models.loot import LootResult
 from heresiarch.engine.models.party import Party
 from heresiarch.engine.models.run_state import CombatResult, RunState
 from heresiarch.engine.models.stats import StatType
-from heresiarch.engine.models.zone import ZoneState
+from heresiarch.engine.models.zone import ZoneState, ZoneTemplate
 
 STASH_LIMIT: int = 10
 
@@ -68,14 +69,75 @@ class GameLoop:
         self.shop_engine = ShopEngine(item_registry=game_data.items)
         self.recruitment_engine = RecruitmentEngine(
             job_registry=game_data.jobs,
+            item_registry=game_data.items,
             rng=self.rng,
         )
+
+    def rehydrate_run(self, run: RunState) -> RunState:
+        """Recompute all derived fields after loading a save.
+
+        Derived fields (effective_stats, max_hp) depend on game data (job
+        templates, item definitions, formula constants) which can change
+        between saves.  Always call this after deserializing a RunState.
+        """
+        new_characters = dict(run.party.characters)
+        for char_id, char in new_characters.items():
+            new_characters[char_id] = self._recompute_derived(char, run.party)
+            # Cap current_hp to recomputed max_hp (but don't raise it)
+            rehydrated = new_characters[char_id]
+            if rehydrated.current_hp > rehydrated.max_hp:
+                new_characters[char_id] = rehydrated.model_copy(
+                    update={"current_hp": rehydrated.max_hp}
+                )
+        new_party = run.party.model_copy(update={"characters": new_characters})
+        return run.model_copy(update={"party": new_party})
+
+    def _check_ability_unlocks(
+        self, char: CharacterInstance, old_level: int, new_level: int
+    ) -> CharacterInstance:
+        """Grant any abilities unlocked between old_level+1 and new_level."""
+        job = self.game_data.jobs.get(char.job_id)
+        if job is None:
+            return char
+        new_abilities = list(char.abilities)
+        for unlock in job.ability_unlocks:
+            if old_level < unlock.level <= new_level:
+                if unlock.ability_id not in new_abilities:
+                    new_abilities.append(unlock.ability_id)
+        if new_abilities != char.abilities:
+            return char.model_copy(update={"abilities": new_abilities})
+        return char
+
+    def _recompute_derived(self, char: CharacterInstance, party: Party | None = None) -> CharacterInstance:
+        """Recompute effective_stats and max_hp from base_stats + equipment.
+
+        Call this after ANY change to base_stats, equipment, or job.
+        """
+        equipped: list[Item] = []
+        for slot, item_id in char.equipment.items():
+            if item_id:
+                item = (party.items.get(item_id) if party else None) or self.game_data.items.get(item_id)
+                if item:
+                    equipped.append(item)
+        effective = calculate_effective_stats(char.base_stats, equipped, [])
+        job = self.game_data.jobs.get(char.job_id)
+        max_hp = calculate_max_hp(job.base_hp, job.hp_growth, char.level, effective.DEF) if job else 0
+        return char.model_copy(update={
+            "effective_stats": effective,
+            "max_hp": max_hp,
+        })
 
     def new_run(self, run_id: str, mc_name: str, mc_job_id: str) -> RunState:
         """Initialize a new run with MC at level 1."""
         job = self.game_data.jobs[mc_job_id]
         stats = calculate_stats_at_level(job.growth, 1)
         max_hp = calculate_max_hp(job.base_hp, job.hp_growth, 1, stats.DEF)
+
+        # Start with basic_attack + innate, then check for Lv1 breakpoints
+        starting_abilities = ["basic_attack", job.innate_ability_id]
+        for unlock in job.ability_unlocks:
+            if unlock.level <= 1 and unlock.ability_id not in starting_abilities:
+                starting_abilities.append(unlock.ability_id)
 
         mc = CharacterInstance(
             id=f"mc_{mc_job_id}",
@@ -84,10 +146,12 @@ class GameLoop:
             level=1,
             xp=0,
             base_stats=stats,
+            effective_stats=stats,  # No equipment yet
             current_hp=max_hp,
-            abilities=["basic_attack", job.innate_ability_id],
+            max_hp=max_hp,
+            abilities=starting_abilities,
             is_mc=True,
-            growth_history=[(mc_job_id, 0)],
+            growth_history=[(mc_job_id, 1)],
         )
 
         party = Party(
@@ -101,24 +165,82 @@ class GameLoop:
             created_at=datetime.now(timezone.utc).isoformat(),
         )
 
+    # --- Zone Navigation ---
+
+    def is_zone_unlocked(self, run: RunState, zone_id: str) -> bool:
+        """Check whether a zone's unlock requirements are all met."""
+        zone = self.game_data.zones.get(zone_id)
+        if zone is None:
+            return False
+        for req in zone.unlock_requires:
+            if req.type == "zone_clear":
+                if req.zone_id not in run.zones_completed:
+                    return False
+            elif req.type == "item":
+                if req.item_id not in run.party.stash:
+                    return False
+            elif req.type == "level":
+                mc = self._get_mc(run)
+                if mc is None or mc.level < (req.level or 0):
+                    return False
+        return True
+
+    def get_available_zones(self, run: RunState) -> list[ZoneTemplate]:
+        """Return all zones the player can currently enter, sorted by zone_level."""
+        available = [
+            zone
+            for zone in self.game_data.zones.values()
+            if self.is_zone_unlocked(run, zone.id)
+        ]
+        available.sort(key=lambda z: z.zone_level)
+        return available
+
     def enter_zone(self, run: RunState, zone_id: str) -> RunState:
-        """Begin a zone. Sets current_zone_id and zone_state."""
+        """Begin a zone. Sets current_zone_id and zone_state.
+
+        Re-entering a cleared zone starts in overstay mode (is_cleared=True).
+        """
         if zone_id not in self.game_data.zones:
             raise ValueError(f"Unknown zone: {zone_id}")
 
-        zone_state = ZoneState(template_id=zone_id)
+        already_cleared = zone_id in run.zones_completed
+        zone_state = ZoneState(
+            template_id=zone_id,
+            is_cleared=already_cleared,
+        )
         return run.model_copy(
             update={"current_zone_id": zone_id, "zone_state": zone_state}
         )
 
+    def leave_zone(self, run: RunState) -> RunState:
+        """Exit the current zone and heal the party."""
+        run = self.enter_safe_zone(run)
+        return run.model_copy(
+            update={"current_zone_id": None, "zone_state": None}
+        )
+
     def get_next_encounter(self, run: RunState) -> list[EnemyInstance]:
-        """Generate the next encounter in current zone."""
+        """Generate the next encounter in current zone.
+
+        In overstay mode (zone already cleared), generates a random
+        non-boss encounter from the zone's template list.
+        """
         if run.zone_state is None or run.current_zone_id is None:
             raise ValueError("Not in a zone")
 
         zone = self.game_data.zones[run.current_zone_id]
-        idx = run.zone_state.current_encounter_index
 
+        if run.zone_state.is_cleared:
+            # Overstay: pick a random non-boss encounter
+            non_boss = [e for e in zone.encounters if not e.is_boss]
+            if not non_boss:
+                non_boss = zone.encounters  # fallback: all encounters
+            encounter_template = self.rng.choice(non_boss)
+            return self.encounter_generator.generate_encounter(
+                encounter_template, zone.zone_level
+            )
+
+        idx = run.zone_state.current_encounter_index
         if idx >= len(zone.encounters):
             raise ValueError("No more encounters in this zone")
 
@@ -126,6 +248,13 @@ class GameLoop:
         return self.encounter_generator.generate_encounter(
             encounter_template, zone.zone_level
         )
+
+    def _get_mc(self, run: RunState) -> CharacterInstance | None:
+        """Return the MC character, or None."""
+        for char in run.party.characters.values():
+            if char.is_mc:
+                return char
+        return None
 
     def resolve_combat_result(
         self,
@@ -166,21 +295,16 @@ class GameLoop:
 
             if levels_gained == 0:
                 # No level-up: just persist XP and surviving HP
-                job = self.game_data.jobs[char.job_id]
-                current_max = calculate_max_hp(
-                    job.base_hp, job.hp_growth, char.level, char.base_stats.DEF
+                updated = char.model_copy(update={"xp": new_xp})
+                updated = self._recompute_derived(updated, run.party)
+                updated = updated.model_copy(
+                    update={"current_hp": min(surviving_hp, updated.max_hp)}
                 )
-                new_characters[char_id] = char.model_copy(
-                    update={
-                        "xp": new_xp,
-                        "current_hp": min(surviving_hp, current_max),
-                    }
-                )
+                new_characters[char_id] = updated
             else:
                 # Recalculate stats at new level
                 job = self.game_data.jobs[char.job_id]
                 if char.is_mc and char.growth_history:
-                    # MC Mimic: update levels in current job segment
                     history = list(char.growth_history)
                     if history:
                         job_id, prev_levels = history[-1]
@@ -188,31 +312,31 @@ class GameLoop:
                     new_stats = calculate_stats_from_history(
                         history, self.game_data.jobs
                     )
-                    new_max_hp = calculate_max_hp(
-                        job.base_hp, job.hp_growth, new_level, new_stats.DEF
-                    )
-                    new_characters[char_id] = char.model_copy(
+                    updated = char.model_copy(
                         update={
                             "xp": new_xp,
                             "level": new_level,
                             "base_stats": new_stats,
-                            "current_hp": min(surviving_hp, new_max_hp),
                             "growth_history": history,
                         }
                     )
                 else:
                     new_stats = calculate_stats_at_level(job.growth, new_level)
-                    new_max_hp = calculate_max_hp(
-                        job.base_hp, job.hp_growth, new_level, new_stats.DEF
-                    )
-                    new_characters[char_id] = char.model_copy(
+                    updated = char.model_copy(
                         update={
                             "xp": new_xp,
                             "level": new_level,
                             "base_stats": new_stats,
-                            "current_hp": min(surviving_hp, new_max_hp),
                         }
                     )
+                # Check for ability unlocks at new level
+                updated = self._check_ability_unlocks(updated, char.level, new_level)
+                # Recompute effective stats (equipment scaling changes with new base)
+                updated = self._recompute_derived(updated, run.party)
+                updated = updated.model_copy(
+                    update={"current_hp": min(surviving_hp, updated.max_hp)}
+                )
+                new_characters[char_id] = updated
 
         # --- Loot ---
         defeated_instances: list[EnemyInstance] = []
@@ -225,10 +349,12 @@ class GameLoop:
                 instance = instance.model_copy(update={"current_hp": 0})
                 defeated_instances.append(instance)
 
+        overstay = run.zone_state.overstay_battles if run.zone_state else 0
         loot = self.loot_resolver.resolve_encounter_drops(
             defeated_enemies=defeated_instances,
             zone_level=combat_result.zone_level,
             party_cha=party.cha,
+            overstay_battles=overstay,
         )
 
         new_party = party.model_copy(
@@ -264,9 +390,21 @@ class GameLoop:
         return run.model_copy(update={"party": new_party})
 
     def advance_zone(self, run: RunState) -> RunState:
-        """Move to next encounter in zone. Mark zone cleared if done."""
+        """Move to next encounter in zone. Mark zone cleared if done.
+
+        In overstay mode, increments the overstay counter instead.
+        """
         if run.zone_state is None or run.current_zone_id is None:
             raise ValueError("Not in a zone")
+
+        # Overstay mode — just bump the counter
+        if run.zone_state.is_cleared:
+            new_zone_state = run.zone_state.model_copy(
+                update={
+                    "overstay_battles": run.zone_state.overstay_battles + 1,
+                }
+            )
+            return run.model_copy(update={"zone_state": new_zone_state})
 
         zone = self.game_data.zones[run.current_zone_id]
         new_idx = run.zone_state.current_encounter_index + 1
@@ -286,7 +424,8 @@ class GameLoop:
         updates: dict = {"zone_state": new_zone_state}
         if is_cleared:
             zones_completed = list(run.zones_completed)
-            zones_completed.append(run.current_zone_id)
+            if run.current_zone_id not in zones_completed:
+                zones_completed.append(run.current_zone_id)
             updates["zones_completed"] = zones_completed
 
         return run.model_copy(update=updates)
@@ -317,20 +456,20 @@ class GameLoop:
         history = list(mc.growth_history)
         history.append((new_job_id, 0))
 
-        # Recalculate stats from full history
+        # Recalculate stats from full history + recompute derived
         new_stats = calculate_stats_from_history(history, self.game_data.jobs)
-        new_hp = calculate_max_hp(
-            new_job.base_hp, new_job.hp_growth, mc.level, new_stats.DEF
-        )
 
         new_mc = mc.model_copy(
             update={
                 "job_id": new_job_id,
                 "base_stats": new_stats,
-                "current_hp": min(mc.current_hp, new_hp),
-                "abilities": [new_job.innate_ability_id],
+                "abilities": ["basic_attack", new_job.innate_ability_id],
                 "growth_history": history,
             }
+        )
+        new_mc = self._recompute_derived(new_mc, party)
+        new_mc = new_mc.model_copy(
+            update={"current_hp": min(mc.current_hp, new_mc.max_hp)}
         )
 
         new_characters = dict(party.characters)
@@ -377,11 +516,9 @@ class GameLoop:
         new_equipment[slot] = item_id
         new_items[item_id] = item
 
-        # Update abilities from equipment
-        new_abilities = [
-            a for a in char.abilities
-            if a == self.game_data.jobs[char.job_id].innate_ability_id
-        ]
+        # Rebuild abilities: basic_attack + innate + equipment-granted
+        innate_id = self.game_data.jobs[char.job_id].innate_ability_id
+        new_abilities = ["basic_attack", innate_id]
         for s, eid in new_equipment.items():
             if eid and eid in new_items and new_items[eid].granted_ability_id:
                 new_abilities.append(new_items[eid].granted_ability_id)
@@ -394,6 +531,12 @@ class GameLoop:
         new_party = party.model_copy(
             update={"characters": new_characters, "stash": new_stash, "items": new_items}
         )
+        # Recompute derived stats and cap HP
+        new_char = self._recompute_derived(new_char, new_party)
+        if new_char.current_hp > new_char.max_hp:
+            new_char = new_char.model_copy(update={"current_hp": new_char.max_hp})
+        new_characters[character_id] = new_char
+        new_party = new_party.model_copy(update={"characters": new_characters})
         return run.model_copy(update={"party": new_party})
 
     def unequip_item(
@@ -418,12 +561,27 @@ class GameLoop:
         new_equipment = dict(char.equipment)
         new_equipment[slot] = None
 
-        new_char = char.model_copy(update={"equipment": new_equipment})
+        # Rebuild abilities: basic_attack + innate + remaining equipment-granted
+        innate_id = self.game_data.jobs[char.job_id].innate_ability_id
+        new_abilities = ["basic_attack", innate_id]
+        for s, eid in new_equipment.items():
+            if eid:
+                eq_item = party.items.get(eid) or self.game_data.items.get(eid)
+                if eq_item and eq_item.granted_ability_id:
+                    new_abilities.append(eq_item.granted_ability_id)
+
+        new_char = char.model_copy(update={"equipment": new_equipment, "abilities": new_abilities})
         new_characters = dict(party.characters)
         new_characters[character_id] = new_char
         new_party = party.model_copy(
             update={"characters": new_characters, "stash": new_stash}
         )
+        # Recompute derived stats and cap HP
+        new_char = self._recompute_derived(new_char, new_party)
+        if new_char.current_hp > new_char.max_hp:
+            new_char = new_char.model_copy(update={"current_hp": new_char.max_hp})
+        new_characters[character_id] = new_char
+        new_party = new_party.model_copy(update={"characters": new_characters})
         return run.model_copy(update={"party": new_party})
 
     # --- Party Management ---
@@ -446,6 +604,75 @@ class GameLoop:
         )
         return run.model_copy(update={"party": new_party})
 
+    def promote_to_active(self, run: RunState, reserve_id: str) -> RunState:
+        """Move a reserve member to active. Requires an open active slot."""
+        from heresiarch.engine.recruitment import MAX_ACTIVE_SIZE
+
+        party = run.party
+        if reserve_id not in party.reserve:
+            raise ValueError(f"'{reserve_id}' is not in reserve")
+        if len(party.active) >= MAX_ACTIVE_SIZE:
+            raise ValueError("Active party is full")
+
+        new_active = list(party.active) + [reserve_id]
+        new_reserve = [r for r in party.reserve if r != reserve_id]
+        new_party = party.model_copy(
+            update={"active": new_active, "reserve": new_reserve}
+        )
+        return run.model_copy(update={"party": new_party})
+
+    def bench_to_reserve(self, run: RunState, active_id: str) -> RunState:
+        """Move an active member to reserve."""
+        party = run.party
+        if active_id not in party.active:
+            raise ValueError(f"'{active_id}' is not in active roster")
+        if len(party.active) <= 1:
+            raise ValueError("Cannot bench your last active member")
+
+        new_active = [a for a in party.active if a != active_id]
+        new_reserve = list(party.reserve) + [active_id]
+        new_party = party.model_copy(
+            update={"active": new_active, "reserve": new_reserve}
+        )
+        return run.model_copy(update={"party": new_party})
+
+    # --- Scrolls ---
+
+    def use_teach_scroll(
+        self, run: RunState, item_id: str, target_character_id: str
+    ) -> RunState:
+        """Use a permanent teach scroll: consume it, grant ability to character."""
+        party = run.party
+        if item_id not in party.stash:
+            raise ValueError(f"Item '{item_id}' not in stash")
+        if target_character_id not in party.characters:
+            raise ValueError(f"Unknown character: {target_character_id}")
+
+        item = self.game_data.items.get(item_id) or party.items.get(item_id)
+        if item is None or not item.is_consumable or not item.teaches_ability_id:
+            raise ValueError(f"'{item_id}' is not a teach scroll")
+
+        char = party.characters[target_character_id]
+        ability_id = item.teaches_ability_id
+
+        # Grant the ability if not already known
+        new_abilities = list(char.abilities)
+        if ability_id not in new_abilities:
+            new_abilities.append(ability_id)
+
+        new_char = char.model_copy(update={"abilities": new_abilities})
+
+        # Remove scroll from stash
+        new_stash = list(party.stash)
+        new_stash.remove(item_id)
+
+        new_characters = dict(party.characters)
+        new_characters[target_character_id] = new_char
+        new_party = party.model_copy(
+            update={"characters": new_characters, "stash": new_stash}
+        )
+        return run.model_copy(update={"party": new_party})
+
     # --- Consumables ---
 
     def use_consumable(
@@ -464,13 +691,9 @@ class GameLoop:
 
         char = party.characters[target_character_id]
         job = self.game_data.jobs[char.job_id]
-        max_hp = calculate_max_hp(
-            job.base_hp, job.hp_growth, char.level, char.base_stats.DEF
-        )
-
-        # Apply healing
-        heal = item.heal_amount + int(max_hp * item.heal_percent)
-        new_hp = min(char.current_hp + heal, max_hp)
+        # Apply healing using effective max HP
+        heal = item.heal_amount + int(char.max_hp * item.heal_percent)
+        new_hp = min(char.current_hp + heal, char.max_hp)
 
         new_stash = list(party.stash)
         new_stash.remove(item_id)
@@ -497,13 +720,9 @@ class GameLoop:
             if char_id not in new_characters:
                 continue
             char = new_characters[char_id]
-            job = self.game_data.jobs[char.job_id]
-            max_hp = calculate_max_hp(
-                job.base_hp, job.hp_growth, char.level, char.base_stats.DEF
-            )
-            if char.current_hp < max_hp:
+            if char.current_hp < char.max_hp:
                 new_characters[char_id] = char.model_copy(
-                    update={"current_hp": max_hp}
+                    update={"current_hp": char.max_hp}
                 )
 
         new_party = party.model_copy(update={"characters": new_characters})

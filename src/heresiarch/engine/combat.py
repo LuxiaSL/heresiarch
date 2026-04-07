@@ -82,6 +82,9 @@ class CombatEngine:
             )
             current_hp = char.current_hp if char.current_hp > 0 else max_hp
 
+            # Sum leech percent from all equipped items
+            total_leech = sum(item.leech_percent for item in equipped)
+
             player_combatants.append(
                 CombatantState(
                     id=char.id,
@@ -89,8 +92,10 @@ class CombatEngine:
                     current_hp=min(current_hp, max_hp),
                     max_hp=max_hp,
                     base_stats=char.base_stats,
+                    equipment_stats=effective,  # Baseline for status tick rebuilds
                     effective_stats=effective,
                     ability_ids=list(char.abilities),
+                    leech_percent=total_leech,
                 )
             )
 
@@ -103,6 +108,7 @@ class CombatEngine:
                     current_hp=enemy.current_hp,
                     max_hp=enemy.max_hp,
                     base_stats=enemy.stats,
+                    equipment_stats=enemy.stats,  # Enemies have no equipment layer
                     effective_stats=enemy.stats,
                     ability_ids=list(enemy.abilities),
                 )
@@ -139,7 +145,7 @@ class CombatEngine:
 
         state = self._tick_statuses(state)
 
-        state.turn_order = self._determine_turn_order(state)
+        state.turn_order = self._determine_turn_order(state, player_decisions)
 
         for combatant_id in state.turn_order:
             if state.is_finished:
@@ -177,10 +183,21 @@ class CombatEngine:
         zone_level: int,
         instance_id: str | None = None,
     ) -> EnemyInstance:
-        """Create a concrete enemy from a template at a zone level."""
-        stats = calculate_enemy_stats(
+        """Create a concrete enemy from a template at a zone level.
+
+        Enemy stats come from budget allocation, then get amplified by
+        equipment through the same Layer 3 scaling players use.
+        """
+        base_stats = calculate_enemy_stats(
             zone_level, template.budget_multiplier, template.stat_distribution
         )
+
+        # Apply equipment scaling (same Layer 3 system as players)
+        equipped_items = [
+            self.items[eid] for eid in template.equipment if eid in self.items
+        ]
+        effective_stats = calculate_effective_stats(base_stats, equipped_items, [])
+
         hp = calculate_enemy_hp(
             zone_level, template.budget_multiplier, template.base_hp, template.hp_per_budget
         )
@@ -189,7 +206,7 @@ class CombatEngine:
             template_id=template.id,
             name=instance_id if instance_id else template.name,
             level=zone_level,
-            stats=stats,
+            stats=effective_stats,
             max_hp=hp,
             current_hp=hp,
             abilities=list(template.abilities),
@@ -212,8 +229,10 @@ class CombatEngine:
         return char.model_copy(
             update={
                 "base_stats": stats,
+                "effective_stats": effective,
+                "max_hp": max_hp,
                 "current_hp": max_hp,
-                "abilities": [job.innate_ability_id] + [
+                "abilities": ["basic_attack", job.innate_ability_id] + [
                     item.granted_ability_id
                     for item in equipped
                     if item.granted_ability_id
@@ -391,18 +410,43 @@ class CombatEngine:
         if ability.target == TargetType.SELF and not effective_target_ids:
             effective_target_ids = [actor_id]
 
-        # Auto-retarget dead targets to next living enemy/ally
+        # Determine if this is an ally-targeting or enemy-targeting ability
+        targets_allies = ability.target in (TargetType.SINGLE_ALLY, TargetType.ALL_ALLIES)
+
+        # For ALL_ENEMIES, fill target list with all living enemies
+        if ability.target == TargetType.ALL_ENEMIES and not effective_target_ids:
+            if actor.is_player:
+                effective_target_ids = [e.id for e in state.living_enemies]
+            else:
+                effective_target_ids = [p.id for p in state.living_players]
+
+        # For ALL_ALLIES, fill target list with all living allies
+        if ability.target == TargetType.ALL_ALLIES and not effective_target_ids:
+            if actor.is_player:
+                effective_target_ids = [p.id for p in state.living_players]
+            else:
+                effective_target_ids = [e.id for e in state.living_enemies]
+
+        # Auto-retarget dead targets to next living combatant on the correct side
         retargeted: list[str] = []
         for tid in effective_target_ids:
             target = state.get_combatant(tid)
             if target is not None and target.is_alive:
                 retargeted.append(tid)
             else:
-                # Find a replacement from the same side
-                if actor.is_player:
-                    replacements = [e.id for e in state.living_enemies if e.id not in retargeted]
+                # Find a replacement from the correct side
+                if targets_allies:
+                    # Ally-targeting: same side as actor
+                    if actor.is_player:
+                        replacements = [p.id for p in state.living_players if p.id not in retargeted]
+                    else:
+                        replacements = [e.id for e in state.living_enemies if e.id not in retargeted]
                 else:
-                    replacements = [p.id for p in state.living_players if p.id not in retargeted]
+                    # Enemy-targeting: opposite side from actor
+                    if actor.is_player:
+                        replacements = [e.id for e in state.living_enemies if e.id not in retargeted]
+                    else:
+                        replacements = [p.id for p in state.living_players if p.id not in retargeted]
                 if replacements:
                     retargeted.append(replacements[0])
         effective_target_ids = retargeted
@@ -495,6 +539,10 @@ class CombatEngine:
             if effect.quality == DamageQuality.CHAIN:
                 damage = int(damage * effect.chain_damage_ratio)
 
+            # Mark bonus damage (25% bonus against marked targets)
+            if target.is_marked:
+                damage = int(damage * 1.25)
+
             # Taunt redirect for enemies attacking players
             if not actor.is_player and target.is_player:
                 taunting = [p for p in state.living_players if p.is_taunting and p.id != target.id]
@@ -544,44 +592,155 @@ class CombatEngine:
                         )
                     )
 
-                # Retaliate trigger
+                # Retaliate trigger — procs a Basic Attack back at the attacker
                 if target.is_alive and target.is_player:
                     retaliate = self._get_passive(
                         target, TriggerCondition.ON_HIT_RECEIVED, state
                     )
-                    if retaliate:
-                        ret_damage = self._calculate_retaliate_damage(target, retaliate)
-                        if ret_damage > 0:
-                            actor.current_hp = max(0, actor.current_hp - ret_damage)
-                            state.log.append(
-                                CombatEvent(
-                                    event_type=CombatEventType.RETALIATE_TRIGGERED,
-                                    round_number=state.round_number,
-                                    actor_id=target.id,
-                                    target_id=actor.id,
-                                    value=ret_damage,
-                                )
+                    if retaliate and actor.is_alive:
+                        basic_attack = self.abilities.get("basic_attack")
+                        if basic_attack:
+                            ret_damage = calculate_physical_damage(
+                                ability_base=basic_attack.effects[0].base_damage,
+                                ability_coefficient=basic_attack.effects[0].scaling_coefficient,
+                                attacker_str=target.effective_stats.STR,
+                                target_def=actor.effective_stats.DEF,
                             )
-                            if actor.current_hp <= 0:
-                                actor.is_alive = False
+                            if ret_damage > 0:
+                                actor.current_hp = max(0, actor.current_hp - ret_damage)
                                 state.log.append(
                                     CombatEvent(
-                                        event_type=CombatEventType.DEATH,
+                                        event_type=CombatEventType.RETALIATE_TRIGGERED,
                                         round_number=state.round_number,
+                                        actor_id=target.id,
                                         target_id=actor.id,
+                                        value=ret_damage,
+                                    )
+                                )
+                                # Leech on retaliate damage
+                                ret_leech = self._get_item_leech(target, state)
+                                if ret_leech > 0:
+                                    heal = max(1, int(ret_damage * ret_leech))
+                                    target.current_hp = min(target.max_hp, target.current_hp + heal)
+                                    state.log.append(
+                                        CombatEvent(
+                                            event_type=CombatEventType.HEALING,
+                                            round_number=state.round_number,
+                                            actor_id=target.id,
+                                            target_id=target.id,
+                                            value=heal,
+                                            details={"source": "leech"},
+                                        )
+                                    )
+                                if actor.current_hp <= 0:
+                                    actor.is_alive = False
+                                    state.log.append(
+                                        CombatEvent(
+                                            event_type=CombatEventType.DEATH,
+                                            round_number=state.round_number,
+                                            target_id=actor.id,
+                                        )
+                                    )
+
+                # Siphon trigger — stacking MAG buff when hit
+                if target.is_alive:
+                    for siphon in self._get_all_passives(target, TriggerCondition.ON_HIT_RECEIVED):
+                        if siphon.id == "retaliate":
+                            continue  # Retaliate already handled above
+                        for siphon_eff in siphon.effects:
+                            if siphon_eff.stat_buff:
+                                siphon_status = StatusEffect(
+                                    id=f"{siphon.id}_stack_{state.round_number}_{id(effect)}",
+                                    name=f"{siphon.name}",
+                                    stat_modifiers=dict(siphon_eff.stat_buff),
+                                    rounds_remaining=999,  # Permanent for the fight
+                                    source_id=target.id,
+                                )
+                                target.active_statuses.append(siphon_status)
+                                state.log.append(
+                                    CombatEvent(
+                                        event_type=CombatEventType.PASSIVE_TRIGGERED,
+                                        round_number=state.round_number,
+                                        actor_id=target.id,
+                                        target_id=target.id,
+                                        ability_id=siphon.id,
+                                        details={"buffs": siphon_eff.stat_buff},
                                     )
                                 )
 
-                # Death check
+                # Death check — with Endure protection
                 if target.current_hp <= 0:
-                    target.is_alive = False
-                    state.log.append(
-                        CombatEvent(
-                            event_type=CombatEventType.DEATH,
-                            round_number=state.round_number,
-                            target_id=target.id,
+                    # Check for Endure passive (survive lethal at 1 HP, once per fight)
+                    if not target.has_endured and "endure" in target.ability_ids:
+                        target.current_hp = 1
+                        target.has_endured = True
+                        state.log.append(
+                            CombatEvent(
+                                event_type=CombatEventType.PASSIVE_TRIGGERED,
+                                round_number=state.round_number,
+                                actor_id=target.id,
+                                target_id=target.id,
+                                ability_id="endure",
+                                details={"survived_at": 1},
+                            )
                         )
-                    )
+                    else:
+                        target.is_alive = False
+                        state.log.append(
+                            CombatEvent(
+                                event_type=CombatEventType.DEATH,
+                                round_number=state.round_number,
+                                target_id=target.id,
+                            )
+                        )
+
+                        # Momentum trigger — refund 1 AP on kill
+                        if actor.is_alive:
+                            momentum = self._get_passive(actor, TriggerCondition.ON_KILL, state)
+                            if momentum:
+                                actor.action_points = min(
+                                    actor.action_points + 1, MAX_ACTION_POINT_BANK
+                                )
+                                state.log.append(
+                                    CombatEvent(
+                                        event_type=CombatEventType.PASSIVE_TRIGGERED,
+                                        round_number=state.round_number,
+                                        actor_id=actor.id,
+                                        target_id=target.id,
+                                        ability_id="momentum",
+                                        details={"ap_refunded": 1},
+                                    )
+                                )
+
+                        # Vengeance trigger — buff surviving allies on ally KO
+                        if target.is_player:
+                            for ally in state.living_players:
+                                if ally.id == target.id:
+                                    continue
+                                vengeance = self._get_passive(
+                                    ally, TriggerCondition.ON_ALLY_KO, state
+                                )
+                                if vengeance:
+                                    for v_eff in vengeance.effects:
+                                        if v_eff.stat_buff:
+                                            v_status = StatusEffect(
+                                                id=f"vengeance_{ally.id}_{state.round_number}",
+                                                name=f"{vengeance.name}",
+                                                stat_modifiers=dict(v_eff.stat_buff),
+                                                rounds_remaining=v_eff.duration_rounds + 1 if v_eff.duration_rounds > 0 else 4,
+                                                source_id=ally.id,
+                                            )
+                                            ally.active_statuses.append(v_status)
+                                            state.log.append(
+                                                CombatEvent(
+                                                    event_type=CombatEventType.PASSIVE_TRIGGERED,
+                                                    round_number=state.round_number,
+                                                    actor_id=ally.id,
+                                                    target_id=target.id,
+                                                    ability_id="vengeance",
+                                                    details={"buffs": v_eff.stat_buff},
+                                                )
+                                            )
 
         # Secondary effects (DOT, debuffs) — check RES gate
         if effect.quality in (DamageQuality.DOT, DamageQuality.SHATTER, DamageQuality.DISRUPT):
@@ -607,6 +766,56 @@ class CombatEngine:
                     details={"status": status.name},
                 )
             )
+
+        # General stat buff (Haste, Ward, Infuse, Vengeance, etc.)
+        if effect.stat_buff and target.is_alive:
+            status = StatusEffect(
+                id=f"{ability.id}_stat_buff",
+                name=f"{ability.name} buff",
+                stat_modifiers=dict(effect.stat_buff),
+                rounds_remaining=effect.duration_rounds + 1 if effect.duration_rounds > 0 else 2,
+                source_id=actor.id,
+            )
+            target.active_statuses.append(status)
+            state.log.append(
+                CombatEvent(
+                    event_type=CombatEventType.STATUS_APPLIED,
+                    round_number=state.round_number,
+                    actor_id=actor.id,
+                    target_id=target.id,
+                    details={"status": status.name, "buffs": effect.stat_buff},
+                )
+            )
+
+        # Heal effect (Sacrifice, enemy heal, etc.) — heals the TARGET
+        if effect.heal_percent > 0 and target.is_alive:
+            heal = max(1, int(actor.max_hp * effect.heal_percent))
+            target.current_hp = min(target.max_hp, target.current_hp + heal)
+            state.log.append(
+                CombatEvent(
+                    event_type=CombatEventType.HEALING,
+                    round_number=state.round_number,
+                    actor_id=actor.id,
+                    target_id=target.id,
+                    value=heal,
+                    details={"source": ability.id},
+                )
+            )
+
+        # Mark — apply status that flags target for bonus damage
+        if ability.id == "mark" and target.is_alive:
+            target.is_marked = True
+            mark_duration = effect.duration_rounds if effect.duration_rounds > 0 else 3
+            mark_status = StatusEffect(
+                id="mark_active",
+                name="Marked",
+                rounds_remaining=mark_duration + 1,
+                source_id=actor.id,
+            )
+            target.active_statuses = [
+                s for s in target.active_statuses if s.id != "mark_active"
+            ]
+            target.active_statuses.append(mark_status)
 
         # Taunt effect — add a status so it persists through the round
         if ability.id == "taunt" and actor.is_alive:
@@ -659,19 +868,6 @@ class CombatEngine:
 
         return damage
 
-    def _calculate_retaliate_damage(
-        self,
-        retaliator: CombatantState,
-        retaliate_ability: Ability,
-    ) -> int:
-        """Calculate Retaliate counter-attack damage."""
-        for effect in retaliate_ability.effects:
-            if effect.stat_scaling == StatType.STR:
-                return max(
-                    1,
-                    int(effect.base_damage + effect.scaling_coefficient * retaliator.effective_stats.STR),
-                )
-        return 0
 
     def _apply_secondary_effect(
         self,
@@ -695,6 +891,26 @@ class CombatEngine:
                         details={"quality": effect.quality.value},
                     )
                 )
+                # Counter-Hex: reflect debuff back when RES gate blocks it
+                counter_hex = self._get_passive(target, TriggerCondition.RES_GATE_PASSED, state)
+                if counter_hex and actor.is_alive:
+                    disrupt_status = StatusEffect(
+                        id=f"counter_hex_disrupt_{state.round_number}",
+                        name="Counter-Hex Disrupt",
+                        rounds_remaining=2,
+                        source_id=target.id,
+                    )
+                    actor.active_statuses.append(disrupt_status)
+                    state.log.append(
+                        CombatEvent(
+                            event_type=CombatEventType.PASSIVE_TRIGGERED,
+                            round_number=state.round_number,
+                            actor_id=target.id,
+                            target_id=actor.id,
+                            ability_id="counter_hex",
+                            details={"reflected": effect.quality.value},
+                        )
+                    )
                 return state
 
         match effect.quality:
@@ -755,12 +971,15 @@ class CombatEngine:
             # (taunt lasts 1 full round after activation)
             combatant.is_taunting = False
             combatant.is_surviving = False
+            combatant.is_marked = False
             combatant.frenzy_stacks = 0
 
-            # Re-apply taunt if there's an active taunt status
+            # Re-apply persistent flags from active statuses
             for status in combatant.active_statuses:
                 if "taunt" in status.id.lower():
                     combatant.is_taunting = True
+                if "mark" in status.id.lower():
+                    combatant.is_marked = True
 
             expired: list[StatusEffect] = []
             for status in combatant.active_statuses:
@@ -803,8 +1022,49 @@ class CombatEngine:
                     )
                 )
 
-            # Recalculate effective stats after status changes
-            effective_data = combatant.base_stats.model_dump()
+            # Blood Rush: toggle SPD buff when HP below threshold
+            for ability_id in combatant.ability_ids:
+                ability = self.abilities.get(ability_id)
+                if (
+                    ability is not None
+                    and ability.category == AbilityCategory.PASSIVE
+                    and ability.trigger == TriggerCondition.HP_BELOW_THRESHOLD
+                ):
+                    threshold = ability.trigger_threshold or 0.3
+                    hp_ratio = combatant.current_hp / max(combatant.max_hp, 1)
+                    has_buff = any(
+                        s.id == f"passive_{ability_id}" for s in combatant.active_statuses
+                    )
+                    if hp_ratio < threshold and not has_buff:
+                        # Activate
+                        for eff in ability.effects:
+                            if eff.stat_buff:
+                                rush_status = StatusEffect(
+                                    id=f"passive_{ability_id}",
+                                    name=ability.name,
+                                    stat_modifiers=dict(eff.stat_buff),
+                                    rounds_remaining=999,
+                                    source_id=combatant.id,
+                                )
+                                combatant.active_statuses.append(rush_status)
+                                state.log.append(
+                                    CombatEvent(
+                                        event_type=CombatEventType.PASSIVE_TRIGGERED,
+                                        round_number=state.round_number,
+                                        actor_id=combatant.id,
+                                        target_id=combatant.id,
+                                        ability_id=ability_id,
+                                    )
+                                )
+                    elif hp_ratio >= threshold and has_buff:
+                        # Deactivate
+                        combatant.active_statuses = [
+                            s for s in combatant.active_statuses
+                            if s.id != f"passive_{ability_id}"
+                        ]
+
+            # Recalculate effective stats: equipment baseline + active combat buffs
+            effective_data = combatant.equipment_stats.model_dump()
             for status in combatant.active_statuses:
                 for stat_name, mod in status.stat_modifiers.items():
                     if stat_name in effective_data:
@@ -817,11 +1077,31 @@ class CombatEngine:
 
     # --- Helpers ---
 
-    def _determine_turn_order(self, state: CombatState) -> list[str]:
-        """Order combatants by effective SPD descending. Players win ties."""
+    def _determine_turn_order(
+        self,
+        state: CombatState,
+        player_decisions: dict[str, PlayerTurnDecision] | None = None,
+    ) -> list[str]:
+        """Order combatants by effective SPD descending. Players win ties.
+
+        Survive players always go first — their defensive stance activates
+        before enemies attack.
+        """
         alive = [c for c in state.all_combatants if c.is_alive]
+        survive_ids: set[str] = set()
+        if player_decisions:
+            survive_ids = {
+                cid
+                for cid, d in player_decisions.items()
+                if d.cheat_survive == CheatSurviveChoice.SURVIVE
+            }
+
         alive.sort(
-            key=lambda c: (c.effective_stats.SPD, 1 if c.is_player else 0),
+            key=lambda c: (
+                2 if c.id in survive_ids else 0,  # Survive players first
+                c.effective_stats.SPD,
+                1 if c.is_player else 0,
+            ),
             reverse=True,
         )
         return [c.id for c in alive]
@@ -864,10 +1144,7 @@ class CombatEngine:
         trigger: TriggerCondition,
         state: CombatState,
     ) -> Ability | None:
-        """Find a passive ability with the given trigger on a combatant.
-
-        Only returns abilities the combatant actually has.
-        """
+        """Find the first passive ability with the given trigger on a combatant."""
         for ability_id in combatant.ability_ids:
             ability = self.abilities.get(ability_id)
             if ability is None:
@@ -879,8 +1156,24 @@ class CombatEngine:
                 return ability
         return None
 
+    def _get_all_passives(
+        self,
+        combatant: CombatantState,
+        trigger: TriggerCondition,
+    ) -> list[Ability]:
+        """Find all passive abilities with the given trigger on a combatant."""
+        result: list[Ability] = []
+        for ability_id in combatant.ability_ids:
+            ability = self.abilities.get(ability_id)
+            if ability is None:
+                continue
+            if (
+                ability.category == AbilityCategory.PASSIVE
+                and ability.trigger == trigger
+            ):
+                result.append(ability)
+        return result
+
     def _get_item_leech(self, combatant: CombatantState, state: CombatState) -> float:
         """Get total leech percent from equipped items."""
-        # Simplified: would need to look up character's equipped items
-        # For now return 0 — leech from items needs CharacterInstance lookup
-        return 0.0
+        return combatant.leech_percent

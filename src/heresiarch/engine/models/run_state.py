@@ -30,3 +30,4 @@ class RunState(BaseModel):
     battle_record: BattleRecord = Field(default_factory=BattleRecord)
     is_dead: bool = False
     created_at: str = ""
+    last_recruit_job_id: str | None = None

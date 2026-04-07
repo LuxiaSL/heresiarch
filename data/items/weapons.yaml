@@ -12,25 +12,25 @@
 - id: runic_edge
   name: Runic Edge
   slot: WEAPON
-  description: "Investment piece. Mid-game spike."
+  description: "Investment piece. Overtakes Iron Blade around Lv30."
   base_price: 350
   scaling:
     scaling_type: SUPERLINEAR
     stat: STR
     base: 15.0
     linear_coeff: 0.3
-    quadratic_coeff: 0.004
+    quadratic_coeff: 0.005
 
 - id: void_fang
   name: Void Fang
   slot: WEAPON
-  description: "Hurts you early. Kills god late."
+  description: "Hurts you early. Kills god late. Overtakes Runic Edge around Lv60."
   base_price: 800
   scaling:
     scaling_type: DEGENERATE
     stat: STR
-    constant_offset: -200.0
-    quadratic_coeff: 0.01
+    constant_offset: -154.5
+    quadratic_coeff: 0.007884
 
 - id: spirit_lens
   name: Spirit Lens
@@ -46,10 +46,10 @@
 - id: resonance_orb
   name: Resonance Orb
   slot: WEAPON
-  description: "Deep MAG commitment. Onmyoji dream."
+  description: "Deep MAG commitment. Overtakes Spirit Lens around Lv30."
   base_price: 500
   scaling:
     scaling_type: QUADRATIC
     stat: MAG
     base: 15.0
-    quadratic_coeff: 0.008
+    quadratic_coeff: 0.0069

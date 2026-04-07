@@ -6,8 +6,10 @@
   conversion:
     source_stat: DEF
     target_stat: MAG
-    scaling_type: QUADRATIC
-    quadratic_coeff: 0.004
+    scaling_type: SIGMOID
+    sigmoid_max: 800.0
+    sigmoid_mid: 300.0
+    sigmoid_rate: 0.015
 
 - id: gale_brace
   name: Gale Brace
@@ -26,3 +28,13 @@
   description: "Sustain. Enables Retaliate loop."
   base_price: 450
   leech_percent: 0.15
+
+- id: endurance_plate
+  name: Endurance Plate
+  slot: ACCESSORY_1
+  description: "Defensive accessory. Flat DEF feeds into armor scaling."
+  base_price: 250
+  flat_stat_bonus:
+    DEF: 10
+  extra_def_reduction: 0.5
+  hp_bonus: 20

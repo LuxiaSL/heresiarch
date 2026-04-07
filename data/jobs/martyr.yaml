@@ -11,3 +11,8 @@ growth:
 base_hp: 70
 hp_growth: 12
 innate_ability_id: taunt
+ability_unlocks:
+  - level: 5
+    ability_id: brace_strike
+  - level: 12
+    ability_id: endure

@@ -1,5 +1,12 @@
 # Slime Curriculum: Shinto early game (zones 1-15)
 # Teaches basic combat, AOE value, archetype differences, boss mechanics
+#
+# Shop philosophy:
+#   - Weapons/armor only (LINEAR early, SUPERLINEAR/QUADRATIC zone 8+)
+#   - Accessories are loot drops, not buyable
+#   - Potions scale with zone difficulty
+#
+# Unlock chain: linear (zone_01 always available, each requires prior cleared)
 
 - id: zone_01
   name: Shrine Entrance
@@ -7,9 +14,13 @@
   region: shinto_slimes
   xp_cap_level: 5
   loot_tier: 1
+  unlock_requires: []
   shop_item_pool:
     - iron_blade
     - spirit_lens
+    - iron_guard
+    - spirit_mantle
+    - minor_potion
   encounters:
     - enemy_templates: [fodder_slime]
       enemy_counts: [1]
@@ -19,7 +30,7 @@
       enemy_counts: [2]
     - enemy_templates: [fodder_slime]
       enemy_counts: [3]
-    - enemy_templates: [fodder_slime]
+    - enemy_templates: [alpha_slime]
       enemy_counts: [1]
       is_boss: true
 
@@ -29,10 +40,15 @@
   region: shinto_slimes
   xp_cap_level: 6
   loot_tier: 1
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_01
   shop_item_pool:
     - iron_blade
     - spirit_lens
-    - endurance_plate
+    - iron_guard
+    - spirit_mantle
+    - minor_potion
   encounters:
     - enemy_templates: [fodder_slime]
       enemy_counts: [2]
@@ -44,7 +60,7 @@
       enemy_counts: [3]
     - enemy_templates: [fodder_slime]
       enemy_counts: [4]
-    - enemy_templates: [fodder_slime]
+    - enemy_templates: [alpha_slime]
       enemy_counts: [1]
       is_boss: true
 
@@ -54,11 +70,15 @@
   region: shinto_slimes
   xp_cap_level: 8
   loot_tier: 1
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_02
   shop_item_pool:
     - iron_blade
     - spirit_lens
-    - endurance_plate
-    - gale_brace
+    - iron_guard
+    - spirit_mantle
+    - minor_potion
   encounters:
     - enemy_templates: [fodder_slime]
       enemy_counts: [3]
@@ -70,8 +90,8 @@
       enemy_counts: [4]
     - enemy_templates: [fodder_slime]
       enemy_counts: [4]
-    - enemy_templates: [fodder_slime]
-      enemy_counts: [2]
+    - enemy_templates: [alpha_slime, fodder_slime]
+      enemy_counts: [1, 2]
       is_boss: true
 
 - id: zone_05
@@ -80,13 +100,17 @@
   region: shinto_slimes
   xp_cap_level: 10
   loot_tier: 1
-  recruitment_chance: 0.3
+  recruitment_chance: 0.15
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_03
   shop_item_pool:
     - iron_blade
     - spirit_lens
-    - endurance_plate
-    - gale_brace
-    - fortress_ring
+    - iron_guard
+    - spirit_mantle
+    - minor_potion
+    - potion
   encounters:
     - enemy_templates: [fodder_slime]
       enemy_counts: [3]
@@ -108,14 +132,19 @@
   region: shinto_slimes
   xp_cap_level: 14
   loot_tier: 2
-  recruitment_chance: 0.3
+  recruitment_chance: 0.15
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_05
   shop_item_pool:
+    - iron_blade
     - runic_edge
     - spirit_lens
-    - endurance_plate
-    - gale_brace
-    - fortress_ring
-    - leech_fang
+    - iron_guard
+    - runic_plate
+    - spirit_mantle
+    - resonance_veil
+    - potion
   encounters:
     - enemy_templates: [fodder_slime, caster_kitsune]
       enemy_counts: [2, 1]
@@ -139,14 +168,17 @@
   region: shinto_slimes
   xp_cap_level: 18
   loot_tier: 2
-  recruitment_chance: 0.3
+  recruitment_chance: 0.15
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_08
   shop_item_pool:
     - runic_edge
     - resonance_orb
-    - endurance_plate
-    - gale_brace
-    - fortress_ring
-    - leech_fang
+    - runic_plate
+    - resonance_veil
+    - potion
+    - major_potion
   encounters:
     - enemy_templates: [brute_oni, caster_kitsune]
       enemy_counts: [1, 1]
@@ -168,13 +200,17 @@
   region: shinto_slimes
   xp_cap_level: 20
   loot_tier: 3
+  is_final: true
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_12
   shop_item_pool:
     - runic_edge
     - resonance_orb
-    - endurance_plate
-    - gale_brace
-    - fortress_ring
-    - leech_fang
+    - runic_plate
+    - resonance_veil
+    - major_potion
+    - elixir
   encounters:
     - enemy_templates: [brute_oni, caster_kitsune, fodder_slime]
       enemy_counts: [1, 1, 2]

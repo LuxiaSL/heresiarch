@@ -20,6 +20,7 @@ class ScalingType(str, Enum):
     QUADRATIC = "QUADRATIC"
     DEGENERATE = "DEGENERATE"
     FLAT = "FLAT"
+    SIGMOID = "SIGMOID"
 
 
 class ItemScaling(BaseModel):
@@ -41,6 +42,10 @@ class ConversionEffect(BaseModel):
     scaling_type: ScalingType
     linear_coeff: float = 0.0
     quadratic_coeff: float = 0.0
+    # Sigmoid parameters: output = sigmoid_max / (1 + exp(-sigmoid_rate * (stat - sigmoid_mid)))
+    sigmoid_max: float = 0.0
+    sigmoid_mid: float = 0.0
+    sigmoid_rate: float = 0.0
 
 
 class Item(BaseModel):
@@ -58,4 +63,7 @@ class Item(BaseModel):
     is_consumable: bool = False
     heal_amount: int = 0
     heal_percent: float = 0.0
+    # Scroll fields
+    teaches_ability_id: str | None = None  # Permanent teach scroll: consumed, grants ability forever
+    casts_ability_id: str | None = None  # One-time cast scroll: consumed, performs ability once
     description: str = ""

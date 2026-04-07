@@ -84,7 +84,8 @@ class CombatantState(BaseModel):
     current_hp: int
     max_hp: int
     base_stats: StatBlock
-    effective_stats: StatBlock
+    equipment_stats: StatBlock  # base + equipment (Layer 1-4, no combat buffs)
+    effective_stats: StatBlock  # equipment_stats + combat buffs
     ability_ids: list[str] = Field(default_factory=list)
     action_points: int = 0
     cheat_debt: int = 0
@@ -95,6 +96,9 @@ class CombatantState(BaseModel):
     frenzy_stacks: int = 0
     surge_stacks: dict[str, int] = Field(default_factory=dict)
     is_surviving: bool = False
+    leech_percent: float = 0.0
+    has_endured: bool = False  # True once Endure has been consumed this fight
+    is_marked: bool = False  # Mark: bonus damage from all attackers
 
 
 class CombatState(BaseModel):

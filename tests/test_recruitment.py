@@ -21,7 +21,11 @@ from heresiarch.engine.recruitment import (
 
 @pytest.fixture
 def recruitment_engine(game_data: GameData, seeded_rng: random.Random) -> RecruitmentEngine:
-    return RecruitmentEngine(job_registry=game_data.jobs, rng=seeded_rng)
+    return RecruitmentEngine(
+        job_registry=game_data.jobs,
+        item_registry=game_data.items,
+        rng=seeded_rng,
+    )
 
 
 class TestCandidateGeneration:
@@ -130,7 +134,7 @@ class TestInspectionCHA:
         assert "name" in info
         assert "job_id" in info
         assert "growth" not in info
-        assert "current_stats" not in info
+        assert "stats" not in info
 
     def test_moderate_shows_growth(
         self, recruitment_engine: RecruitmentEngine
@@ -138,7 +142,7 @@ class TestInspectionCHA:
         candidate = recruitment_engine.generate_candidate(zone_level=10)
         info = recruitment_engine.inspect_candidate(candidate, cha=50)
         assert "growth" in info
-        assert "current_stats" not in info
+        assert "stats" not in info
 
     def test_full_shows_everything(
         self, recruitment_engine: RecruitmentEngine
@@ -146,10 +150,122 @@ class TestInspectionCHA:
         candidate = recruitment_engine.generate_candidate(zone_level=10)
         info = recruitment_engine.inspect_candidate(candidate, cha=80)
         assert "growth" in info
-        assert "current_stats" in info
+        assert "stats" in info
         assert "projected_stats_99" in info
         assert "level" in info
-        assert "current_hp" in info
+        assert "hp" in info
+
+
+class TestRecruitEquipment:
+    def test_recruit_with_shop_pool_can_have_weapon(
+        self, game_data: GameData
+    ) -> None:
+        """With a shop pool, recruits can spawn with weapons."""
+        equipped_any = False
+        for seed in range(50):
+            rng = random.Random(seed)
+            engine = RecruitmentEngine(
+                job_registry=game_data.jobs,
+                item_registry=game_data.items,
+                rng=rng,
+            )
+            candidate = engine.generate_candidate(
+                zone_level=5,
+                shop_pool=["iron_blade", "spirit_lens", "iron_guard", "spirit_mantle"],
+            )
+            if candidate.character.equipment.get("WEAPON"):
+                equipped_any = True
+                break
+        assert equipped_any, "Expected at least one recruit with a weapon in 50 seeds"
+
+    def test_recruit_without_shop_pool_has_no_equipment(
+        self, recruitment_engine: RecruitmentEngine
+    ) -> None:
+        """Without a shop pool, recruits spawn unarmed."""
+        candidate = recruitment_engine.generate_candidate(zone_level=10)
+        equipment = candidate.character.equipment
+        assert all(v is None for v in equipment.values())
+
+    def test_str_job_gets_str_weapon(self, game_data: GameData) -> None:
+        """STR jobs should get STR-scaling weapons from the pool."""
+        for seed in range(50):
+            rng = random.Random(seed)
+            engine = RecruitmentEngine(
+                job_registry=game_data.jobs,
+                item_registry=game_data.items,
+                rng=rng,
+            )
+            candidate = engine.generate_candidate(
+                zone_level=5,
+                exclude_job_ids=["onmyoji"],  # only STR jobs
+                shop_pool=["iron_blade", "spirit_lens"],
+            )
+            weapon = candidate.character.equipment.get("WEAPON")
+            if weapon:
+                item = game_data.items[weapon]
+                assert item.scaling.stat.value == "STR"
+
+    def test_mag_job_gets_mag_weapon(self, game_data: GameData) -> None:
+        """MAG jobs should get MAG-scaling weapons from the pool."""
+        for seed in range(50):
+            rng = random.Random(seed)
+            engine = RecruitmentEngine(
+                job_registry=game_data.jobs,
+                item_registry=game_data.items,
+                rng=rng,
+            )
+            candidate = engine.generate_candidate(
+                zone_level=5,
+                exclude_job_ids=["einherjar", "berserker", "martyr"],
+                shop_pool=["iron_blade", "spirit_lens"],
+            )
+            weapon = candidate.character.equipment.get("WEAPON")
+            if weapon:
+                item = game_data.items[weapon]
+                assert item.scaling.stat.value == "MAG"
+
+    def test_recruit_effective_stats_include_equipment(
+        self, game_data: GameData
+    ) -> None:
+        """Recruit effective_stats should account for equipped items."""
+        # Force a recruit with a weapon
+        for seed in range(100):
+            rng = random.Random(seed)
+            engine = RecruitmentEngine(
+                job_registry=game_data.jobs,
+                item_registry=game_data.items,
+                rng=rng,
+            )
+            candidate = engine.generate_candidate(
+                zone_level=10,
+                shop_pool=["iron_blade", "spirit_lens", "iron_guard", "spirit_mantle"],
+            )
+            if candidate.character.equipment.get("WEAPON"):
+                # effective_stats should differ from base_stats
+                assert candidate.character.effective_stats != candidate.character.base_stats
+                break
+
+    def test_recruit_items_added_to_party_on_recruit(
+        self, game_data: GameData
+    ) -> None:
+        """When recruited, the recruit's equipped items should be in party.items."""
+        for seed in range(100):
+            rng = random.Random(seed)
+            engine = RecruitmentEngine(
+                job_registry=game_data.jobs,
+                item_registry=game_data.items,
+                rng=rng,
+            )
+            candidate = engine.generate_candidate(
+                zone_level=5,
+                shop_pool=["iron_blade", "spirit_lens"],
+            )
+            if candidate.character.equipment.get("WEAPON"):
+                party = Party(active=[], characters={})
+                new_party = engine.recruit(party, candidate)
+                weapon_id = candidate.character.equipment["WEAPON"]
+                assert weapon_id in new_party.items
+                break
 
 
 class TestRecruitToParty:
@@ -180,7 +296,16 @@ class TestRecruitToParty:
                 reserve.append(char.id)
         return Party(active=active, reserve=reserve, characters=chars)
 
-    def test_recruit_adds_to_reserve(
+    def test_recruit_adds_to_active_if_room(
+        self, recruitment_engine: RecruitmentEngine, game_data: GameData
+    ) -> None:
+        party = self._make_party_with_n(game_data, 2)
+        candidate = recruitment_engine.generate_candidate(zone_level=10)
+        new_party = recruitment_engine.recruit(party, candidate)
+        assert candidate.character.id in new_party.active
+        assert candidate.character.id in new_party.characters
+
+    def test_recruit_adds_to_reserve_when_active_full(
         self, recruitment_engine: RecruitmentEngine, game_data: GameData
     ) -> None:
         party = self._make_party_with_n(game_data, 3)

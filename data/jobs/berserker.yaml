@@ -11,3 +11,10 @@ growth:
 base_hp: 25
 hp_growth: 4
 innate_ability_id: frenzy
+ability_unlocks:
+  - level: 3
+    ability_id: quick_strike
+  - level: 7
+    ability_id: double_hit
+  - level: 12
+    ability_id: reckless_blow

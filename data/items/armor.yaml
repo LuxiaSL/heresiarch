@@ -1,9 +1,61 @@
-- id: endurance_plate
-  name: Endurance Plate
+# --- DEF Armor Tier (Layer 3 scaling, natural job: Martyr @ 6 DEF/lv) ---
+# Crossovers: Iron Guard -> Runic Plate @ Lv30, Runic Plate -> Void Bastion @ Lv60
+
+- id: iron_guard
+  name: Iron Guard
   slot: ARMOR
-  description: "Tank item. Stacks with natural DEF."
-  base_price: 250
-  flat_stat_bonus:
-    DEF: 10
-  extra_def_reduction: 0.5
-  hp_bonus: 20
+  description: "Reliable. Holds the line."
+  base_price: 120
+  scaling:
+    scaling_type: LINEAR
+    stat: DEF
+    base: 20.0
+    linear_coeff: 1.0
+
+- id: runic_plate
+  name: Runic Plate
+  slot: ARMOR
+  description: "Investment piece. Overtakes Iron Guard around Lv30."
+  base_price: 400
+  scaling:
+    scaling_type: SUPERLINEAR
+    stat: DEF
+    base: 15.0
+    linear_coeff: 0.3
+    quadratic_coeff: 0.004
+
+- id: void_bastion
+  name: Void Bastion
+  slot: ARMOR
+  description: "Hurts you early. Unkillable late. Overtakes Runic Plate around Lv60."
+  base_price: 900
+  scaling:
+    scaling_type: DEGENERATE
+    stat: DEF
+    constant_offset: -184.0
+    quadratic_coeff: 0.006369
+
+# --- RES Armor Tier (Layer 3 scaling, natural job: Onmyoji @ 5 RES/lv) ---
+# Crossover: Spirit Mantle -> Resonance Veil @ Lv30
+
+- id: spirit_mantle
+  name: Spirit Mantle
+  slot: ARMOR
+  description: "Wards off secondary effects. Caster baseline."
+  base_price: 120
+  scaling:
+    scaling_type: LINEAR
+    stat: RES
+    base: 20.0
+    linear_coeff: 1.0
+
+- id: resonance_veil
+  name: Resonance Veil
+  slot: ARMOR
+  description: "Deep RES commitment. Overtakes Spirit Mantle around Lv30."
+  base_price: 500
+  scaling:
+    scaling_type: QUADRATIC
+    stat: RES
+    base: 15.0
+    quadratic_coeff: 0.0069

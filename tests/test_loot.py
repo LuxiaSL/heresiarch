@@ -90,7 +90,8 @@ class TestCommonDrop:
 
 class TestRareDrop:
     def test_rare_drop_possible(self, game_data: GameData) -> None:
-        """Brute oni has 5% rare drop (runic_edge) — scan seeds."""
+        """Brute oni has 5% rare drop (leech_fang etc.) — scan seeds."""
+        rare_items = {"endurance_plate", "leech_fang", "void_fang"}
         dropped_rare = False
         for seed in range(500):
             rng = random.Random(seed)
@@ -101,10 +102,10 @@ class TestRareDrop:
             )
             enemy = _make_enemy("brute_oni")
             result = resolver.resolve_encounter_drops([enemy], zone_level=10)
-            if "runic_edge" in result.item_ids:
+            if rare_items & set(result.item_ids):
                 dropped_rare = True
                 break
-        assert dropped_rare, "Expected runic_edge drop in 500 seeds"
+        assert dropped_rare, "Expected rare drop from brute_oni in 500 seeds"
 
 
 class TestEquipmentDrop:
