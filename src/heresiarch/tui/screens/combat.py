@@ -515,12 +515,22 @@ class CombatScreen(Screen):
 
         self._selected_item_id = None
 
-        # Route back into the turn flow — don't skip remaining actions
+        # Route through the same action-slot logic as abilities.
+        # The item was already applied; we use a no-op CombatAction as a
+        # sentinel so the engine knows an action slot was consumed.
+        # (basic_attack with empty targets resolves harmlessly in the engine)
         if self._current_decision is None:
             return
 
-        # If this was during cheat extra actions, consume one and continue
+        noop = CombatAction(
+            actor_id=self._current_decision.combatant_id,
+            ability_id="basic_attack",
+            target_ids=[],  # empty targets = engine skips cleanly
+        )
+
+        # Cheat extra action (primary already set, cheat slots remaining)
         if self._cheat_actions_remaining > 0 and self._current_decision.primary_action is not None:
+            self._cheat_extra_actions.append(noop)
             self._cheat_actions_remaining -= 1
             if self._cheat_actions_remaining > 0:
                 self._phase = CombatPhase.PLANNING_ACTION_MENU
@@ -532,8 +542,9 @@ class CombatScreen(Screen):
             self._check_partial_actions()
             return
 
-        # If this was during partial (SPD bonus) actions, consume one and continue
+        # Partial (SPD bonus) action
         if self._partial_actions_remaining > 0 and self._current_decision.primary_action is not None:
+            self._partial_actions.append(noop)
             self._partial_actions_remaining -= 1
             if self._partial_actions_remaining > 0:
                 self._phase = CombatPhase.PLANNING_ACTION_MENU
@@ -545,8 +556,8 @@ class CombatScreen(Screen):
             self._finalize_character()
             return
 
-        # Primary action slot — item replaces attack
-        self._current_decision.primary_action = None
+        # Primary action slot — item consumes it
+        self._current_decision.primary_action = noop
 
         # Still need cheat extra actions?
         if self._cheat_actions_remaining > 0:

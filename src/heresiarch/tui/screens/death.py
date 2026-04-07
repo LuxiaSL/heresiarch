@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Center, Middle, Vertical
+from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Label, Static
 
@@ -20,30 +20,44 @@ YOU_DIED = r"""
 class DeathScreen(Screen):
     """The run is over. Dark Souls energy."""
 
+    CSS = """
+    DeathScreen {
+        align: center middle;
+    }
+    #death-container {
+        width: auto;
+        max-width: 90;
+        height: auto;
+        padding: 1 4;
+    }
+    #you-died {
+        text-align: center;
+    }
+    """
+
     BINDINGS = [
         ("enter", "return_to_title", "Return"),
     ]
 
     def compose(self) -> ComposeResult:
-        with Middle():
-            with Center():
-                with Vertical(id="death-container"):
-                    yield Static(
-                        f"[bold #880000]{YOU_DIED}[/bold #880000]",
-                        id="you-died",
-                    )
-                    yield Label("")
-                    yield Static("", id="run-recap")
-                    yield Label("")
-                    yield Button(
-                        "Return to Title",
-                        variant="primary",
-                        id="btn-return",
-                    )
+        with Vertical(id="death-container"):
+            yield Static(
+                f"[bold #880000]{YOU_DIED}[/bold #880000]",
+                id="you-died",
+            )
+            yield Label("")
+            yield Static("", id="run-recap")
+            yield Label("")
+            yield Button(
+                "Return to Title",
+                variant="primary",
+                id="btn-return",
+            )
 
     def on_mount(self) -> None:
         self._render_recap()
         self._delete_saves()
+        self.query_one("#btn-return", Button).focus()
 
     def _render_recap(self) -> None:
         """Generate run recap from BattleRecord."""
@@ -88,15 +102,19 @@ class DeathScreen(Screen):
         lines.append(f"  Money: {party.money}G")
         lines.append("")
 
-        # Top damage dealers
+        # Top damage dealers (player characters only)
         damage_by_char = record.damage_dealt_by_character()
         if damage_by_char:
-            lines.append("[bold]Top Damage[/bold]")
-            sorted_dmg = sorted(damage_by_char.items(), key=lambda x: x[1], reverse=True)[:3]
-            for char_id, dmg in sorted_dmg:
-                char = party.characters.get(char_id)
-                name = char.name if char else char_id
-                lines.append(f"  {name}: {dmg}")
+            player_dmg = {
+                cid: dmg for cid, dmg in damage_by_char.items()
+                if cid in party.characters
+            }
+            if player_dmg:
+                lines.append("[bold]Top Damage[/bold]")
+                sorted_dmg = sorted(player_dmg.items(), key=lambda x: x[1], reverse=True)[:3]
+                for char_id, dmg in sorted_dmg:
+                    char = party.characters[char_id]
+                    lines.append(f"  {char.name}: {dmg}")
             lines.append("")
 
         # Most used abilities

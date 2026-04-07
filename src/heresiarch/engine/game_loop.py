@@ -409,14 +409,20 @@ class GameLoop:
         if run.zone_state is None or run.current_zone_id is None:
             raise ValueError("Not in a zone")
 
-        # Overstay mode — just bump the counter
+        # Overstay mode — bump the counter and sync to zone_progress
         if run.zone_state.is_cleared:
             new_zone_state = run.zone_state.model_copy(
                 update={
                     "overstay_battles": run.zone_state.overstay_battles + 1,
                 }
             )
-            return run.model_copy(update={"zone_state": new_zone_state})
+            new_progress = dict(run.zone_progress)
+            if run.current_zone_id:
+                new_progress[run.current_zone_id] = new_zone_state
+            return run.model_copy(update={
+                "zone_state": new_zone_state,
+                "zone_progress": new_progress,
+            })
 
         zone = self.game_data.zones[run.current_zone_id]
         new_idx = run.zone_state.current_encounter_index + 1
@@ -439,6 +445,11 @@ class GameLoop:
             if run.current_zone_id not in zones_completed:
                 zones_completed.append(run.current_zone_id)
             updates["zones_completed"] = zones_completed
+            # Sync cleared state to zone_progress
+            new_progress = dict(run.zone_progress)
+            if run.current_zone_id:
+                new_progress[run.current_zone_id] = new_zone_state
+            updates["zone_progress"] = new_progress
 
         return run.model_copy(update=updates)
 
