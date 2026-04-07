@@ -270,10 +270,10 @@ class TestLeaveZone:
         mc = run.party.characters["mc_einherjar"]
         assert mc.current_hp == mc.max_hp
 
-    def test_leave_mid_zone_loses_progress(
+    def test_leave_mid_zone_saves_progress(
         self, game_loop: GameLoop, game_data: GameData
     ) -> None:
-        """Leaving a zone and re-entering should reset encounter progress."""
+        """Leaving a zone and re-entering should restore encounter progress."""
         run = game_loop.new_run("run_001", "Hero", "einherjar")
         run = game_loop.enter_zone(run, "zone_01")
         run = game_loop.advance_zone(run)
@@ -281,8 +281,24 @@ class TestLeaveZone:
         assert run.zone_state.current_encounter_index == 2
 
         run = game_loop.leave_zone(run)
+        assert "zone_01" in run.zone_progress
         run = game_loop.enter_zone(run, "zone_01")
-        assert run.zone_state.current_encounter_index == 0
+        assert run.zone_state.current_encounter_index == 2
+
+    def test_leave_saves_overstay_counter(
+        self, game_loop: GameLoop, game_data: GameData
+    ) -> None:
+        """Overstay battle count should persist across leave/re-enter."""
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        run = _clear_zone(game_loop, run, "zone_01", game_data)
+        run = game_loop.enter_zone(run, "zone_01")
+        for _ in range(3):
+            run = game_loop.advance_zone(run)
+        assert run.zone_state.overstay_battles == 3
+
+        run = game_loop.leave_zone(run)
+        run = game_loop.enter_zone(run, "zone_01")
+        assert run.zone_state.overstay_battles == 3
 
 
 class TestFinalZone:

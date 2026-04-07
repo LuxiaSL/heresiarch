@@ -27,6 +27,7 @@ class RunState(BaseModel):
     current_zone_id: str | None = None
     zone_state: ZoneState | None = None
     zones_completed: list[str] = Field(default_factory=list)
+    zone_progress: dict[str, ZoneState] = Field(default_factory=dict)
     battle_record: BattleRecord = Field(default_factory=BattleRecord)
     is_dead: bool = False
     created_at: str = ""

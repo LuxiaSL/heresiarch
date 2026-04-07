@@ -198,10 +198,18 @@ class GameLoop:
     def enter_zone(self, run: RunState, zone_id: str) -> RunState:
         """Begin a zone. Sets current_zone_id and zone_state.
 
+        Restores saved progress if the player previously left mid-zone.
         Re-entering a cleared zone starts in overstay mode (is_cleared=True).
         """
         if zone_id not in self.game_data.zones:
             raise ValueError(f"Unknown zone: {zone_id}")
+
+        # Restore saved progress if it exists
+        saved = run.zone_progress.get(zone_id)
+        if saved is not None:
+            return run.model_copy(
+                update={"current_zone_id": zone_id, "zone_state": saved}
+            )
 
         already_cleared = zone_id in run.zones_completed
         zone_state = ZoneState(
@@ -213,7 +221,11 @@ class GameLoop:
         )
 
     def leave_zone(self, run: RunState) -> RunState:
-        """Exit the current zone and heal the party."""
+        """Exit the current zone, save progress, and heal the party."""
+        new_progress = dict(run.zone_progress)
+        if run.current_zone_id and run.zone_state:
+            new_progress[run.current_zone_id] = run.zone_state
+        run = run.model_copy(update={"zone_progress": new_progress})
         run = self.enter_safe_zone(run)
         return run.model_copy(
             update={"current_zone_id": None, "zone_state": None}
