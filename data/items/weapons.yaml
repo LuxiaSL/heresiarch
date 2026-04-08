@@ -13,7 +13,7 @@
   name: Runic Edge
   slot: WEAPON
   description: "Investment piece. Overtakes Iron Blade around Lv30."
-  base_price: 350
+  base_price: 3500
   scaling:
     scaling_type: SUPERLINEAR
     stat: STR
@@ -25,7 +25,7 @@
   name: Void Fang
   slot: WEAPON
   description: "Hurts you early. Kills god late. Overtakes Runic Edge around Lv60."
-  base_price: 800
+  base_price: 8000
   scaling:
     scaling_type: DEGENERATE
     stat: STR
@@ -47,7 +47,7 @@
   name: Resonance Orb
   slot: WEAPON
   description: "Deep MAG commitment. Overtakes Spirit Lens around Lv30."
-  base_price: 500
+  base_price: 4000
   scaling:
     scaling_type: QUADRATIC
     stat: MAG

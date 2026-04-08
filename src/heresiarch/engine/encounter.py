@@ -6,7 +6,7 @@ import random
 
 from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.models.enemies import EnemyInstance, EnemyTemplate
-from heresiarch.engine.models.zone import EncounterTemplate
+from heresiarch.engine.models.zone import EncounterTemplate, RandomSpawn
 
 BOSS_BUDGET_MULTIPLIER: float = 1.5
 
@@ -28,11 +28,13 @@ class EncounterGenerator:
         self,
         encounter_template: EncounterTemplate,
         zone_level: int,
+        random_spawns: list[RandomSpawn] | None = None,
     ) -> list[EnemyInstance]:
         """Create EnemyInstance list from an EncounterTemplate.
 
         For boss encounters, enemies get 1.5x budget multiplier.
         Each instance gets a unique ID: "{template_id}_{index}".
+        Random spawns are rolled and injected if they hit.
         """
         instances: list[EnemyInstance] = []
         global_idx = 0
@@ -59,5 +61,19 @@ class EncounterGenerator:
                 )
                 instances.append(instance)
                 global_idx += 1
+
+        # Roll for random spawn injections (skip boss encounters)
+        if random_spawns and not encounter_template.is_boss:
+            for spawn in random_spawns:
+                if spawn.enemy_template_id not in self.enemy_registry:
+                    continue
+                if self.rng.random() < spawn.chance:
+                    template = self.enemy_registry[spawn.enemy_template_id]
+                    instance_id = f"{spawn.enemy_template_id}_{global_idx}"
+                    instance = self.combat_engine.create_enemy_instance(
+                        template, zone_level, instance_id=instance_id
+                    )
+                    instances.append(instance)
+                    global_idx += 1
 
         return instances

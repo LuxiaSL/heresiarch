@@ -108,6 +108,47 @@ class GameLoop:
             return char.model_copy(update={"abilities": new_abilities})
         return char
 
+    def _rebuild_abilities(
+        self,
+        char: CharacterInstance,
+        equipment: dict[str, str | None],
+        item_lookup: dict[str, Item],
+    ) -> list[str]:
+        """Rebuild ability list from all sources, preserving scroll-taught abilities.
+
+        Sources (in order):
+        1. basic_attack + innate
+        2. Job breakpoint unlocks for current level
+        3. Equipment-granted abilities from current equipment
+        4. Anything else already on the character (scroll-taught, etc.)
+        """
+        job = self.game_data.jobs.get(char.job_id)
+        innate_id = job.innate_ability_id if job else ""
+
+        abilities: list[str] = ["basic_attack"]
+        if innate_id:
+            abilities.append(innate_id)
+
+        # Breakpoint unlocks
+        if job:
+            for unlock in job.ability_unlocks:
+                if unlock.level <= char.level and unlock.ability_id not in abilities:
+                    abilities.append(unlock.ability_id)
+
+        # Equipment-granted
+        for _slot, eid in equipment.items():
+            if eid:
+                item = item_lookup.get(eid) or self.game_data.items.get(eid)
+                if item and item.granted_ability_id and item.granted_ability_id not in abilities:
+                    abilities.append(item.granted_ability_id)
+
+        # Preserve scroll-taught and other learned abilities
+        for aid in char.abilities:
+            if aid not in abilities:
+                abilities.append(aid)
+
+        return abilities
+
     def _recompute_derived(self, char: CharacterInstance, party: Party | None = None) -> CharacterInstance:
         """Recompute effective_stats and max_hp from base_stats + equipment.
 
@@ -221,12 +262,11 @@ class GameLoop:
         )
 
     def leave_zone(self, run: RunState) -> RunState:
-        """Exit the current zone, save progress, and heal the party."""
+        """Exit the current zone and save progress. HP persists."""
         new_progress = dict(run.zone_progress)
         if run.current_zone_id and run.zone_state:
             new_progress[run.current_zone_id] = run.zone_state
         run = run.model_copy(update={"zone_progress": new_progress})
-        run = self.enter_safe_zone(run)
         return run.model_copy(
             update={"current_zone_id": None, "zone_state": None}
         )
@@ -242,6 +282,8 @@ class GameLoop:
 
         zone = self.game_data.zones[run.current_zone_id]
 
+        spawns = zone.random_spawns or None
+
         if run.zone_state.is_cleared:
             # Overstay: pick a random non-boss encounter
             non_boss = [e for e in zone.encounters if not e.is_boss]
@@ -249,7 +291,7 @@ class GameLoop:
                 non_boss = zone.encounters  # fallback: all encounters
             encounter_template = self.rng.choice(non_boss)
             return self.encounter_generator.generate_encounter(
-                encounter_template, zone.zone_level
+                encounter_template, zone.zone_level, random_spawns=spawns
             )
 
         idx = run.zone_state.current_encounter_index
@@ -258,7 +300,7 @@ class GameLoop:
 
         encounter_template = zone.encounters[idx]
         return self.encounter_generator.generate_encounter(
-            encounter_template, zone.zone_level
+            encounter_template, zone.zone_level, random_spawns=spawns
         )
 
     def _get_mc(self, run: RunState) -> CharacterInstance | None:
@@ -281,6 +323,11 @@ class GameLoop:
         if not combat_result.player_won:
             return self.handle_death(run), LootResult()
 
+        # Overstay XP penalty (same curve as loot: -5% per battle, floor 10%)
+        overstay = run.zone_state.overstay_battles if run.zone_state else 0
+        from heresiarch.engine.loot import OVERSTAY_PENALTY_PER_BATTLE
+        overstay_xp_mult = max(0.0, 1.0 - OVERSTAY_PENALTY_PER_BATTLE * overstay)
+
         # --- XP Distribution + HP Persistence ---
         new_characters = dict(party.characters)
         for char_id in combat_result.surviving_character_ids:
@@ -295,6 +342,7 @@ class GameLoop:
                     character_level=char.level,
                     xp_cap_level=xp_cap,
                 )
+            total_xp_gain = int(total_xp_gain * overstay_xp_mult)
 
             new_xp = char.xp + total_xp_gain
             levels_gained = calculate_levels_gained(new_xp, char.level)
@@ -369,10 +417,17 @@ class GameLoop:
             overstay_battles=overstay,
         )
 
+        # Apply gold: loot gains, minus stolen by enemies, plus stolen by players
+        net_gold = (
+            party.money
+            + loot.money
+            - combat_result.gold_stolen_by_enemies
+            + combat_result.gold_stolen_by_players
+        )
         new_party = party.model_copy(
             update={
                 "characters": new_characters,
-                "money": party.money + loot.money,
+                "money": max(0, net_gold),
             }
         )
         new_run = run.model_copy(update={"party": new_party})
@@ -482,14 +537,30 @@ class GameLoop:
         # Recalculate stats from full history + recompute derived
         new_stats = calculate_stats_from_history(history, self.game_data.jobs)
 
+        # Strip old job's innate/breakpoint abilities, keep scroll-taught
+        old_job = self.game_data.jobs.get(mc.job_id)
+        old_job_ability_ids: set[str] = set()
+        if old_job:
+            old_job_ability_ids.add(old_job.innate_ability_id)
+            for unlock in old_job.ability_unlocks:
+                old_job_ability_ids.add(unlock.ability_id)
+        scroll_abilities = [
+            a for a in mc.abilities
+            if a not in old_job_ability_ids and a != "basic_attack"
+        ]
+
+        # Temporarily set the new job + scroll abilities, then let
+        # _rebuild_abilities fill in new innate, breakpoints, and equipment
         new_mc = mc.model_copy(
             update={
                 "job_id": new_job_id,
                 "base_stats": new_stats,
-                "abilities": ["basic_attack", new_job.innate_ability_id],
+                "abilities": scroll_abilities,
                 "growth_history": history,
             }
         )
+        new_abilities = self._rebuild_abilities(new_mc, mc.equipment, party.items)
+        new_mc = new_mc.model_copy(update={"abilities": new_abilities})
         new_mc = self._recompute_derived(new_mc, party)
         new_mc = new_mc.model_copy(
             update={"current_hp": min(mc.current_hp, new_mc.max_hp)}
@@ -539,12 +610,7 @@ class GameLoop:
         new_equipment[slot] = item_id
         new_items[item_id] = item
 
-        # Rebuild abilities: basic_attack + innate + equipment-granted
-        innate_id = self.game_data.jobs[char.job_id].innate_ability_id
-        new_abilities = ["basic_attack", innate_id]
-        for s, eid in new_equipment.items():
-            if eid and eid in new_items and new_items[eid].granted_ability_id:
-                new_abilities.append(new_items[eid].granted_ability_id)
+        new_abilities = self._rebuild_abilities(char, new_equipment, new_items)
 
         new_char = char.model_copy(
             update={"equipment": new_equipment, "abilities": new_abilities}
@@ -584,14 +650,7 @@ class GameLoop:
         new_equipment = dict(char.equipment)
         new_equipment[slot] = None
 
-        # Rebuild abilities: basic_attack + innate + remaining equipment-granted
-        innate_id = self.game_data.jobs[char.job_id].innate_ability_id
-        new_abilities = ["basic_attack", innate_id]
-        for s, eid in new_equipment.items():
-            if eid:
-                eq_item = party.items.get(eid) or self.game_data.items.get(eid)
-                if eq_item and eq_item.granted_ability_id:
-                    new_abilities.append(eq_item.granted_ability_id)
+        new_abilities = self._rebuild_abilities(char, new_equipment, party.items)
 
         new_char = char.model_copy(update={"equipment": new_equipment, "abilities": new_abilities})
         new_characters = dict(party.characters)

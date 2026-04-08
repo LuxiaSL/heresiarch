@@ -65,14 +65,15 @@ class SaveManager:
         return RunState.model_validate_json(save_path.read_text())
 
     def list_runs(self) -> list[str]:
-        """List all run IDs with saves."""
+        """List all run IDs with saves, most recently modified last."""
         if not self.save_dir.exists():
             return []
-        return sorted(
-            d.name
-            for d in self.save_dir.iterdir()
+        run_dirs = [
+            d for d in self.save_dir.iterdir()
             if d.is_dir() and (d / "metadata.json").exists()
-        )
+        ]
+        run_dirs.sort(key=lambda d: d.stat().st_mtime)
+        return [d.name for d in run_dirs]
 
     def list_slots(self, run_id: str) -> list[SaveSlot]:
         """List all save slots for a run."""

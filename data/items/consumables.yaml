@@ -27,7 +27,7 @@
   slot: ACCESSORY_1
   is_consumable: true
   heal_percent: 1.0
-  base_price: 500
+  base_price: 300
   description: "Restores full HP. Liquid regret prevention."
 
 # --- Teach Scrolls (permanent ability grant) ---

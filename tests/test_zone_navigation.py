@@ -212,8 +212,8 @@ class TestOverstayLootPenalty:
         # At 20 * 5% = 100% penalty, all drop chances should be 0
         assert drops == 0
 
-    def test_money_not_affected_by_overstay(self, game_data: GameData) -> None:
-        """Money should still drop even at max overstay."""
+    def test_money_penalized_by_overstay(self, game_data: GameData) -> None:
+        """Money should degrade to zero at high overstay — no farming."""
         from heresiarch.engine.models.enemies import ActionTable, ActionWeight, EnemyInstance
         from heresiarch.engine.models.stats import StatBlock
 
@@ -236,8 +236,9 @@ class TestOverstayLootPenalty:
                 base_weights=[ActionWeight(ability_id="basic_attack", weight=1.0)]
             ),
         )
-        result = r.resolve_encounter_drops([enemy], zone_level=10, overstay_battles=50)
-        assert result.money > 0
+        # At 20 overstay battles (20 * 5% = 100%), money should be 0
+        result = r.resolve_encounter_drops([enemy], zone_level=10, overstay_battles=20)
+        assert result.money == 0
 
     def test_overstay_penalty_constant(self) -> None:
         assert OVERSTAY_PENALTY_PER_BATTLE == 0.05
@@ -253,7 +254,8 @@ class TestLeaveZone:
         assert run.current_zone_id is None
         assert run.zone_state is None
 
-    def test_leave_heals_party(self, game_loop: GameLoop) -> None:
+    def test_leave_preserves_hp(self, game_loop: GameLoop) -> None:
+        """Leaving a zone does NOT heal — HP persists until a town."""
         run = game_loop.new_run("run_001", "Hero", "einherjar")
         run = game_loop.enter_zone(run, "zone_01")
 
@@ -268,7 +270,7 @@ class TestLeaveZone:
 
         run = game_loop.leave_zone(run)
         mc = run.party.characters["mc_einherjar"]
-        assert mc.current_hp == mc.max_hp
+        assert mc.current_hp == 1
 
     def test_leave_mid_zone_saves_progress(
         self, game_loop: GameLoop, game_data: GameData

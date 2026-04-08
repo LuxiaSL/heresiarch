@@ -63,6 +63,7 @@ class CombatEventType(str, Enum):
     PASSIVE_TRIGGERED = "PASSIVE_TRIGGERED"
     TAUNT_REDIRECT = "TAUNT_REDIRECT"
     FRENZY_STACK = "FRENZY_STACK"
+    GOLD_STOLEN = "GOLD_STOLEN"
     COMBAT_END = "COMBAT_END"
 
 
@@ -97,6 +98,7 @@ class CombatantState(BaseModel):
     surge_stacks: dict[str, int] = Field(default_factory=dict)
     is_surviving: bool = False
     leech_percent: float = 0.0
+    level: int = 1
     has_endured: bool = False  # True once Endure has been consumed this fight
     is_marked: bool = False  # Mark: bonus damage from all attackers
 
@@ -113,6 +115,8 @@ class CombatState(BaseModel):
     is_finished: bool = False
     player_won: bool | None = None
     foresight_revealed: list[str] = Field(default_factory=list)
+    gold_stolen_by_enemies: int = 0
+    gold_stolen_by_players: int = 0
 
     def get_combatant(self, combatant_id: str) -> CombatantState | None:
         for c in self.player_combatants + self.enemy_combatants:

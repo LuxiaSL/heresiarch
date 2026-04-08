@@ -103,10 +103,13 @@ class RecruitmentEngine:
 
         max_hp = calculate_max_hp(job.base_hp, job.hp_growth, zone_level, effective.DEF)
 
-        # Build ability list from job innate + equipment-granted
+        # Build ability list from job innate + breakpoints + equipment-granted
         abilities = ["basic_attack", job.innate_ability_id]
+        for unlock in job.ability_unlocks:
+            if unlock.level <= zone_level and unlock.ability_id not in abilities:
+                abilities.append(unlock.ability_id)
         for item in equipped_items:
-            if item.granted_ability_id:
+            if item.granted_ability_id and item.granted_ability_id not in abilities:
                 abilities.append(item.granted_ability_id)
 
         char_id = f"recruit_{job_id}_{self.rng.randint(1000, 9999)}"

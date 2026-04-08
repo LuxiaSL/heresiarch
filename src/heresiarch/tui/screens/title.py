@@ -51,6 +51,7 @@ class TitleScreen(Screen):
     BINDINGS = [
         ("n", "new_run", "New Run"),
         ("c", "continue_run", "Continue"),
+        ("l", "load_game", "Load Game"),
         ("q", "quit_game", "Quit"),
     ]
 
@@ -89,6 +90,8 @@ class TitleScreen(Screen):
         if has_saves:
             action_list.add_option(Option("[c] Continue"))
             self._action_keys.append("continue_run")
+            action_list.add_option(Option("[l] Load Game"))
+            self._action_keys.append("load_game")
 
         action_list.add_option(Option("[q] Quit"))
         self._action_keys.append("quit_game")
@@ -109,6 +112,8 @@ class TitleScreen(Screen):
                 self.action_new_run()
             case "continue_run":
                 self.action_continue_run()
+            case "load_game":
+                self.action_load_game()
             case "quit_game":
                 self.action_quit_game()
 
@@ -118,24 +123,33 @@ class TitleScreen(Screen):
         self.app.push_screen(JobSelectScreen())
 
     def action_continue_run(self) -> None:
+        """Quick continue — load most recent save from most recent run."""
         try:
             runs = self.app.save_manager.list_runs()
             if not runs:
                 return
             run_id = runs[-1]
-            run_state = self.app.save_manager.load_run(run_id, "autosave")
+            slots = self.app.save_manager.list_slots(run_id)
+            if not slots:
+                return
+            latest = max(slots, key=lambda s: s.saved_at or "")
+            run_state = self.app.save_manager.load_run(run_id, latest.slot_id)
             self.app.run_state = self.app.game_loop.rehydrate_run(run_state)
 
             if self.app.run_state.current_zone_id is not None:
                 from heresiarch.tui.screens.zone import ZoneScreen
-
                 self.app.push_screen(ZoneScreen())
             else:
                 from heresiarch.tui.screens.zone_select import ZoneSelectScreen
-
                 self.app.push_screen(ZoneSelectScreen())
         except Exception:
             pass
+
+    def action_load_game(self) -> None:
+        """Open the save browser to pick a specific run/slot."""
+        from heresiarch.tui.screens.load import LoadScreen
+
+        self.app.push_screen(LoadScreen())
 
     def action_quit_game(self) -> None:
         self.app.exit()

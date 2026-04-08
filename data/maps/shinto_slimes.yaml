@@ -1,0 +1,91 @@
+# Region map: Shinto Slimes
+# Winding path from shrine entrance to the giga slime lair.
+# The camera pans across the map as the player cycles through zones.
+#
+# Marker positions (row, col) are where the dynamic zone marker is composited.
+# The base art has an 'o' at each anchor position — the renderer overwrites it
+# with the appropriate state marker (?, o, *, X) at runtime.
+#
+# TERRAIN VOCABULARY (for authoring/extending):
+#   ~        water / streams (rendered blue)
+#   *  .     cherry blossoms / path dots (rendered dim pink / gray)
+#   |  /  \  structures, bamboo stalks, walls (rendered dim gray)
+#   _  -  =  floors, paths, bridges (rendered dim gray)
+#   ( ) [ ]  structural brackets (rendered dim gray)
+#   A-Z a-z  zone names and labels (rendered slightly brighter gray)
+#   o        zone anchor placeholder — will be overwritten by marker renderer
+#            (must be at the exact anchor coordinate)
+#   <space>  empty / sky — no color applied
+#
+# AUTHORING TIPS:
+#   - Use `heresiarch-map find <file> o` to list all 'o' positions
+#   - Use `heresiarch-map inspect <file> <row> <col>` to view a region with rulers
+#   - Use `heresiarch-map validate <file>` to check anchors against zone data
+#   - Leave at least 1 empty row ABOVE each anchor for the selection flag (|>)
+#   - Map should be wider+taller than a typical terminal for meaningful panning
+
+region_id: shinto_slimes
+name: "~ Shinto Slimes ~"
+
+art:
+  - "                                                                                                          "
+  - "         .  *     *  .                                                                                    "
+  - "      *     .  .  .     *                       ~ ~ ~ ~ ~ ~ ~ ~ ~                                        "
+  - "        .  .   .   .  .                        ~~~~~~~~~~~~~~~~~~~                  ||| ||| ||| |||        "
+  - "        ___|__|_|__|___                       ~~                 ~~                 |/| |\\| |/| |\\|        "
+  - "       |   |  | |  |   |                     ~~                   ~~                ||| ||| ||| |||        "
+  - "       |   |  |_|  |   |  . . . . . . . .  ~~                     ~~  . . . . . .  ||| ||| ||| |||        "
+  - "       |   |       |   |                    ~~                     ~~               ||| ||| ||| |||        "
+  - "       |       o       |                     ~~     o              ~~               |||  o  ||| |||        "
+  - "       |    Shrine     |                      ~~  Mossy Path     ~~                ||| Bamboo  |||        "
+  - "       |   Entrance    |                       ~~~~~~~~~~~~~~~~~~~                 ||| Thicket |||        "
+  - "       |_______________|                               |                           ||| ||| ||| |||        "
+  - "             |                                         |                                |                  "
+  - "             |_________________________________________|________________________________|                  "
+  - "                                                       |                                                  "
+  - "                                                 ______|______                                            "
+  - "                                                /             \\                                           "
+  - "                                               /               \\                                          "
+  - "                                              /    *       *    \\                                         "
+  - "                                             /                   \\                                        "
+  - "                                            /         o           \\                                       "
+  - "                                           /     Spirit Clearing   \\                                      "
+  - "                                          /                         \\                                     "
+  - "                                         /___________________________\\                                    "
+  - "                                                      |                                                   "
+  - "                                                      |                                                   "
+  - "               ___________________________            |                                                   "
+  - "              |    __|__   __|__   __|__   |           |         __________________                        "
+  - "              |   |     | |     | |     |  |           |        |                  |                        "
+  - "              |   |     | |     | |     |  |___________|________|        o         |                        "
+  - "              |          o                 |           |         |  Inner Sanctum  |          _________    "
+  - "              |      Torii Descent         |           |         |                 |         /  ~~~~~  \\   "
+  - "              |   |     | |     | |     |  |           |         |_________________|        /  ~~~~~~~  \\  "
+  - "              |   |_____| |_____| |_____|  |           |                |                  /     o       \\ "
+  - "              |____________________________|           |                |                 /  Giga  Slime  \\"
+  - "                                                       |                |________________/     Lair       \\"
+  - "                                                       |________________________________\\________________/"
+  - "                                                                                                          "
+
+anchors:
+  - zone_id: zone_01
+    row: 8
+    col: 15
+  - zone_id: zone_02
+    row: 8
+    col: 52
+  - zone_id: zone_03
+    row: 8
+    col: 89
+  - zone_id: zone_05
+    row: 20
+    col: 54
+  - zone_id: zone_08
+    row: 30
+    col: 25
+  - zone_id: zone_12
+    row: 29
+    col: 73
+  - zone_id: zone_15
+    row: 33
+    col: 97

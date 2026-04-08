@@ -13,16 +13,33 @@
 
 - enemy_template_id: alpha_slime
   guaranteed_money: true
+  money_multiplier: 3.5
+  common_item_ids: []
+  common_drop_chance: 0.0
+  rare_item_ids: []
+  rare_drop_chance: 0.0
+  equipment_drop_chance: 0.0
+  guaranteed_pools:
+    # Always drop a potion
+    - items:
+        - { item_id: minor_potion, weight: 3 }
+        - { item_id: potion, weight: 1 }
+    # Always drop a gear piece
+    - items:
+        - { item_id: endurance_plate, weight: 2 }
+        - { item_id: gale_brace, weight: 2 }
+        - { item_id: iron_blade, weight: 3 }
+        - { item_id: scroll_searing_edge, weight: 1 }
+
+- enemy_template_id: bandit_slime
+  guaranteed_money: true
+  money_multiplier: 2.0
   common_item_ids:
     - minor_potion
-    - potion
-  common_drop_chance: 0.3
-  rare_item_ids:
-    - endurance_plate
-    - gale_brace
-    - scroll_searing_edge
-  rare_drop_chance: 0.1
-  equipment_drop_chance: 0.15
+  common_drop_chance: 0.15
+  rare_item_ids: []
+  rare_drop_chance: 0.0
+  equipment_drop_chance: 0.0
 
 - enemy_template_id: brute_oni
   guaranteed_money: true

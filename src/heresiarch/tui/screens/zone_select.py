@@ -1,39 +1,43 @@
-"""Zone selection screen — pick which zone to enter."""
+"""Zone selection screen — ASCII map viewer with zone markers and panning."""
 
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Footer, Label, OptionList, Static
-from textual.widgets.option_list import Option
+from textual.widgets import Footer, Static
+
+from heresiarch.engine.models.region_map import RegionMap
+from heresiarch.tui.widgets.map_viewer import MapViewer, ZoneStatus
 
 
 class ZoneSelectScreen(Screen):
-    """Choose a zone to enter from the unlocked set."""
+    """Choose a zone to enter from a pannable ASCII map."""
 
     CSS = """
     ZoneSelectScreen {
-        align: center middle;
+        layout: vertical;
     }
-    #zone-select-box {
-        width: 80;
-        height: auto;
-        padding: 1 2;
-    }
-    #zone-list {
-        height: auto;
-        max-height: 16;
-        margin: 1 0;
-    }
-    #zone-detail {
-        height: auto;
-        min-height: 4;
-        padding: 0 1;
+    #map-area {
+        height: 1fr;
         border: tall #333355;
     }
+    #info-panel {
+        height: auto;
+        min-height: 5;
+        max-height: 8;
+        padding: 0 2;
+        border: tall #333355;
+    }
+    #zone-detail {
+        width: 1fr;
+        height: auto;
+    }
     #party-summary {
-        margin-top: 1;
+        width: auto;
+        min-width: 32;
+        height: auto;
+        padding-left: 2;
     }
     """
 
@@ -44,42 +48,144 @@ class ZoneSelectScreen(Screen):
     def __init__(self) -> None:
         super().__init__()
         self._zone_ids: list[str] = []
+        self._all_zone_ids: list[str] = []
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="zone-select-box"):
-            yield Static("[bold]Choose a Zone[/bold]")
-            yield Label("")
-            yield OptionList(id="zone-list")
+        yield Vertical(id="map-area")
+        with Horizontal(id="info-panel"):
             yield Static("", id="zone-detail")
             yield Static("", id="party-summary")
         yield Footer()
 
     def on_mount(self) -> None:
-        self._populate_zones()
+        self._build_map()
         self._render_party()
-        zone_list = self.query_one("#zone-list", OptionList)
-        zone_list.focus()
-        if self._zone_ids:
-            zone_list.highlighted = 0
 
-    def _populate_zones(self) -> None:
+    def _build_map(self) -> None:
+        """Build the map viewer from run state and mount it into #map-area."""
         run = self.app.run_state
         if run is None:
             return
 
-        zone_list = self.query_one("#zone-list", OptionList)
-        zone_list.clear_options()
-        self._zone_ids = []
+        # Determine region — for now all zones share "shinto_slimes"
+        region_map = self._get_region_map()
+        if region_map is None:
+            # Fallback: no map data, use a stub
+            self._fallback_list()
+            return
 
+        # Build zone status dict and navigable list
         available = self.app.game_loop.get_available_zones(run)
+        available_ids = {z.id for z in available}
         completed = set(run.zones_completed)
 
-        for zone in available:
-            cleared_tag = " [bold #44aa44][CLEARED][/bold #44aa44]" if zone.id in completed else ""
-            final_tag = " [bold #e6c566][FINAL][/bold #e6c566]" if zone.is_final else ""
-            label = f"{zone.name} (Lv{zone.zone_level}){cleared_tag}{final_tag}"
-            zone_list.add_option(Option(label))
-            self._zone_ids.append(zone.id)
+        zone_statuses: dict[str, ZoneStatus] = {}
+        navigable: list[str] = []
+        all_zone_ids: list[str] = []
+
+        # Walk anchors in map order (which follows the zone chain)
+        for anchor in region_map.anchors:
+            zid = anchor.zone_id
+            all_zone_ids.append(zid)
+            if zid in completed:
+                zone_statuses[zid] = ZoneStatus.CLEARED
+                navigable.append(zid)
+            elif zid in available_ids:
+                zone_statuses[zid] = ZoneStatus.AVAILABLE
+                navigable.append(zid)
+            else:
+                zone_statuses[zid] = ZoneStatus.LOCKED
+
+        self._zone_ids = navigable
+        self._all_zone_ids = all_zone_ids
+
+        # Find a good initial zone: first non-cleared available, or first navigable
+        initial = None
+        for zid in navigable:
+            if zone_statuses.get(zid) == ZoneStatus.AVAILABLE:
+                initial = zid
+                break
+        if initial is None and navigable:
+            initial = navigable[0]
+
+        # Mount the map viewer inside the container
+        container = self.query_one("#map-area", Vertical)
+        viewer = MapViewer(
+            region_map=region_map,
+            zone_statuses=zone_statuses,
+            navigable_zone_ids=navigable,
+            initial_zone_id=initial,
+        )
+        container.mount(viewer)
+        viewer.focus()
+
+        # Show initial zone detail
+        if initial:
+            self._show_zone_detail(initial)
+
+    def _get_region_map(self) -> RegionMap | None:
+        """Look up the region map for the current run's zones."""
+        # All current zones belong to "shinto_slimes" region
+        maps = getattr(self.app, "game_data", None)
+        if maps is None:
+            return None
+        region_maps = maps.maps
+        # Try to find the matching region from zone data
+        run = self.app.run_state
+        if run is not None:
+            for zone in self.app.game_data.zones.values():
+                if zone.region in region_maps:
+                    return region_maps[zone.region]
+        # Fallback: return first available map
+        if region_maps:
+            return next(iter(region_maps.values()))
+        return None
+
+    def _fallback_list(self) -> None:
+        """Simple text fallback if no map data is available."""
+        container = self.query_one("#map-area", Vertical)
+        container.mount(Static("[dim]No region map data found.[/dim]"))
+
+    # --- Event handlers from MapViewer ---
+
+    def on_map_viewer_zone_highlighted(self, event: MapViewer.ZoneHighlighted) -> None:
+        self._show_zone_detail(event.zone_id)
+
+    def on_map_viewer_zone_selected(self, event: MapViewer.ZoneSelected) -> None:
+        self._enter_zone(event.zone_id)
+
+    # --- Zone detail panel ---
+
+    def _show_zone_detail(self, zone_id: str) -> None:
+        run = self.app.run_state
+        if run is None:
+            return
+        zone = self.app.game_data.zones.get(zone_id)
+        if zone is None:
+            return
+
+        is_cleared = zone_id in run.zones_completed
+        encounters = len(zone.encounters)
+        boss_count = sum(1 for e in zone.encounters if e.is_boss)
+        shop = "Yes" if zone.shop_item_pool else "No"
+        recruit = f"{zone.recruitment_chance:.0%}" if zone.recruitment_chance > 0 else "No"
+
+        status_tag = ""
+        if is_cleared:
+            status_tag = " [bold #44aa44][CLEARED][/bold #44aa44]"
+
+        lines = [
+            f"[bold #e6c566]{zone.name}[/bold #e6c566] (Lv.{zone.zone_level}){status_tag}",
+            f"  Encounters: {encounters} ({boss_count} boss)  |  Shop: {shop}  |  Recruit: {recruit}",
+        ]
+        if is_cleared:
+            lines.append("  [dim]Overstay penalty applies to loot drops[/dim]")
+        lines.append("  [dim][Enter] embark  [Up/Down] cycle zones  [Esc] back[/dim]")
+
+        try:
+            self.query_one("#zone-detail", Static).update("\n".join(lines))
+        except Exception:
+            pass
 
     def _render_party(self) -> None:
         run = self.app.run_state
@@ -101,58 +207,19 @@ class ZoneSelectScreen(Screen):
                 f"HP: [{hp_color}]{char.current_hp}/{max_hp}[/{hp_color}]"
             )
         if run.party.money > 0:
-            lines.append(f"  Money: [bold #e6c566]{run.party.money}G[/bold #e6c566]")
+            lines.append(f"  Gold: [bold #e6c566]{run.party.money}G[/bold #e6c566]")
         lines.append(f"  Zones cleared: {len(run.zones_completed)}")
 
-        self.query_one("#party-summary", Static).update("\n".join(lines))
-
-    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
-        if event.option_list.id != "zone-list":
-            return
-        idx = event.option_index
-        if idx < 0 or idx >= len(self._zone_ids):
-            return
-        self._show_zone_detail(self._zone_ids[idx])
-
-    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        if event.option_list.id != "zone-list":
-            return
-        idx = event.option_index
-        if idx < 0 or idx >= len(self._zone_ids):
-            return
-        self._enter_zone(self._zone_ids[idx])
-
-    def _show_zone_detail(self, zone_id: str) -> None:
-        run = self.app.run_state
-        if run is None:
-            return
-        zone = self.app.game_data.zones.get(zone_id)
-        if zone is None:
-            return
-
-        is_cleared = zone_id in run.zones_completed
-        encounters = len(zone.encounters)
-        boss_count = sum(1 for e in zone.encounters if e.is_boss)
-        shop = "Yes" if zone.shop_item_pool else "No"
-        recruit = f"{zone.recruitment_chance:.0%}" if zone.recruitment_chance > 0 else "No"
-
-        lines = [
-            f"[bold #e6c566]{zone.name}[/bold #e6c566] — {zone.region}",
-            f"  Level: {zone.zone_level}  |  Encounters: {encounters} ({boss_count} boss)",
-            f"  Shop: {shop}  |  Recruitment: {recruit}",
-        ]
-        if is_cleared:
-            lines.append("  [dim]Cleared — overstay penalty applies to loot drops[/dim]")
-
-        self.query_one("#zone-detail", Static).update("\n".join(lines))
+        try:
+            self.query_one("#party-summary", Static).update("\n".join(lines))
+        except Exception:
+            pass
 
     def _enter_zone(self, zone_id: str) -> None:
         run = self.app.run_state
         if run is None:
             return
 
-        # Heal between zones
-        run = self.app.game_loop.enter_safe_zone(run)
         run = self.app.game_loop.enter_zone(run, zone_id)
         self.app.run_state = run
 

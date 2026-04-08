@@ -160,3 +160,15 @@
     - base_damage: -5
       stat_scaling: MAG
       scaling_coefficient: 1.5
+
+- id: pilfer
+  name: Pilfer
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  description: "A quick swipe that steals gold. Light damage, but your wallet hurts more."
+  effects:
+    - base_damage: 2
+      stat_scaling: STR
+      scaling_coefficient: 0.2
+      gold_steal_flat: 5
+      gold_steal_per_level: 12.0

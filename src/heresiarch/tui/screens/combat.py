@@ -492,11 +492,7 @@ class CombatScreen(Screen):
         # Apply healing to combatant in combat state
         combatant = combat.get_combatant(target_id)
         if combatant and combatant.is_alive:
-            heal = 0
-            if item.heal_amount > 0:
-                heal = item.heal_amount
-            elif item.heal_percent > 0:
-                heal = int(combatant.max_hp * item.heal_percent)
+            heal = item.heal_amount + int(combatant.max_hp * item.heal_percent)
             if heal > 0:
                 combatant.current_hp = min(combatant.max_hp, combatant.current_hp + heal)
 
@@ -1131,6 +1127,8 @@ class CombatScreen(Screen):
             ],
             rounds_taken=combat.round_number,
             zone_level=self.app.game_data.zones[run.current_zone_id].zone_level if run.current_zone_id else 0,
+            gold_stolen_by_enemies=combat.gold_stolen_by_enemies,
+            gold_stolen_by_players=combat.gold_stolen_by_players,
         )
 
         new_run, loot = self.app.game_loop.resolve_combat_result(run, result)

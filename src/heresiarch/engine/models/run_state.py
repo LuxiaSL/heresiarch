@@ -17,6 +17,8 @@ class CombatResult(BaseModel):
     defeated_enemy_budget_multipliers: list[float] = Field(default_factory=list)
     rounds_taken: int = 0
     zone_level: int = 0
+    gold_stolen_by_enemies: int = 0
+    gold_stolen_by_players: int = 0
 
 
 class RunState(BaseModel):

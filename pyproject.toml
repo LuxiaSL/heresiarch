@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 heresiarch = "heresiarch.tui.app:main"
+heresiarch-map = "heresiarch.tools.map_tool:main"
 
 [build-system]
 requires = ["uv_build>=0.9.2,<0.10.0"]

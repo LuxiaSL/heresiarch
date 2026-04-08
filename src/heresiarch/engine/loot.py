@@ -7,7 +7,7 @@ import random
 from heresiarch.engine.formulas import calculate_money_drop
 from heresiarch.engine.models.enemies import EnemyInstance
 from heresiarch.engine.models.items import Item
-from heresiarch.engine.models.loot import DropTable, LootResult
+from heresiarch.engine.models.loot import DropTable, GuaranteedDropPool, LootResult
 
 # CHA bonus to drop chances
 CHA_COMMON_BONUS_PER_POINT: float = 0.002
@@ -39,24 +39,34 @@ class LootResolver:
     ) -> LootResult:
         """Roll drops for all defeated enemies in an encounter.
 
-        ``overstay_battles`` applies a flat -5 % penalty per battle to all
-        item drop chances (common, rare, equipment).  Money is unaffected.
+        ``overstay_battles`` applies a flat -5 % penalty per battle to
+        item drop chances, money, and XP (via the returned LootResult).
         """
         total_money = 0
         dropped_items: list[str] = []
         seen_items: set[str] = set()
 
         overstay_reduction = OVERSTAY_PENALTY_PER_BATTLE * overstay_battles
+        overstay_multiplier = max(0.0, 1.0 - overstay_reduction)
 
         for enemy in defeated_enemies:
             dt = self.drop_tables.get(enemy.template_id)
 
-            # Money: always roll if guaranteed (or no drop table) — no overstay penalty
+            # Money: scaled by overstay penalty + per-enemy money_multiplier
             if dt is None or dt.guaranteed_money:
-                total_money += calculate_money_drop(zone_level, self.rng)
+                money = calculate_money_drop(zone_level, self.rng)
+                money = int(money * (dt.money_multiplier if dt else 1.0))
+                total_money += int(money * overstay_multiplier)
 
             if dt is None:
                 continue
+
+            # Guaranteed pools — always drop, ignoring overstay
+            for pool in dt.guaranteed_pools:
+                for item_id in self._pick_from_pool(pool):
+                    if item_id not in seen_items and item_id in self.item_registry:
+                        dropped_items.append(item_id)
+                        seen_items.add(item_id)
 
             # Common drop
             if dt.common_item_ids:
@@ -87,4 +97,21 @@ class LootResolver:
                         dropped_items.append(item_id)
                         seen_items.add(item_id)
 
-        return LootResult(money=total_money, item_ids=dropped_items)
+        return LootResult(
+            money=total_money,
+            item_ids=dropped_items,
+            overstay_xp_multiplier=overstay_multiplier,
+        )
+
+    def _pick_from_pool(self, pool: GuaranteedDropPool) -> list[str]:
+        """Weighted random selection of ``pool.count`` items from a pool."""
+        if not pool.items:
+            return []
+        ids = [entry.item_id for entry in pool.items]
+        weights = [entry.weight for entry in pool.items]
+        picked: list[str] = []
+        for _ in range(pool.count):
+            choices = self.rng.choices(ids, weights=weights, k=1)
+            if choices:
+                picked.append(choices[0])
+        return picked

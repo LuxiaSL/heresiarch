@@ -16,7 +16,7 @@
   name: Runic Plate
   slot: ARMOR
   description: "Investment piece. Overtakes Iron Guard around Lv30."
-  base_price: 400
+  base_price: 3500
   scaling:
     scaling_type: SUPERLINEAR
     stat: DEF
@@ -28,7 +28,7 @@
   name: Void Bastion
   slot: ARMOR
   description: "Hurts you early. Unkillable late. Overtakes Runic Plate around Lv60."
-  base_price: 900
+  base_price: 9000
   scaling:
     scaling_type: DEGENERATE
     stat: DEF
@@ -53,7 +53,7 @@
   name: Resonance Veil
   slot: ARMOR
   description: "Deep RES commitment. Overtakes Spirit Mantle around Lv30."
-  base_price: 500
+  base_price: 4000
   scaling:
     scaling_type: QUADRATIC
     stat: RES

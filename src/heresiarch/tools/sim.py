@@ -1,7 +1,8 @@
 """Heresiarch balance simulation tool.
 
 A spreadsheet-style engine for testing weapon scaling, converter interactions,
-build comparisons, and ability balance analysis against the actual game formulas.
+build comparisons, ability balance analysis, and full run progression against
+the actual game formulas.
 
 Usage:
     python -m heresiarch.tools.sim sweep [options]
@@ -11,6 +12,11 @@ Usage:
     python -m heresiarch.tools.sim ability-dpr [options]
     python -m heresiarch.tools.sim ability-compare [options]
     python -m heresiarch.tools.sim job-curve [options]
+    python -m heresiarch.tools.sim economy [options]
+    python -m heresiarch.tools.sim xp-curve [options]
+    python -m heresiarch.tools.sim enemy-stats [options]
+    python -m heresiarch.tools.sim shop-pricing [options]
+    python -m heresiarch.tools.sim progression [options]
 
 Examples:
     # Sweep STR weapons across all levels for Einherjar
@@ -37,6 +43,20 @@ Examples:
 
     # Full ability progression curve for a job
     python -m heresiarch.tools.sim job-curve --job berserker
+
+    # XP progression across zones for a job
+    python -m heresiarch.tools.sim xp-curve --job einherjar
+
+    # Enemy stat tables at each zone level
+    python -m heresiarch.tools.sim enemy-stats
+    python -m heresiarch.tools.sim enemy-stats --enemies brute_oni caster_kitsune
+
+    # Shop affordability analysis
+    python -m heresiarch.tools.sim shop-pricing
+    python -m heresiarch.tools.sim shop-pricing --potions-only
+
+    # Full run progression simulation
+    python -m heresiarch.tools.sim progression --job einherjar
 """
 
 from __future__ import annotations
@@ -49,13 +69,19 @@ from typing import TYPE_CHECKING
 from heresiarch.engine.data_loader import load_all
 from heresiarch.engine.formulas import (
     calculate_bonus_actions,
+    calculate_buy_price,
     calculate_effective_stats,
+    calculate_enemy_hp,
+    calculate_enemy_stats,
+    calculate_levels_gained,
     calculate_max_hp,
     calculate_physical_damage,
     calculate_magical_damage,
     calculate_stats_at_level,
+    calculate_xp_reward,
     evaluate_conversion,
     evaluate_item_scaling,
+    xp_for_level,
 )
 
 # _sigmoid may not exist in all versions of formulas.py
@@ -1199,6 +1225,687 @@ def cmd_job_curve(args: argparse.Namespace) -> None:
     print(job_ability_curve(gd, job_id, enemy_def=args.def_value))
 
 
+# ---------------------------------------------------------------------------
+# Shared economy / XP helpers (Step 1)
+# ---------------------------------------------------------------------------
+
+_OVERSTAY_MODERATE: int = 5
+_OVERSTAY_GRIND: int = 20
+
+
+@dataclass
+class ZoneEconSnapshot:
+    """Economy snapshot for a single zone."""
+
+    zone_id: str
+    zone_name: str
+    zone_level: int
+    enemies_total: int
+    encounters_total: int
+    zone_gold: float
+    overstay_max_gold: float
+    cumulative_gold_rush: float
+    cumulative_gold_moderate: float
+    cumulative_gold_grind: float
+    avg_encounter_gold: float
+    shop_items: list[str]
+
+
+@dataclass
+class ZoneXPSnapshot:
+    """XP / level snapshot for a single zone under different play styles."""
+
+    zone_id: str
+    zone_level: int
+    level_at_exit_rush: int
+    level_at_exit_moderate: int
+    level_at_exit_grind: int
+    cumulative_xp_rush: int
+    cumulative_xp_moderate: int
+    cumulative_xp_grind: int
+
+
+def _compute_zone_economy(game_data: GameData) -> list[ZoneEconSnapshot]:
+    """Build per-zone gold snapshots using avg money-drop formula.
+
+    Returns zones sorted by zone_level ascending.
+    """
+    from heresiarch.engine.formulas import MONEY_DROP_MIN_MULTIPLIER, MONEY_DROP_MAX_MULTIPLIER
+    from heresiarch.engine.loot import OVERSTAY_PENALTY_PER_BATTLE
+
+    money_avg = (MONEY_DROP_MIN_MULTIPLIER + MONEY_DROP_MAX_MULTIPLIER) / 2.0
+
+    money_mults: dict[str, float] = {}
+    for dt in game_data.drop_tables.values():
+        money_mults[dt.enemy_template_id] = dt.money_multiplier
+
+    snapshots: list[ZoneEconSnapshot] = []
+    cumulative_rush = 0.0
+    cumulative_moderate = 0.0
+    cumulative_grind = 0.0
+
+    for zone in sorted(game_data.zones.values(), key=lambda z: z.zone_level):
+        zlvl = zone.zone_level
+        zone_gold = 0.0
+        zone_enemies = 0
+        non_boss_golds: list[float] = []
+
+        for enc in zone.encounters:
+            enc_gold = 0.0
+            enc_enemies = 0
+            for tmpl_id, cnt in zip(enc.enemy_templates, enc.enemy_counts, strict=True):
+                mult = money_mults.get(tmpl_id, 1.0)
+                enc_gold += zlvl * money_avg * mult * cnt
+                enc_enemies += cnt
+            zone_gold += enc_gold
+            zone_enemies += enc_enemies
+            if not enc.is_boss:
+                non_boss_golds.append(enc_gold)
+
+        avg_enc_gold = sum(non_boss_golds) / len(non_boss_golds) if non_boss_golds else 0.0
+
+        # Overstay gold: sum avg_enc_gold * decaying multiplier per extra battle
+        overstay_max_gold = 0.0
+        for b in range(1, 100):
+            mult = max(0.0, 1.0 - OVERSTAY_PENALTY_PER_BATTLE * b)
+            if mult <= 0:
+                break
+            overstay_max_gold += avg_enc_gold * mult
+
+        # Gold for N overstay battles
+        def _overstay_gold(n_battles: int) -> float:
+            total = 0.0
+            for b in range(1, n_battles + 1):
+                mult = max(0.0, 1.0 - OVERSTAY_PENALTY_PER_BATTLE * b)
+                total += avg_enc_gold * mult
+            return total
+
+        cumulative_rush += zone_gold
+        cumulative_moderate += zone_gold + _overstay_gold(_OVERSTAY_MODERATE)
+        cumulative_grind += zone_gold + _overstay_gold(_OVERSTAY_GRIND)
+
+        snapshots.append(ZoneEconSnapshot(
+            zone_id=zone.id,
+            zone_name=zone.name,
+            zone_level=zlvl,
+            enemies_total=zone_enemies,
+            encounters_total=len(zone.encounters),
+            zone_gold=zone_gold,
+            overstay_max_gold=overstay_max_gold,
+            cumulative_gold_rush=cumulative_rush,
+            cumulative_gold_moderate=cumulative_moderate,
+            cumulative_gold_grind=cumulative_grind,
+            avg_encounter_gold=avg_enc_gold,
+            shop_items=list(zone.shop_item_pool),
+        ))
+
+    return snapshots
+
+
+def _compute_xp_progression(game_data: GameData, job_id: str) -> list[ZoneXPSnapshot]:
+    """Simulate XP/level at each zone exit under rush/moderate/grind scenarios.
+
+    Assumes a single character of the given job, starting at level 1 with 0 XP,
+    clearing zones in order.  Rush = clear only; moderate = +5 overstay battles;
+    grind = +20 overstay battles per zone.
+    """
+    from heresiarch.engine.loot import OVERSTAY_PENALTY_PER_BATTLE
+
+    job = game_data.jobs[job_id]
+
+    # Track state for each play style independently
+    xp_rush = 0
+    xp_moderate = 0
+    xp_grind = 0
+    level_rush = 1
+    level_moderate = 1
+    level_grind = 1
+
+    snapshots: list[ZoneXPSnapshot] = []
+
+    for zone in sorted(game_data.zones.values(), key=lambda z: z.zone_level):
+        zlvl = zone.zone_level
+        xp_cap = zone.xp_cap_level
+
+        # XP from clearing all encounters in the zone
+        def _zone_clear_xp(char_level: int) -> int:
+            total = 0
+            for enc in zone.encounters:
+                for tmpl_id, cnt in zip(enc.enemy_templates, enc.enemy_counts, strict=True):
+                    tmpl = game_data.enemies.get(tmpl_id)
+                    if tmpl is None:
+                        continue
+                    xp_per_kill = calculate_xp_reward(
+                        zlvl, tmpl.budget_multiplier, char_level, xp_cap,
+                    )
+                    total += xp_per_kill * cnt
+            return total
+
+        # Overstay XP: re-fight avg encounter, XP penalized by both overstay
+        # multiplier and level-cap diminishing returns
+        def _overstay_xp(n_battles: int, char_level: int) -> int:
+            if not zone.encounters:
+                return 0
+            # Use avg enemy budget from non-boss encounters
+            non_boss = [e for e in zone.encounters if not e.is_boss]
+            if not non_boss:
+                non_boss = zone.encounters
+            total_budget = 0.0
+            total_enemies = 0
+            for enc in non_boss:
+                for tmpl_id, cnt in zip(enc.enemy_templates, enc.enemy_counts, strict=True):
+                    tmpl = game_data.enemies.get(tmpl_id)
+                    if tmpl is not None:
+                        total_budget += tmpl.budget_multiplier * cnt
+                        total_enemies += cnt
+            avg_budget = total_budget / total_enemies if total_enemies > 0 else 1.0
+            avg_count = sum(sum(e.enemy_counts) for e in non_boss) / len(non_boss) if non_boss else 1
+
+            total_xp = 0
+            for b in range(1, n_battles + 1):
+                overstay_mult = max(0.0, 1.0 - OVERSTAY_PENALTY_PER_BATTLE * b)
+                base_xp = calculate_xp_reward(zlvl, avg_budget, char_level, xp_cap)
+                total_xp += int(base_xp * overstay_mult * avg_count)
+            return total_xp
+
+        # Rush: clear only
+        xp_rush += _zone_clear_xp(level_rush)
+        gained = calculate_levels_gained(xp_rush, level_rush)
+        level_rush += gained
+
+        # Moderate: clear + 5 overstay
+        xp_moderate += _zone_clear_xp(level_moderate)
+        xp_moderate += _overstay_xp(_OVERSTAY_MODERATE, level_moderate)
+        gained = calculate_levels_gained(xp_moderate, level_moderate)
+        level_moderate += gained
+
+        # Grind: clear + 20 overstay
+        xp_grind += _zone_clear_xp(level_grind)
+        xp_grind += _overstay_xp(_OVERSTAY_GRIND, level_grind)
+        gained = calculate_levels_gained(xp_grind, level_grind)
+        level_grind += gained
+
+        snapshots.append(ZoneXPSnapshot(
+            zone_id=zone.id,
+            zone_level=zlvl,
+            level_at_exit_rush=level_rush,
+            level_at_exit_moderate=level_moderate,
+            level_at_exit_grind=level_grind,
+            cumulative_xp_rush=xp_rush,
+            cumulative_xp_moderate=xp_moderate,
+            cumulative_xp_grind=xp_grind,
+        ))
+
+    return snapshots
+
+
+# ---------------------------------------------------------------------------
+# cmd_economy (refactored to use _compute_zone_economy)
+# ---------------------------------------------------------------------------
+
+def cmd_economy(args: argparse.Namespace) -> None:
+    """Full zone economy analysis: gold per zone, overstay curves, pilfer impact."""
+    from heresiarch.engine.loot import OVERSTAY_PENALTY_PER_BATTLE
+
+    game_data = _load_game_data()
+    snapshots = _compute_zone_economy(game_data)
+
+    print("=" * 90)
+    print("ZONE ECONOMY ANALYSIS")
+    print("=" * 90)
+
+    for snap in snapshots:
+        print(f"\n{snap.zone_name} (Lv{snap.zone_level}) — {snap.encounters_total} encounters, {snap.enemies_total} enemies")
+        print(f"  Zone gold: {snap.zone_gold:.0f}G  |  Avg encounter: {snap.avg_encounter_gold:.0f}G  |  Overstay max: {snap.overstay_max_gold:.0f}G")
+        print(f"  Zone + overstay: {snap.zone_gold + snap.overstay_max_gold:.0f}G  |  Cumulative run: {snap.cumulative_gold_rush:.0f}G")
+
+        if args.overstay:
+            print("  Overstay decay:")
+            oc = 0.0
+            for b in range(1, 25):
+                mult = max(0.0, 1.0 - OVERSTAY_PENALTY_PER_BATTLE * b)
+                gold = snap.avg_encounter_gold * mult
+                oc += gold
+                if b <= 5 or b % 5 == 0 or mult <= 0:
+                    print(f"    Battle {b:>2}: {mult:>4.0%} -> {gold:>6.0f}G  (cum: {oc:>6.0f}G)")
+                if mult <= 0:
+                    break
+
+    # Pilfer impact
+    print(f"\n{'=' * 90}")
+    print("PILFER IMPACT vs ZONE VALUE")
+    print(f"{'=' * 90}")
+
+    pilfer = game_data.abilities.get("pilfer")
+    if pilfer and pilfer.effects:
+        eff = pilfer.effects[0]
+        flat = eff.gold_steal_flat
+        per_lvl = eff.gold_steal_per_level
+        print(f"  Pilfer: {flat}G flat + {per_lvl}G/level")
+        print()
+        print(f"  {'Zone':>8} | {'Zone Gold':>10} | {'Cum Gold':>10} | {'Pilfer/Hit':>10} | {'2 Hits':>8} | {'~ Encounters':>12}")
+        print(f"  {'-'*8}-+-{'-'*10}-+-{'-'*10}-+-{'-'*10}-+-{'-'*8}-+-{'-'*12}")
+        for snap in snapshots:
+            p = flat + int(per_lvl * snap.zone_level)
+            two = p * 2
+            equiv = two / snap.avg_encounter_gold if snap.avg_encounter_gold > 0 else 0
+            print(f"  {snap.zone_id:>8} | {snap.zone_gold:>8.0f}G | {snap.cumulative_gold_rush:>8.0f}G | {p:>8}G | {two:>6}G | {equiv:>10.2f}")
+    else:
+        print("  (pilfer ability not found)")
+
+    # Shop reference
+    print("\n  Shop prices: ", end="")
+    prices = [(item.name, item.base_price) for item in game_data.items.values() if item.base_price > 0]
+    prices.sort(key=lambda x: x[1])
+    print(", ".join(f"{name}: {price}G" for name, price in prices[:8]))
+
+
+# ---------------------------------------------------------------------------
+# cmd_xp_curve (Step 2)
+# ---------------------------------------------------------------------------
+
+def cmd_xp_curve(args: argparse.Namespace) -> None:
+    """Show player level at each zone exit under rush/moderate/grind scenarios."""
+    gd = _load_game_data()
+    job_id = args.job
+
+    if job_id not in gd.jobs:
+        print(f"Error: job '{job_id}' not found. Available: {', '.join(gd.jobs.keys())}")
+        return
+
+    job = gd.jobs[job_id]
+    snapshots = _compute_xp_progression(gd, job_id)
+
+    if not snapshots:
+        print("No zones found.")
+        return
+
+    print(f"XP Progression: {job.name}")
+    print(f"  Rush = clear only  |  Moderate = +{_OVERSTAY_MODERATE} overstay  |  Grind = +{_OVERSTAY_GRIND} overstay")
+    print()
+
+    # Main table
+    headers = [
+        "Zone", "ZoneLv", "Lv Rush", "XP Rush",
+        "Lv Mod", "XP Mod", "Lv Grind", "XP Grind",
+    ]
+    rows: list[list[str]] = []
+    for snap in snapshots:
+        rows.append([
+            snap.zone_id,
+            str(snap.zone_level),
+            str(snap.level_at_exit_rush),
+            str(snap.cumulative_xp_rush),
+            str(snap.level_at_exit_moderate),
+            str(snap.cumulative_xp_moderate),
+            str(snap.level_at_exit_grind),
+            str(snap.cumulative_xp_grind),
+        ])
+    print(_fmt_table(headers, rows, col_align=["l", "r", "r", "r", "r", "r", "r", "r"]))
+
+    # XP thresholds for milestone levels
+    milestone_levels = [5, 10, 15, 20, 25, 30]
+    print("\nXP Thresholds:")
+    for lv in milestone_levels:
+        print(f"  Level {lv:>2}: {xp_for_level(lv):>6} XP")
+
+    # Which zone each milestone is reached in (for each play style)
+    print("\nMilestone Zones:")
+    print(f"  {'Level':>6} | {'Rush':>10} | {'Moderate':>10} | {'Grind':>10}")
+    print(f"  {'-'*6}-+-{'-'*10}-+-{'-'*10}-+-{'-'*10}")
+    for target_lv in milestone_levels:
+        rush_zone = "---"
+        mod_zone = "---"
+        grind_zone = "---"
+        for snap in snapshots:
+            if rush_zone == "---" and snap.level_at_exit_rush >= target_lv:
+                rush_zone = snap.zone_id
+            if mod_zone == "---" and snap.level_at_exit_moderate >= target_lv:
+                mod_zone = snap.zone_id
+            if grind_zone == "---" and snap.level_at_exit_grind >= target_lv:
+                grind_zone = snap.zone_id
+        print(f"  Lv{target_lv:>3} | {rush_zone:>10} | {mod_zone:>10} | {grind_zone:>10}")
+
+
+# ---------------------------------------------------------------------------
+# cmd_enemy_stats (Step 3)
+# ---------------------------------------------------------------------------
+
+def cmd_enemy_stats(args: argparse.Namespace) -> None:
+    """Show enemy stats (HP, STR, MAG, DEF, RES, SPD) at each zone level."""
+    gd = _load_game_data()
+
+    # Determine which enemies to show
+    if args.enemies:
+        enemy_ids = args.enemies
+        for eid in enemy_ids:
+            if eid not in gd.enemies:
+                print(f"Error: enemy '{eid}' not found. Available: {', '.join(gd.enemies.keys())}")
+                return
+    else:
+        enemy_ids = list(gd.enemies.keys())
+
+    zones = sorted(gd.zones.values(), key=lambda z: z.zone_level)
+    zone_levels = sorted({z.zone_level for z in zones})
+
+    if not zone_levels:
+        print("No zones found.")
+        return
+
+    for eid in enemy_ids:
+        tmpl = gd.enemies[eid]
+        equip_items = [gd.items[iid] for iid in tmpl.equipment if iid in gd.items]
+
+        print(f"\n{'=' * 80}")
+        print(f"{tmpl.name} ({eid})  |  budget_mult={tmpl.budget_multiplier}  |  equip: {', '.join(tmpl.equipment) or 'none'}")
+        print(f"  stat_dist: " + ", ".join(f"{k}={v:.0%}" for k, v in tmpl.stat_distribution.items()))
+        print(f"{'=' * 80}")
+
+        headers = ["ZoneLv", "HP", "STR", "MAG", "DEF", "RES", "SPD"]
+        if equip_items:
+            headers.extend(["eSTR", "eMAG", "eDEF", "eRES", "eSPD"])
+        rows: list[list[str]] = []
+
+        for zlvl in zone_levels:
+            base_stats = calculate_enemy_stats(
+                zlvl, tmpl.budget_multiplier, tmpl.stat_distribution,
+            )
+            hp = calculate_enemy_hp(
+                zlvl, tmpl.budget_multiplier, tmpl.base_hp, tmpl.hp_per_budget,
+            )
+
+            row = [
+                str(zlvl), str(hp),
+                str(base_stats.STR), str(base_stats.MAG),
+                str(base_stats.DEF), str(base_stats.RES), str(base_stats.SPD),
+            ]
+
+            if equip_items:
+                eff = calculate_effective_stats(base_stats, equip_items, [])
+                row.extend([
+                    str(eff.STR), str(eff.MAG),
+                    str(eff.DEF), str(eff.RES), str(eff.SPD),
+                ])
+
+            rows.append(row)
+
+        print(_fmt_table(headers, rows))
+
+
+# ---------------------------------------------------------------------------
+# cmd_shop_pricing (Step 4)
+# ---------------------------------------------------------------------------
+
+def cmd_shop_pricing(args: argparse.Namespace) -> None:
+    """Shop affordability analysis and potion price validation."""
+    gd = _load_game_data()
+    snapshots = _compute_zone_economy(gd)
+
+    if not snapshots:
+        print("No zones found.")
+        return
+
+    potions_only: bool = args.potions_only
+
+    if potions_only:
+        _print_potion_check(gd, snapshots)
+    else:
+        _print_shop_affordability(gd, snapshots)
+        print()
+        _print_potion_check(gd, snapshots)
+
+
+def _print_shop_affordability(game_data: GameData, snapshots: list[ZoneEconSnapshot]) -> None:
+    """For each zone's shop, show item price as % of cumulative gold (rush/mod/grind)."""
+    print("=" * 100)
+    print("SHOP AFFORDABILITY (item price as % of cumulative gold at zone)")
+    print("=" * 100)
+
+    for snap in snapshots:
+        if not snap.shop_items:
+            continue
+
+        print(f"\n{snap.zone_name} (Lv{snap.zone_level})  —  Cum gold: rush={snap.cumulative_gold_rush:.0f}G  mod={snap.cumulative_gold_moderate:.0f}G  grind={snap.cumulative_gold_grind:.0f}G")
+
+        headers = ["Item", "Base Price", "% Rush", "% Moderate", "% Grind", "Affordable?"]
+        rows: list[list[str]] = []
+
+        for item_id in snap.shop_items:
+            item = game_data.items.get(item_id)
+            if item is None or item.base_price <= 0:
+                continue
+
+            price = calculate_buy_price(item.base_price, cha=0)
+            pct_rush = (price / snap.cumulative_gold_rush * 100) if snap.cumulative_gold_rush > 0 else float("inf")
+            pct_mod = (price / snap.cumulative_gold_moderate * 100) if snap.cumulative_gold_moderate > 0 else float("inf")
+            pct_grind = (price / snap.cumulative_gold_grind * 100) if snap.cumulative_gold_grind > 0 else float("inf")
+
+            # Affordable if <= 100% of cumulative gold for at least one style
+            if pct_rush <= 100:
+                afford = "YES (rush)"
+            elif pct_mod <= 100:
+                afford = "YES (mod)"
+            elif pct_grind <= 100:
+                afford = "YES (grind)"
+            else:
+                afford = "NO"
+
+            rows.append([
+                item.name,
+                f"{price}G",
+                f"{pct_rush:.1f}%" if pct_rush < 10000 else "---",
+                f"{pct_mod:.1f}%" if pct_mod < 10000 else "---",
+                f"{pct_grind:.1f}%" if pct_grind < 10000 else "---",
+                afford,
+            ])
+
+        print(_fmt_table(headers, rows, col_align=["l", "r", "r", "r", "r", "l"]))
+
+
+def _print_potion_check(game_data: GameData, snapshots: list[ZoneEconSnapshot]) -> None:
+    """Validate potions cost ~1.5x avg enemy gold in their intro zone."""
+    print("=" * 100)
+    print("POTION PRICE CHECK (target: ~1.5x avg encounter gold in intro zone)")
+    print("=" * 100)
+
+    # Identify potion items (consumables with base_price > 0 and "potion" or "elixir" in name/id)
+    potion_ids: set[str] = set()
+    for item in game_data.items.values():
+        if item.base_price > 0 and any(
+            kw in item.id.lower() for kw in ("potion", "elixir")
+        ):
+            potion_ids.add(item.id)
+
+    if not potion_ids:
+        print("  No potions found in item registry.")
+        return
+
+    # Find intro zone for each potion (first zone where it appears in shop)
+    potion_intro: dict[str, ZoneEconSnapshot] = {}
+    for snap in snapshots:
+        for pid in potion_ids:
+            if pid in snap.shop_items and pid not in potion_intro:
+                potion_intro[pid] = snap
+
+    headers = ["Potion", "Base Price", "Buy (0 CHA)", "Intro Zone", "Avg Enc Gold", "Ratio", "Status"]
+    rows: list[list[str]] = []
+
+    target_ratio = 1.5
+    tolerance = 0.5  # acceptable range: 1.0x to 2.0x
+
+    for pid in sorted(potion_ids):
+        item = game_data.items[pid]
+        buy_price = calculate_buy_price(item.base_price, cha=0)
+        snap = potion_intro.get(pid)
+
+        if snap is None:
+            rows.append([item.name, f"{item.base_price}G", f"{buy_price}G", "---", "---", "---", "NOT IN SHOP"])
+            continue
+
+        avg_gold = snap.avg_encounter_gold
+        ratio = buy_price / avg_gold if avg_gold > 0 else 0.0
+
+        if abs(ratio - target_ratio) <= tolerance:
+            status = "OK"
+        elif ratio < target_ratio - tolerance:
+            status = "CHEAP"
+        else:
+            status = "EXPENSIVE"
+
+        rows.append([
+            item.name,
+            f"{item.base_price}G",
+            f"{buy_price}G",
+            f"{snap.zone_name} (Lv{snap.zone_level})",
+            f"{avg_gold:.0f}G",
+            f"{ratio:.2f}x",
+            status,
+        ])
+
+    print(_fmt_table(headers, rows, col_align=["l", "r", "r", "l", "r", "r", "l"]))
+
+
+# ---------------------------------------------------------------------------
+# cmd_progression (Step 5)
+# ---------------------------------------------------------------------------
+
+def cmd_progression(args: argparse.Namespace) -> None:
+    """Full run simulation: level, gold, shop, abilities, weapon crossover at each zone."""
+    gd = _load_game_data()
+    job_id = args.job
+
+    if job_id not in gd.jobs:
+        print(f"Error: job '{job_id}' not found. Available: {', '.join(gd.jobs.keys())}")
+        return
+
+    job = gd.jobs[job_id]
+
+    econ_snaps = _compute_zone_economy(gd)
+    xp_snaps = _compute_xp_progression(gd, job_id)
+
+    if not econ_snaps or not xp_snaps:
+        print("No zones found.")
+        return
+
+    # Build ability unlock lookup: level -> list of ability names
+    unlock_map: dict[int, list[str]] = {}
+    innate = gd.abilities.get(job.innate_ability_id)
+    if innate:
+        unlock_map.setdefault(1, []).append(innate.name)
+    for unlock in getattr(job, "ability_unlocks", []):
+        ability = gd.abilities.get(unlock.ability_id)
+        if ability:
+            unlock_map.setdefault(unlock.level, []).append(ability.name)
+
+    # Determine primary offensive stat for crossover analysis
+    primary_stat = max(
+        [StatType.STR, StatType.MAG],
+        key=lambda s: job.growth.effective_growth(s),
+    )
+    growth_rate = job.growth.effective_growth(primary_stat)
+
+    # Gather weapons that scale off the primary stat
+    weapons: dict[str, ItemScaling] = {}
+    for item in gd.items.values():
+        if item.scaling and item.scaling.stat == primary_stat:
+            weapons[item.name] = item.scaling
+
+    print("=" * 100)
+    print(f"FULL RUN PROGRESSION: {job.name}")
+    print(f"  Primary stat: {primary_stat.value} (growth +{growth_rate}/lv)")
+    print("=" * 100)
+
+    # Pair econ and xp snapshots by zone_id
+    xp_by_zone: dict[str, ZoneXPSnapshot] = {s.zone_id: s for s in xp_snaps}
+
+    for econ in econ_snaps:
+        xp = xp_by_zone.get(econ.zone_id)
+        if xp is None:
+            continue
+
+        print(f"\n--- {econ.zone_name} (Lv{econ.zone_level}) ---")
+
+        # Level + XP
+        print(f"  Level at exit:  rush={xp.level_at_exit_rush}  moderate={xp.level_at_exit_moderate}  grind={xp.level_at_exit_grind}")
+
+        # Gold
+        print(f"  Cumulative gold: rush={econ.cumulative_gold_rush:.0f}G  moderate={econ.cumulative_gold_moderate:.0f}G  grind={econ.cumulative_gold_grind:.0f}G")
+
+        # Newly affordable items (rush scenario: can we afford it now?)
+        newly_affordable: list[str] = []
+        for item_id in econ.shop_items:
+            item = gd.items.get(item_id)
+            if item is None or item.base_price <= 0:
+                continue
+            buy = calculate_buy_price(item.base_price, cha=0)
+            if buy <= econ.cumulative_gold_moderate:
+                newly_affordable.append(f"{item.name} ({buy}G)")
+        if newly_affordable:
+            print(f"  Affordable (mod): {', '.join(newly_affordable)}")
+
+        # Ability unlocks reached by this zone's exit level (moderate)
+        exit_level = xp.level_at_exit_moderate
+        unlocked_here: list[str] = []
+        for lv, names in sorted(unlock_map.items()):
+            if lv <= exit_level:
+                for n in names:
+                    unlocked_here.append(f"{n} (Lv{lv})")
+        if unlocked_here:
+            print(f"  Abilities unlocked: {', '.join(unlocked_here)}")
+
+        # Weapon crossover status at this level (moderate exit level)
+        if weapons:
+            stat_val = growth_rate * exit_level
+            weapon_outputs: dict[str, float] = {}
+            for wname, wscaling in weapons.items():
+                weapon_outputs[wname] = evaluate_item_scaling(wscaling, stat_val)
+            best_weapon = max(weapon_outputs, key=lambda n: weapon_outputs[n])
+            weapon_report = "  |  ".join(
+                f"{n}={v:.0f}{'*' if n == best_weapon else ''}"
+                for n, v in weapon_outputs.items()
+            )
+            print(f"  Best weapon @Lv{exit_level}: {best_weapon}  ({weapon_report})")
+
+    # Summary table
+    print(f"\n{'=' * 100}")
+    print("SUMMARY TABLE (moderate play style)")
+    print(f"{'=' * 100}")
+
+    headers = ["Zone", "ZoneLv", "ExitLv", "Gold", "Best Weapon", "New Abilities"]
+    rows: list[list[str]] = []
+
+    prev_level = 0
+    for econ in econ_snaps:
+        xp = xp_by_zone.get(econ.zone_id)
+        if xp is None:
+            continue
+        exit_lv = xp.level_at_exit_moderate
+
+        # Best weapon at this level
+        stat_val = growth_rate * exit_lv
+        best = "---"
+        if weapons:
+            best = max(weapons, key=lambda n: evaluate_item_scaling(weapons[n], stat_val))
+
+        # New abilities since last zone
+        new_abs: list[str] = []
+        for lv, names in sorted(unlock_map.items()):
+            if prev_level < lv <= exit_lv:
+                new_abs.extend(names)
+        prev_level = exit_lv
+
+        rows.append([
+            econ.zone_id,
+            str(econ.zone_level),
+            str(exit_lv),
+            f"{econ.cumulative_gold_moderate:.0f}G",
+            best,
+            ", ".join(new_abs) if new_abs else "---",
+        ])
+
+    print(_fmt_table(headers, rows, col_align=["l", "r", "r", "r", "l", "l"]))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="heresiarch-sim",
@@ -1264,6 +1971,31 @@ def main() -> None:
     p.add_argument("--job", default="einherjar", help="Job ID")
     p.add_argument("--def", dest="def_value", type=int, default=_DEFAULT_ENEMY_DEF, help="Enemy DEF for physical calcs")
     p.set_defaults(func=cmd_job_curve)
+
+    # economy
+    p = sub.add_parser("economy", help="Zone economy analysis: gold, overstay, pilfer impact")
+    p.add_argument("--overstay", action="store_true", help="Show per-battle overstay decay")
+    p.set_defaults(func=cmd_economy)
+
+    # xp-curve
+    p = sub.add_parser("xp-curve", help="XP progression across zones (rush/moderate/grind)")
+    p.add_argument("--job", default="einherjar", help="Job ID")
+    p.set_defaults(func=cmd_xp_curve)
+
+    # enemy-stats
+    p = sub.add_parser("enemy-stats", help="Enemy stat tables at each zone level")
+    p.add_argument("--enemies", nargs="*", default=None, help="Specific enemy IDs (default: all)")
+    p.set_defaults(func=cmd_enemy_stats)
+
+    # shop-pricing
+    p = sub.add_parser("shop-pricing", help="Shop affordability and potion price validation")
+    p.add_argument("--potions-only", action="store_true", help="Only show potion price check")
+    p.set_defaults(func=cmd_shop_pricing)
+
+    # progression
+    p = sub.add_parser("progression", help="Full run progression: level, gold, abilities, weapons per zone")
+    p.add_argument("--job", default="einherjar", help="Job ID")
+    p.set_defaults(func=cmd_progression)
 
     args = parser.parse_args()
     args.func(args)

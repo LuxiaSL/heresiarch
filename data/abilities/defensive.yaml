@@ -24,6 +24,7 @@
       scaling_coefficient: 0.4
     - def_buff: 15
       duration_rounds: 1
+      applies_to_self: true
 
 - id: anchor
   name: Anchor

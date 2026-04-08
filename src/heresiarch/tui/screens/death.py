@@ -25,8 +25,7 @@ class DeathScreen(Screen):
         align: center middle;
     }
     #death-container {
-        width: auto;
-        max-width: 90;
+        width: 65%;
         height: auto;
         padding: 1 4;
     }

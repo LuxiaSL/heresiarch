@@ -7,7 +7,7 @@ import pytest
 
 from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.data_loader import GameData, load_all
-from heresiarch.engine.formulas import calculate_max_hp, calculate_stats_at_level
+from heresiarch.engine.formulas import calculate_effective_stats, calculate_max_hp, calculate_stats_at_level
 from heresiarch.engine.models.enemies import EnemyInstance
 from heresiarch.engine.models.jobs import CharacterInstance
 from heresiarch.engine.models.stats import StatBlock
@@ -43,7 +43,13 @@ def _make_character(
     job = game_data.jobs[job_id]
     stats = calculate_stats_at_level(job.growth, level)
     equipment = {"WEAPON": weapon_id, "ARMOR": None, "ACCESSORY_1": None, "ACCESSORY_2": None}
-    max_hp = calculate_max_hp(job.base_hp, job.hp_growth, level, stats.DEF)
+
+    # Compute effective stats with equipment
+    equipped_items = []
+    if weapon_id and weapon_id in game_data.items:
+        equipped_items.append(game_data.items[weapon_id])
+    effective = calculate_effective_stats(stats, equipped_items, [])
+    max_hp = calculate_max_hp(job.base_hp, job.hp_growth, level, effective.DEF)
 
     return CharacterInstance(
         id=f"{job_id}_test",
@@ -51,9 +57,11 @@ def _make_character(
         job_id=job_id,
         level=level,
         base_stats=stats,
+        effective_stats=effective,
+        max_hp=max_hp,
         equipment=equipment,
         current_hp=max_hp,
-        abilities=[job.innate_ability_id],
+        abilities=["basic_attack", job.innate_ability_id],
     )
 
 

@@ -28,6 +28,13 @@ class ZoneUnlockRequirement(BaseModel):
     level: int | None = None
 
 
+class RandomSpawn(BaseModel):
+    """A random enemy that may be injected into any encounter in a zone."""
+
+    enemy_template_id: str
+    chance: float = 0.1
+
+
 class ZoneTemplate(BaseModel):
     """Static definition of a zone."""
 
@@ -42,6 +49,7 @@ class ZoneTemplate(BaseModel):
     loot_tier: int = 1
     unlock_requires: list[ZoneUnlockRequirement] = Field(default_factory=list)
     is_final: bool = False
+    random_spawns: list[RandomSpawn] = Field(default_factory=list)
 
 
 class ZoneState(BaseModel):

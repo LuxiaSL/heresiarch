@@ -52,6 +52,45 @@ Early accessories = simple stat bumps. Mid-game = specific synergies. Late-game 
 
 ---
 
+## Stat Computation Stack
+
+Items don't have independent damage calculations — they merge onto stats. All damage, all abilities, all thresholds read from the same effective stats. The stack is:
+
+```
+Layer 1: BASE STATS
+  From level-ups + growth vectors. Pure character identity.
+
+Layer 2: FLAT MODS (additive to base)
+  Items that add flat values directly to stats.
+  e.g., Endurance Plate: DEF +10
+  These INCREASE the input to Layer 3 scaling.
+  Multiple Layer 2 items stack additively.
+
+Layer 3: SCALING MODS (reads Layer 1+2, writes to effective)
+  Weapon/item scaling formulas that read (base + flat mods) and compute a bonus.
+  e.g., Iron Blade: 20 + 1.0 * augmented_STR → added to effective STR
+  Different curves (linear, quadratic, degenerate) live here.
+  This is where item identity lives — same stat, wildly different value curves.
+
+Layer 4: EFFECTIVE MODS (reads current effective, writes to effective)
+  Converters: read from one effective stat, add to another.
+    e.g., Fortress Ring: reads effective DEF, converts to MAG bonus
+  Buffs/debuffs: temporary combat modifiers. Most live here.
+  Special effects can target specific layers for stronger/weaker interactions.
+```
+
+**No feedback loops**: each layer only reads upward. Layer 3 reads (1+2), never 3 or 4. Layer 4 reads (1+2+3), never feeds back.
+
+**What reads from effective stats**: ability damage, retaliate, SPD bonus actions, max HP (via DEF), ability stat requirements, combat resolution. Everything.
+
+**Converters are flexible**: they can theoretically be placed at any layer depending on the design intent. A DEF→MAG converter at Layer 2 would increase weapon scaling inputs. At Layer 4 it adds to final effective. The layer placement IS the balance lever.
+
+**Buffs/debuffs are the same**: most are Layer 4, but special ones could target Layer 2 (stronger — affects weapon scaling downstream) or Layer 3 (modifies the scaling formula itself). This is extendable without changing the core architecture.
+
+> "items should be simple. they shouldn't have their own independent calculations; they should just interact with the stats and boost them directly, that way it carries through to the rest much easier." — designer
+
+---
+
 ## Seed Item Set
 
 | Item | Slot | Scaling | Stat | Formula | Fantasy |

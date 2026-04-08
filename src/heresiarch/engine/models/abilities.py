@@ -72,6 +72,14 @@ class AbilityEffect(BaseModel):
     heal_percent: float = 0.0
     stat_buff: dict[str, int] = Field(default_factory=dict)
 
+    # Gold steal (Pilfer etc.) — amount = gold_steal_flat + gold_steal_per_level * user level
+    gold_steal_flat: int = 0
+    gold_steal_per_level: float = 0.0
+
+    # When True, this effect applies to the actor instead of the target.
+    # Used for "attack + self-buff" abilities like Brace Strike.
+    applies_to_self: bool = False
+
 
 class Ability(BaseModel):
     id: str

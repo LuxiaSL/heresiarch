@@ -43,6 +43,9 @@
   unlock_requires:
     - type: zone_clear
       zone_id: zone_01
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
   shop_item_pool:
     - iron_blade
     - spirit_lens
@@ -73,6 +76,9 @@
   unlock_requires:
     - type: zone_clear
       zone_id: zone_02
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
   shop_item_pool:
     - iron_blade
     - spirit_lens
@@ -104,6 +110,9 @@
   unlock_requires:
     - type: zone_clear
       zone_id: zone_03
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
   shop_item_pool:
     - iron_blade
     - spirit_lens
@@ -136,6 +145,9 @@
   unlock_requires:
     - type: zone_clear
       zone_id: zone_05
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
   shop_item_pool:
     - iron_blade
     - runic_edge
@@ -172,6 +184,9 @@
   unlock_requires:
     - type: zone_clear
       zone_id: zone_08
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
   shop_item_pool:
     - runic_edge
     - resonance_orb
@@ -204,6 +219,9 @@
   unlock_requires:
     - type: zone_clear
       zone_id: zone_12
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
   shop_item_pool:
     - runic_edge
     - resonance_orb

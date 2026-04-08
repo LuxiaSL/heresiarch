@@ -89,6 +89,7 @@ class CombatEngine:
                 CombatantState(
                     id=char.id,
                     is_player=True,
+                    level=char.level,
                     current_hp=min(current_hp, max_hp),
                     max_hp=max_hp,
                     base_stats=char.base_stats,
@@ -105,6 +106,7 @@ class CombatEngine:
                 CombatantState(
                     id=enemy.template_id + f"_{id(enemy)}",
                     is_player=False,
+                    level=enemy.level,
                     current_hp=enemy.current_hp,
                     max_hp=enemy.max_hp,
                     base_stats=enemy.stats,
@@ -213,31 +215,6 @@ class CombatEngine:
             equipment=list(template.equipment),
             action_table=template.action_table,
             target_preference=template.target_preference,
-        )
-
-    def create_character_combatant(
-        self,
-        char: CharacterInstance,
-        job: JobTemplate,
-    ) -> CharacterInstance:
-        """Level up a character: compute stats from job growth."""
-        stats = calculate_stats_at_level(job.growth, char.level)
-        equipped = self._get_equipped_items(char)
-        effective = calculate_effective_stats(stats, equipped, [])
-        max_hp = calculate_max_hp(job.base_hp, job.hp_growth, char.level, effective.DEF)
-
-        return char.model_copy(
-            update={
-                "base_stats": stats,
-                "effective_stats": effective,
-                "max_hp": max_hp,
-                "current_hp": max_hp,
-                "abilities": ["basic_attack", job.innate_ability_id] + [
-                    item.granted_ability_id
-                    for item in equipped
-                    if item.granted_ability_id
-                ],
-            }
         )
 
     # --- Turn Resolution ---
@@ -454,6 +431,14 @@ class CombatEngine:
         for effect in ability.effects:
             if state.is_finished:
                 break
+
+            # applies_to_self: redirect this effect to the actor
+            if effect.applies_to_self:
+                if actor.is_alive:
+                    state = self._apply_effect(
+                        state, actor, actor, effect, ability, is_partial
+                    )
+                continue
 
             for target_id in effective_target_ids:
                 if state.is_finished:
@@ -786,6 +771,24 @@ class CombatEngine:
                     details={"status": status.name, "buffs": effect.stat_buff},
                 )
             )
+
+        # Gold steal (Pilfer etc.) — steal gold on hit
+        if (effect.gold_steal_flat > 0 or effect.gold_steal_per_level > 0) and target.is_alive:
+            steal_amount = effect.gold_steal_flat + int(effect.gold_steal_per_level * actor.level)
+            if steal_amount > 0:
+                if actor.is_player:
+                    state.gold_stolen_by_players += steal_amount
+                else:
+                    state.gold_stolen_by_enemies += steal_amount
+                state.log.append(
+                    CombatEvent(
+                        event_type=CombatEventType.GOLD_STOLEN,
+                        round_number=state.round_number,
+                        actor_id=actor.id,
+                        target_id=target.id,
+                        value=steal_amount,
+                    )
+                )
 
         # Heal effect (Sacrifice, enemy heal, etc.) — heals the TARGET
         if effect.heal_percent > 0 and target.is_alive:

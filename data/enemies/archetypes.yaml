@@ -45,6 +45,40 @@
       - ability_id: basic_attack
         weight: 1.0
 
+# --- Bandit: fast, squishy, steals gold. Kill it first. ---
+- id: bandit_slime
+  name: Bandit Slime
+  archetype: FODDER
+  budget_multiplier: 7.0
+  stat_distribution:
+    STR: 0.20
+    MAG: 0.05
+    DEF: 0.10
+    RES: 0.05
+    SPD: 0.60
+  base_hp: 15
+  hp_per_budget: 1.0
+  abilities:
+    - pilfer
+    - basic_attack
+  equipment: []
+  target_preference: random
+  description: "Gleaming eyes, sticky fingers. Hits your wallet harder than your HP."
+  action_table:
+    base_weights:
+      - ability_id: pilfer
+        weight: 0.80
+      - ability_id: basic_attack
+        weight: 0.20
+    conditions:
+      - condition_type: self_hp_below
+        threshold: 0.30
+        weight_overrides:
+          - ability_id: pilfer
+            weight: 0.40
+          - ability_id: basic_attack
+            weight: 0.60
+
 # --- Brute: STR weapon + DEF armor ---
 - id: brute_oni
   name: Brute Oni

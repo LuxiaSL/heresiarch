@@ -38,6 +38,7 @@ EVENT_DELAYS: dict[CombatEventType, int] = {
     CombatEventType.PASSIVE_TRIGGERED: 300,
     CombatEventType.TAUNT_REDIRECT: 350,
     CombatEventType.FRENZY_STACK: 250,
+    CombatEventType.GOLD_STOLEN: 400,
     CombatEventType.COMBAT_END: 500,
 }
 
@@ -254,6 +255,15 @@ def render_event(
                 affected_ids=[event.actor_id],
             )
 
+        case CombatEventType.GOLD_STOLEN:
+            actor = _name(event.actor_id, combatant_names)
+            target = _name(event.target_id, combatant_names)
+            return RenderedEvent(
+                text=f"  {actor} [bold #e6c566]steals {event.value}G[/bold #e6c566] from {target}!",
+                color="debuff",
+                affected_ids=[event.actor_id, event.target_id],
+            )
+
         case CombatEventType.COMBAT_END:
             result = event.details.get("result", "")
             if result == "player_victory":
@@ -280,51 +290,131 @@ def render_events_summary(
     combatant_names: dict[str, str],
     ability_names: dict[str, str],
 ) -> list[RenderedEvent]:
-    """Render events in summary mode — only significant events, with damage aggregation.
+    """Render events in summary mode — one line per turn.
 
-    Collapses adjacent DAMAGE_DEALT events from the same actor into a single line.
+    Groups events by TURN_START boundaries, collapses each turn into a compact
+    single-line summary showing actor, action, damage dealt/taken, and effects.
     """
     rendered: list[RenderedEvent] = []
-    i = 0
-    while i < len(events):
-        event = events[i]
 
-        # Aggregate adjacent damage events from the same actor
-        if event.event_type == CombatEventType.DAMAGE_DEALT and not event.details.get("self_damage"):
-            total_damage = event.value
-            targets: set[str] = {event.target_id}
-            abilities_used: list[str] = [event.ability_id] if event.ability_id else []
-            actor_id = event.actor_id
-            j = i + 1
-            while j < len(events) and events[j].event_type == CombatEventType.DAMAGE_DEALT and events[j].actor_id == actor_id:
-                total_damage += events[j].value
-                targets.add(events[j].target_id)
-                if events[j].ability_id and events[j].ability_id not in abilities_used:
-                    abilities_used.append(events[j].ability_id)
-                j += 1
+    # Split events into turns (groups between TURN_START markers)
+    turns: list[list[CombatEvent]] = []
+    current_turn: list[CombatEvent] = []
 
-            actor = _name(actor_id, combatant_names)
-            target_str = ", ".join(_name(t, combatant_names) for t in targets)
-            ability_str = ", ".join(_ability_name(a, ability_names) for a in abilities_used)
-            count = j - i
-
-            if count > 1:
-                text = f"  {actor} dealt [bold #cc4444]{total_damage}[/bold #cc4444] total to {target_str} ({ability_str} x{count})"
-            else:
-                text = f"  {target_str} takes [bold #cc4444]{total_damage}[/bold #cc4444] from {actor}"
-
+    for event in events:
+        if event.event_type == CombatEventType.ROUND_START:
+            if current_turn:
+                turns.append(current_turn)
+                current_turn = []
             rendered.append(RenderedEvent(
-                text=text,
-                color="damage",
-                affected_ids=[actor_id] + list(targets),
+                text=f"[bold]--- Round {event.round_number} ---[/bold]",
+                color="neutral",
+                is_significant=False,
             ))
-            i = j
+        elif event.event_type == CombatEventType.TURN_START:
+            if current_turn:
+                turns.append(current_turn)
+            current_turn = [event]
+        elif event.event_type == CombatEventType.COMBAT_END:
+            if current_turn:
+                turns.append(current_turn)
+                current_turn = []
+            result = event.details.get("result", "")
+            if result == "player_victory":
+                rendered.append(RenderedEvent(
+                    text="[bold #44aa44]--- VICTORY ---[/bold #44aa44]",
+                    color="heal",
+                ))
+            else:
+                rendered.append(RenderedEvent(
+                    text="[bold #880000]--- DEFEAT ---[/bold #880000]",
+                    color="death",
+                ))
+        else:
+            current_turn.append(event)
+
+    if current_turn:
+        turns.append(current_turn)
+
+    # Collapse each turn into one line
+    for turn_events in turns:
+        if not turn_events:
             continue
 
-        # For non-damage events, render normally but skip non-significant ones
-        r = render_event(event, combatant_names, ability_names, verbose=False)
-        if r.is_significant:
-            rendered.append(r)
-        i += 1
+        actor_id = turn_events[0].actor_id
+        actor = _name(actor_id, combatant_names)
+        parts: list[str] = []
+        affected: list[str] = [actor_id]
+        color = "neutral"
+        has_death = False
+
+        for ev in turn_events:
+            match ev.event_type:
+                case CombatEventType.TURN_START:
+                    pass  # Already used for grouping
+                case CombatEventType.CHEAT_SURVIVE_DECISION:
+                    choice = ev.details.get("choice", "NORMAL")
+                    if choice == "CHEAT":
+                        actions = ev.details.get("actions_spent", 0)
+                        parts.append(f"[bold]CHEAT[/bold] x{actions}")
+                    elif choice == "SURVIVE":
+                        ap = ev.details.get("ap", 0)
+                        parts.append(f"[bold #4488cc]SURVIVE[/bold #4488cc] (AP:{ap})")
+                case CombatEventType.DAMAGE_DEALT:
+                    target = _name(ev.target_id, combatant_names)
+                    if ev.details.get("self_damage"):
+                        parts.append(f"[#cc4444]{ev.value}[/#cc4444] recoil")
+                    else:
+                        parts.append(f"[#cc4444]{ev.value}[/#cc4444]→{target}")
+                        affected.append(ev.target_id)
+                    color = "damage"
+                case CombatEventType.HEALING:
+                    target = _name(ev.target_id, combatant_names)
+                    parts.append(f"[#44aa44]+{ev.value}[/#44aa44]→{target}")
+                    affected.append(ev.target_id)
+                    if color == "neutral":
+                        color = "heal"
+                case CombatEventType.DOT_TICK:
+                    target = _name(ev.target_id, combatant_names)
+                    status = ev.details.get("status", "DOT")
+                    parts.append(f"[#cc4444]{ev.value}[/#cc4444] {status}→{target}")
+                    affected.append(ev.target_id)
+                    color = "damage"
+                case CombatEventType.DEATH:
+                    target = _name(ev.target_id, combatant_names)
+                    parts.append(f"[bold #880000]{target} dies[/bold #880000]")
+                    affected.append(ev.target_id)
+                    has_death = True
+                case CombatEventType.RETALIATE_TRIGGERED:
+                    retaliator = _name(ev.actor_id, combatant_names)
+                    parts.append(f"{retaliator} retaliates [#cc4444]{ev.value}[/#cc4444]")
+                    affected.append(ev.target_id)
+                case CombatEventType.STATUS_APPLIED:
+                    status = ev.details.get("status", ev.details.get("quality", "effect"))
+                    target = _name(ev.target_id, combatant_names)
+                    parts.append(f"[#cc8844]{status}[/#cc8844]→{target}")
+                case CombatEventType.STATUS_RESISTED:
+                    target = _name(ev.target_id, combatant_names)
+                    quality = ev.details.get("quality", "effect")
+                    parts.append(f"{target} resists {quality}")
+                case CombatEventType.FRENZY_STACK:
+                    parts.append(f"Frenzy x{ev.value}")
+                case CombatEventType.GOLD_STOLEN:
+                    target = _name(ev.target_id, combatant_names)
+                    parts.append(f"[#e6c566]{ev.value}G[/#e6c566] stolen→{target}")
+                case _:
+                    pass  # Skip non-essential events in summary
+
+        if not parts:
+            continue
+
+        summary = " | ".join(parts)
+        text = f"[bold]{actor}[/bold]: {summary}"
+
+        rendered.append(RenderedEvent(
+            text=text,
+            color="death" if has_death else color,
+            affected_ids=affected,
+        ))
 
     return rendered

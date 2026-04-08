@@ -13,6 +13,7 @@ from heresiarch.engine.models.enemies import EnemyTemplate
 from heresiarch.engine.models.items import Item
 from heresiarch.engine.models.jobs import JobTemplate
 from heresiarch.engine.models.loot import DropTable
+from heresiarch.engine.models.region_map import RegionMap
 from heresiarch.engine.models.zone import ZoneTemplate
 
 
@@ -25,6 +26,7 @@ class GameData(BaseModel):
     enemies: dict[str, EnemyTemplate]
     drop_tables: dict[str, DropTable] = {}
     zones: dict[str, ZoneTemplate] = {}
+    maps: dict[str, RegionMap] = {}
 
     def validate_cross_references(self) -> list[str]:
         """Check that all ID references resolve. Returns list of errors."""
@@ -68,6 +70,13 @@ class GameData(BaseModel):
                     errors.append(
                         f"Drop table '{dt_id}' references unknown rare item '{item_id}'"
                     )
+            for pool_idx, pool in enumerate(dt.guaranteed_pools):
+                for entry in pool.items:
+                    if entry.item_id not in self.items:
+                        errors.append(
+                            f"Drop table '{dt_id}' guaranteed pool {pool_idx} "
+                            f"references unknown item '{entry.item_id}'"
+                        )
 
         for zone_id, zone in self.zones.items():
             for enc in zone.encounters:
@@ -80,6 +89,11 @@ class GameData(BaseModel):
                 if item_id not in self.items:
                     errors.append(
                         f"Zone '{zone_id}' shop references unknown item '{item_id}'"
+                    )
+            for spawn in zone.random_spawns:
+                if spawn.enemy_template_id not in self.enemies:
+                    errors.append(
+                        f"Zone '{zone_id}' random_spawn references unknown enemy '{spawn.enemy_template_id}'"
                     )
 
         # Validate scroll ability references
@@ -242,6 +256,25 @@ def load_zones(directory: Path) -> dict[str, ZoneTemplate]:
     return zones
 
 
+def load_maps(directory: Path) -> dict[str, RegionMap]:
+    """Load all region map YAML files from a directory.
+
+    Returns region_id -> RegionMap.
+    """
+    maps: dict[str, RegionMap] = {}
+    if not directory.exists():
+        return maps
+
+    for path in sorted(directory.glob("*.yaml")):
+        data = _load_yaml(path)
+        if data is None:
+            continue
+        region_map = RegionMap(**data)
+        maps[region_map.region_id] = region_map
+
+    return maps
+
+
 def load_all(data_dir: Path) -> GameData:
     """Load everything from the data directory. Returns a GameData container."""
     jobs = load_jobs(data_dir / "jobs")
@@ -250,6 +283,7 @@ def load_all(data_dir: Path) -> GameData:
     enemies = load_enemies(data_dir / "enemies")
     drop_tables = load_drop_tables(data_dir / "loot")
     zones = load_zones(data_dir / "zones")
+    maps = load_maps(data_dir / "maps")
 
     game_data = GameData(
         jobs=jobs,
@@ -258,6 +292,7 @@ def load_all(data_dir: Path) -> GameData:
         enemies=enemies,
         drop_tables=drop_tables,
         zones=zones,
+        maps=maps,
     )
 
     errors = game_data.validate_cross_references()

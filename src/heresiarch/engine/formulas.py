@@ -6,6 +6,7 @@ Constants are module-level for easy tuning.
 
 from __future__ import annotations
 
+import math
 import random
 from typing import TYPE_CHECKING
 
@@ -174,8 +175,29 @@ def evaluate_conversion(conversion: ConversionEffect, source_stat_value: int) ->
             )
         case ScalingType.QUADRATIC:
             return int(conversion.quadratic_coeff * source_stat_value**2)
+        case ScalingType.SIGMOID:
+            return _sigmoid(
+                source_stat_value,
+                conversion.sigmoid_max,
+                conversion.sigmoid_mid,
+                conversion.sigmoid_rate,
+            )
         case _:
             return 0
+
+
+def _sigmoid(stat_value: int, max_output: float, midpoint: float, rate: float) -> int:
+    """Bounded S-curve: output = max_output / (1 + exp(-rate * (stat - midpoint))).
+
+    Grows roughly linearly around the midpoint, flattens toward 0 and max_output.
+    """
+    try:
+        exponent = -rate * (stat_value - midpoint)
+        # Clamp exponent to avoid overflow in exp()
+        exponent = max(-500.0, min(500.0, exponent))
+        return int(max_output / (1.0 + math.exp(exponent)))
+    except OverflowError:
+        return 0 if stat_value < midpoint else int(max_output)
 
 
 # --- Survive Damage Reduction ---
@@ -250,26 +272,49 @@ def calculate_effective_stats(
 ) -> StatBlock:
     """Compute effective stats by layering:
 
-    1. Base stats (from level-ups)
-    2. + flat item bonuses
-    3. + converter item bonuses (based on base stats, not buffed stats)
-    4. + buff/debuff modifiers
+    Layer 1: Base stats (from level-ups)
+    Layer 2: + flat item bonuses → "augmented base" (feeds into Layer 3 scaling)
+    Layer 3: + weapon/item scaling (reads augmented base, adds to effective)
+    Layer 4: + converters (reads current effective, adds to effective)
+             + buff/debuff modifiers
+
+    No feedback loops: each layer only reads from layers above it.
     """
     data = base_stats.model_dump()
 
+    # --- Layer 2: Flat bonuses (e.g., Endurance Plate: DEF +10) ---
+    # These increase the "augmented base" that weapon scaling reads from.
     for item in equipped_items:
         for stat_name, bonus in item.flat_stat_bonus.items():
             if stat_name in data:
                 data[stat_name] += bonus
 
+    # Snapshot augmented base for scaling input
+    augmented_base = StatBlock(**{k: max(0, v) for k, v in data.items()})
+
+    # --- Layer 3: Weapon/item scaling → stat boost ---
+    # Reads from augmented base (Layer 1+2), output added to effective stat.
+    # e.g., Iron Blade (LINEAR STR, base=20, coeff=1.0) at augmented STR 10 → +30 STR
+    for item in equipped_items:
+        if item.scaling:
+            stat_key = item.scaling.stat.value
+            if stat_key in data:
+                stat_value = augmented_base.get(StatType(stat_key))
+                scaling_bonus = int(evaluate_item_scaling(item.scaling, stat_value))
+                data[stat_key] += scaling_bonus
+
+    # --- Layer 4: Converters + buffs/debuffs ---
+    # Converters read from current effective (Layer 1+2+3), add to effective.
+    effective_snapshot = StatBlock(**{k: max(0, v) for k, v in data.items()})
     for item in equipped_items:
         if item.conversion:
-            source_val = base_stats.get(StatType(item.conversion.source_stat.value))
+            source_val = effective_snapshot.get(StatType(item.conversion.source_stat.value))
             bonus = evaluate_conversion(item.conversion, source_val)
             target_key = item.conversion.target_stat.value
             if target_key in data:
                 data[target_key] += bonus
 
+    # Buffs/debuffs (Layer 4 — temporary combat modifiers)
     for buff in active_buffs:
         for stat_name, mod in buff.stat_modifiers.items():
             if stat_name in data:

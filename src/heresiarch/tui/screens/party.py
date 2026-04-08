@@ -8,7 +8,6 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
-from heresiarch.engine.formulas import calculate_max_hp
 
 
 class PartyScreen(Screen):
@@ -41,6 +40,7 @@ class PartyScreen(Screen):
 
     BINDINGS = [
         ("escape", "go_back", "Back"),
+        ("backspace", "go_back", "Back"),
     ]
 
     def __init__(self) -> None:
@@ -124,22 +124,34 @@ class PartyScreen(Screen):
 
         job = self.app.game_data.jobs.get(char.job_id)
         job_name = job.name if job else "?"
-        max_hp = calculate_max_hp(
-            job.base_hp, job.hp_growth, char.level, char.base_stats.DEF
-        ) if job else 0
+        max_hp = char.max_hp
 
-        stats = char.base_stats
+        base = char.base_stats
+        eff = char.effective_stats
         lines: list[str] = [
             f"[bold]{char.name}[/bold] — Lv{char.level} {job_name}",
             f"  HP: {char.current_hp}/{max_hp}  XP: {char.xp}",
             "",
-            "[bold]Stats[/bold]",
-            f"  STR [bold]{stats.STR:>3}[/bold]  MAG [bold]{stats.MAG:>3}[/bold]  "
-            f"DEF [bold]{stats.DEF:>3}[/bold]  RES [bold]{stats.RES:>3}[/bold]  "
-            f"SPD [bold]{stats.SPD:>3}[/bold]",
-            "",
-            "[bold]Equipment[/bold]",
+            "[bold]Stats[/bold]  [dim](base → effective)[/dim]",
         ]
+
+        def _stat_line(name: str, base_val: int, eff_val: int) -> str:
+            if eff_val > base_val:
+                return f"  {name} [bold]{base_val:>3}[/bold] → [bold #44aa44]{eff_val:>3}[/bold #44aa44]"
+            elif eff_val < base_val:
+                return f"  {name} [bold]{base_val:>3}[/bold] → [bold #cc4444]{eff_val:>3}[/bold #cc4444]"
+            return f"  {name} [bold]{base_val:>3}[/bold]"
+
+        stat_parts = [
+            _stat_line("STR", base.STR, eff.STR),
+            _stat_line("MAG", base.MAG, eff.MAG),
+            _stat_line("DEF", base.DEF, eff.DEF),
+            _stat_line("RES", base.RES, eff.RES),
+            _stat_line("SPD", base.SPD, eff.SPD),
+        ]
+        lines.append("  ".join(stat_parts))
+        lines.append("")
+        lines.append("[bold]Equipment[/bold]")
 
         for slot in ("WEAPON", "ARMOR", "ACCESSORY_1", "ACCESSORY_2"):
             item_id = char.equipment.get(slot)
@@ -199,17 +211,40 @@ class PartyScreen(Screen):
             item = run.party.items.get(item_id) or self.app.game_data.items.get(item_id)
             if item and not item.is_consumable:
                 slot = item.slot.value if hasattr(item.slot, "value") else str(item.slot)
-                action_list.add_option(Option(f"Equip {item.name} → {slot}"))
-                self._action_keys.append(f"equip:{char_id}:{item_id}:{slot}")
+                if slot == "ACCESSORY_1":
+                    # Accessories can go in either slot
+                    for acc_slot in ("ACCESSORY_1", "ACCESSORY_2"):
+                        current = char.equipment.get(acc_slot)
+                        current_name = ""
+                        if current:
+                            ci = run.party.items.get(current) or self.app.game_data.items.get(current)
+                            current_name = f" (replacing {ci.name})" if ci else ""
+                        action_list.add_option(Option(f"Equip {item.name} → {acc_slot}{current_name}"))
+                        self._action_keys.append(f"equip:{char_id}:{item_id}:{acc_slot}")
+                else:
+                    action_list.add_option(Option(f"Equip {item.name} → {slot}"))
+                    self._action_keys.append(f"equip:{char_id}:{item_id}:{slot}")
 
-        # Swap
+        # Swap / Move
+        from heresiarch.engine.recruitment import MAX_ACTIVE_SIZE
+
         if char_id in run.party.active:
+            # Bench to reserve (if not the only active member)
+            if len(run.party.active) > 1:
+                action_list.add_option(Option("Move to reserve"))
+                self._action_keys.append(f"bench:{char_id}")
+            # Swap with specific reserve member
             for rid in run.party.reserve:
                 rc = run.party.characters.get(rid)
                 if rc:
                     action_list.add_option(Option(f"Swap with {rc.name} (reserve)"))
                     self._action_keys.append(f"swap:{char_id}:{rid}")
         elif char_id in run.party.reserve:
+            # Promote to active (if there's room)
+            if len(run.party.active) < MAX_ACTIVE_SIZE:
+                action_list.add_option(Option("Move to active"))
+                self._action_keys.append(f"promote:{char_id}")
+            # Swap with specific active member
             for aid in run.party.active:
                 ac = run.party.characters.get(aid)
                 if ac:
@@ -249,6 +284,12 @@ class PartyScreen(Screen):
                 case "swap":
                     _, active_id, reserve_id = parts
                     self.app.run_state = self.app.game_loop.swap_party_member(run, active_id, reserve_id)
+                case "promote":
+                    _, char_id = parts
+                    self.app.run_state = self.app.game_loop.promote_to_active(run, char_id)
+                case "bench":
+                    _, char_id = parts
+                    self.app.run_state = self.app.game_loop.bench_to_reserve(run, char_id)
                 case "mimic":
                     _, job_id = parts
                     self.app.run_state = self.app.game_loop.mc_swap_job(run, job_id)
