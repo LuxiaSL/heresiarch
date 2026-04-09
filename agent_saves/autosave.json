@@ -1,0 +1,444 @@
+{
+  "phase": "POST_COMBAT",
+  "seed": 42,
+  "run": {
+    "run_id": "agent_42",
+    "party": {
+      "active": [
+        "mc_einherjar"
+      ],
+      "reserve": [],
+      "characters": {
+        "mc_einherjar": {
+          "id": "mc_einherjar",
+          "name": "Kael",
+          "job_id": "einherjar",
+          "level": 1,
+          "xp": 8,
+          "base_stats": {
+            "STR": 5,
+            "MAG": 1,
+            "DEF": 5,
+            "RES": 1,
+            "SPD": 3
+          },
+          "equipment": {
+            "WEAPON": null,
+            "ARMOR": null,
+            "ACCESSORY_1": null,
+            "ACCESSORY_2": null
+          },
+          "current_hp": 56,
+          "max_hp": 65,
+          "effective_stats": {
+            "STR": 5,
+            "MAG": 1,
+            "DEF": 5,
+            "RES": 1,
+            "SPD": 3
+          },
+          "abilities": [
+            "basic_attack",
+            "retaliate"
+          ],
+          "is_mc": true,
+          "growth_history": [
+            [
+              "einherjar",
+              1
+            ]
+          ]
+        }
+      },
+      "stash": [],
+      "items": {},
+      "money": 15,
+      "cha": 0
+    },
+    "current_zone_id": "zone_01",
+    "zone_state": {
+      "template_id": "zone_01",
+      "current_encounter_index": 1,
+      "encounters_completed": [
+        0
+      ],
+      "is_cleared": false,
+      "overstay_battles": 0,
+      "recruitment_offered": false
+    },
+    "zones_completed": [],
+    "zone_progress": {},
+    "battle_record": {
+      "encounters": [
+        {
+          "zone_id": "zone_01",
+          "encounter_index": 1,
+          "enemy_template_ids": [
+            "fodder_slime"
+          ],
+          "rounds": [
+            {
+              "round_number": 1,
+              "player_decisions": {
+                "mc_einherjar": {
+                  "combatant_id": "mc_einherjar",
+                  "cheat_survive": "NORMAL",
+                  "cheat_actions": 0,
+                  "primary_action": {
+                    "actor_id": "mc_einherjar",
+                    "ability_id": "basic_attack",
+                    "target_ids": [
+                      "fodder_slime_0"
+                    ],
+                    "is_partial": false
+                  },
+                  "cheat_extra_actions": [],
+                  "partial_actions": []
+                }
+              },
+              "events": [
+                {
+                  "event_type": "ROUND_START",
+                  "round_number": 1,
+                  "actor_id": "",
+                  "target_id": "",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {}
+                },
+                {
+                  "event_type": "TURN_START",
+                  "round_number": 1,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {}
+                },
+                {
+                  "event_type": "ACTION_DECLARED",
+                  "round_number": 1,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "",
+                  "ability_id": "basic_attack",
+                  "value": 0,
+                  "details": {
+                    "targets": [
+                      "fodder_slime_0"
+                    ],
+                    "is_partial": false
+                  }
+                },
+                {
+                  "event_type": "DAMAGE_DEALT",
+                  "round_number": 1,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "fodder_slime_0",
+                  "ability_id": "basic_attack",
+                  "value": 6,
+                  "details": {}
+                },
+                {
+                  "event_type": "TURN_START",
+                  "round_number": 1,
+                  "actor_id": "fodder_slime_0",
+                  "target_id": "",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {}
+                },
+                {
+                  "event_type": "ACTION_DECLARED",
+                  "round_number": 1,
+                  "actor_id": "fodder_slime_0",
+                  "target_id": "",
+                  "ability_id": "basic_attack",
+                  "value": 0,
+                  "details": {
+                    "targets": [
+                      "mc_einherjar"
+                    ],
+                    "is_partial": false
+                  }
+                },
+                {
+                  "event_type": "DAMAGE_DEALT",
+                  "round_number": 1,
+                  "actor_id": "fodder_slime_0",
+                  "target_id": "mc_einherjar",
+                  "ability_id": "basic_attack",
+                  "value": 3,
+                  "details": {}
+                },
+                {
+                  "event_type": "RETALIATE_TRIGGERED",
+                  "round_number": 1,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "fodder_slime_0",
+                  "ability_id": "",
+                  "value": 6,
+                  "details": {}
+                }
+              ],
+              "player_hp": {
+                "mc_einherjar": 62
+              },
+              "enemy_hp": {
+                "fodder_slime_0": 24
+              }
+            },
+            {
+              "round_number": 2,
+              "player_decisions": {
+                "mc_einherjar": {
+                  "combatant_id": "mc_einherjar",
+                  "cheat_survive": "NORMAL",
+                  "cheat_actions": 0,
+                  "primary_action": {
+                    "actor_id": "mc_einherjar",
+                    "ability_id": "basic_attack",
+                    "target_ids": [
+                      "fodder_slime_0"
+                    ],
+                    "is_partial": false
+                  },
+                  "cheat_extra_actions": [],
+                  "partial_actions": []
+                }
+              },
+              "events": [
+                {
+                  "event_type": "ROUND_START",
+                  "round_number": 2,
+                  "actor_id": "",
+                  "target_id": "",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {}
+                },
+                {
+                  "event_type": "TURN_START",
+                  "round_number": 2,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {}
+                },
+                {
+                  "event_type": "ACTION_DECLARED",
+                  "round_number": 2,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "",
+                  "ability_id": "basic_attack",
+                  "value": 0,
+                  "details": {
+                    "targets": [
+                      "fodder_slime_0"
+                    ],
+                    "is_partial": false
+                  }
+                },
+                {
+                  "event_type": "DAMAGE_DEALT",
+                  "round_number": 2,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "fodder_slime_0",
+                  "ability_id": "basic_attack",
+                  "value": 6,
+                  "details": {}
+                },
+                {
+                  "event_type": "TURN_START",
+                  "round_number": 2,
+                  "actor_id": "fodder_slime_0",
+                  "target_id": "",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {}
+                },
+                {
+                  "event_type": "ACTION_DECLARED",
+                  "round_number": 2,
+                  "actor_id": "fodder_slime_0",
+                  "target_id": "",
+                  "ability_id": "basic_attack",
+                  "value": 0,
+                  "details": {
+                    "targets": [
+                      "mc_einherjar"
+                    ],
+                    "is_partial": false
+                  }
+                },
+                {
+                  "event_type": "DAMAGE_DEALT",
+                  "round_number": 2,
+                  "actor_id": "fodder_slime_0",
+                  "target_id": "mc_einherjar",
+                  "ability_id": "basic_attack",
+                  "value": 3,
+                  "details": {}
+                },
+                {
+                  "event_type": "RETALIATE_TRIGGERED",
+                  "round_number": 2,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "fodder_slime_0",
+                  "ability_id": "",
+                  "value": 6,
+                  "details": {}
+                }
+              ],
+              "player_hp": {
+                "mc_einherjar": 59
+              },
+              "enemy_hp": {
+                "fodder_slime_0": 12
+              }
+            },
+            {
+              "round_number": 3,
+              "player_decisions": {
+                "mc_einherjar": {
+                  "combatant_id": "mc_einherjar",
+                  "cheat_survive": "NORMAL",
+                  "cheat_actions": 0,
+                  "primary_action": {
+                    "actor_id": "mc_einherjar",
+                    "ability_id": "basic_attack",
+                    "target_ids": [
+                      "fodder_slime_0"
+                    ],
+                    "is_partial": false
+                  },
+                  "cheat_extra_actions": [],
+                  "partial_actions": []
+                }
+              },
+              "events": [
+                {
+                  "event_type": "ROUND_START",
+                  "round_number": 3,
+                  "actor_id": "",
+                  "target_id": "",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {}
+                },
+                {
+                  "event_type": "TURN_START",
+                  "round_number": 3,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {}
+                },
+                {
+                  "event_type": "ACTION_DECLARED",
+                  "round_number": 3,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "",
+                  "ability_id": "basic_attack",
+                  "value": 0,
+                  "details": {
+                    "targets": [
+                      "fodder_slime_0"
+                    ],
+                    "is_partial": false
+                  }
+                },
+                {
+                  "event_type": "DAMAGE_DEALT",
+                  "round_number": 3,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "fodder_slime_0",
+                  "ability_id": "basic_attack",
+                  "value": 6,
+                  "details": {}
+                },
+                {
+                  "event_type": "TURN_START",
+                  "round_number": 3,
+                  "actor_id": "fodder_slime_0",
+                  "target_id": "",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {}
+                },
+                {
+                  "event_type": "ACTION_DECLARED",
+                  "round_number": 3,
+                  "actor_id": "fodder_slime_0",
+                  "target_id": "",
+                  "ability_id": "basic_attack",
+                  "value": 0,
+                  "details": {
+                    "targets": [
+                      "mc_einherjar"
+                    ],
+                    "is_partial": false
+                  }
+                },
+                {
+                  "event_type": "DAMAGE_DEALT",
+                  "round_number": 3,
+                  "actor_id": "fodder_slime_0",
+                  "target_id": "mc_einherjar",
+                  "ability_id": "basic_attack",
+                  "value": 3,
+                  "details": {}
+                },
+                {
+                  "event_type": "RETALIATE_TRIGGERED",
+                  "round_number": 3,
+                  "actor_id": "mc_einherjar",
+                  "target_id": "fodder_slime_0",
+                  "ability_id": "",
+                  "value": 6,
+                  "details": {}
+                },
+                {
+                  "event_type": "DEATH",
+                  "round_number": 3,
+                  "actor_id": "",
+                  "target_id": "fodder_slime_0",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {}
+                },
+                {
+                  "event_type": "COMBAT_END",
+                  "round_number": 3,
+                  "actor_id": "",
+                  "target_id": "",
+                  "ability_id": "",
+                  "value": 0,
+                  "details": {
+                    "result": "player_victory"
+                  }
+                }
+              ],
+              "player_hp": {
+                "mc_einherjar": 56
+              },
+              "enemy_hp": {
+                "fodder_slime_0": 0
+              }
+            }
+          ],
+          "result": "victory",
+          "rounds_taken": 3,
+          "total_damage_dealt": 18,
+          "total_damage_taken": 9,
+          "total_healing": 0,
+          "character_deaths": []
+        }
+      ]
+    },
+    "is_dead": false,
+    "created_at": "2026-04-09T20:48:22.819767+00:00",
+    "last_recruit_job_id": null
+  }
+}

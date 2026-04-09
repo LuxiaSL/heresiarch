@@ -101,10 +101,13 @@ class CombatEngine:
             )
 
         enemy_combatants = []
+        _eid_counts: dict[str, int] = {}
         for enemy in enemies:
+            count = _eid_counts.get(enemy.template_id, 0)
+            _eid_counts[enemy.template_id] = count + 1
             enemy_combatants.append(
                 CombatantState(
-                    id=enemy.template_id + f"_{id(enemy)}",
+                    id=f"{enemy.template_id}_{count}",
                     is_player=False,
                     level=enemy.level,
                     current_hp=enemy.current_hp,
