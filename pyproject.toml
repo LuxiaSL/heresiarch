@@ -16,10 +16,20 @@ dependencies = [
 [project.scripts]
 heresiarch = "heresiarch.tui.app:main"
 heresiarch-map = "heresiarch.tools.map_tool:main"
+heresiarch-dash = "heresiarch.dashboard.__main__:main"
 
 [build-system]
 requires = ["uv_build>=0.9.2,<0.10.0"]
 build-backend = "uv_build"
+
+[project.optional-dependencies]
+agent = [
+    "mcp>=1.0.0",
+]
+dashboard = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+]
 
 [dependency-groups]
 dev = [
