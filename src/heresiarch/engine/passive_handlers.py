@@ -291,24 +291,23 @@ def handle_consecutive_attack_boundary(passive: Ability, ctx: PassiveContext) ->
 
 
 # ---------------------------------------------------------------------------
-# ON_NON_DAMAGE_ROUND: insight stack generation (round boundary)
+# ON_NON_DAMAGE_ACTION: insight stack generation (post-action)
 # ---------------------------------------------------------------------------
 
 
-def handle_non_damage_round_boundary(passive: Ability, ctx: PassiveContext) -> None:
-    """Round boundary: gain an insight stack on non-damage rounds."""
-    if not ctx.owner.dealt_damage_this_round:
-        ctx.owner.insight_stacks += 1
-        ctx.state.log.append(
-            CombatEvent(
-                event_type=CombatEventType.PASSIVE_TRIGGERED,
-                round_number=ctx.state.round_number,
-                actor_id=ctx.owner.id,
-                target_id=ctx.owner.id,
-                ability_id=passive.id,
-                details={"insight_stacks": ctx.owner.insight_stacks},
-            )
+def handle_non_damage_action(passive: Ability, ctx: PassiveContext) -> None:
+    """Post-action: gain an insight stack after a non-damaging action."""
+    ctx.owner.insight_stacks += 1
+    ctx.state.log.append(
+        CombatEvent(
+            event_type=CombatEventType.PASSIVE_TRIGGERED,
+            round_number=ctx.state.round_number,
+            actor_id=ctx.owner.id,
+            target_id=ctx.owner.id,
+            ability_id=passive.id,
+            details={"insight_stacks": ctx.owner.insight_stacks},
         )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -359,6 +358,6 @@ PASSIVE_DISPATCH: dict[TriggerCondition, PassiveHandler] = {
     TriggerCondition.ON_ALLY_KO: handle_on_ally_ko,
     TriggerCondition.RES_GATE_PASSED: handle_res_gate_passed,
     TriggerCondition.ON_CONSECUTIVE_ATTACK: handle_consecutive_attack_boundary,
-    TriggerCondition.ON_NON_DAMAGE_ROUND: handle_non_damage_round_boundary,
+    TriggerCondition.ON_NON_DAMAGE_ACTION: handle_non_damage_action,
     TriggerCondition.HP_BELOW_THRESHOLD: handle_hp_threshold,
 }

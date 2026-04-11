@@ -24,9 +24,9 @@
   name: Insight
   category: PASSIVE
   target: SELF
-  trigger: ON_NON_DAMAGE_ROUND
+  trigger: ON_NON_DAMAGE_ACTION
   is_innate: true
-  description: "Passivity sharpens perception. Gain a stack each non-damage round; each ability cast consumes one stack for +40% effectiveness."
+  description: "Passivity sharpens perception. Non-amplified actions and Survive build stacks; amplified abilities consume one stack for +40% effectiveness."
   effects:
     - surge_stack_bonus: 0.40
 

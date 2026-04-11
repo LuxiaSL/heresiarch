@@ -35,7 +35,8 @@ CHEAT_DEBT_PER_ACTION: int = 1
 CHEAT_DEBT_RECOVERY_PER_TURN: int = 1
 
 # Combat modifier constants
-FRENZY_BASE: float = 1.5  # exponential base for chain multiplier
+FRENZY_FLOOR: float = 2.0  # multiplier at chain 1 (immediate payoff)
+FRENZY_GROWTH: float = 4 / 3  # per-chain exponential growth after floor (~1.333)
 INSIGHT_MULTIPLIER_PER_STACK: float = 0.4
 THORNS_SCALING_PER_TIER: float = 0.2
 THORNS_TIER_LEVELS: int = 10
@@ -213,10 +214,16 @@ def _sigmoid(stat_value: int, max_output: float, midpoint: float, rate: float) -
 
 def calculate_frenzy_multiplier(
     chain: int,
-    base: float = FRENZY_BASE,
+    floor: float = FRENZY_FLOOR,
+    growth: float = FRENZY_GROWTH,
 ) -> float:
-    """Frenzy chain multiplier: base^chain (e.g., 1.5^3 = 3.375)."""
-    return base ** chain
+    """Frenzy chain multiplier: floor * growth^(chain-1) for chain >= 1, else 1.0.
+
+    2x at chain 1, ~1.33x compounding per chain after that.
+    """
+    if chain <= 0:
+        return 1.0
+    return floor * growth ** (chain - 1)
 
 
 def calculate_insight_multiplier(

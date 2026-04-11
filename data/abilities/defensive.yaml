@@ -1,3 +1,15 @@
+# --- Core actions ---
+
+- id: survive
+  name: Survive
+  category: DEFENSIVE
+  target: SELF
+  priority: true
+  description: "Brace for impact. Gain 1 AP, halve incoming damage this round."
+  effects:
+    - ap_gain: 1
+      grants_surviving: true
+
 # --- Defensive abilities ---
 
 - id: taunt
@@ -6,6 +18,7 @@
   target: SELF
   cooldown: 3
   is_innate: false
+  insight_amplified: true
   description: "Forces all enemies to target this character for 1 round."
   effects:
     - duration_rounds: 1
@@ -17,6 +30,7 @@
   target: SELF
   cooldown: 3
   is_innate: false
+  insight_amplified: true
   description: "Steel the body and mind. Buffs DEF and RES for 2 turns."
   effects:
     - stat_buff:
@@ -30,6 +44,7 @@
   category: DEFENSIVE
   target: SINGLE_ALLY
   is_innate: false
+  insight_amplified: true
   description: "Absorbs a percentage of ally damage and redirects it to self. DEF scaling reduces redirected damage taken."
   effects:
     - def_buff: 20
@@ -42,6 +57,7 @@
   category: DEFENSIVE
   target: SINGLE_ENEMY
   is_innate: false
+  insight_amplified: true
   description: "A disciplined attack that hardens the user's guard. Deals STR damage and grants a minor DEF buff for 1 turn."
   effects:
     - base_damage: 8
@@ -56,6 +72,7 @@
   category: DEFENSIVE
   target: SELF
   is_innate: false
+  insight_amplified: true
   description: "Plants feet and steels resolve. Reduces effectiveness of Disrupt-quality effects for the duration."
   effects:
     - stat_scaling: DEF
@@ -77,6 +94,7 @@
   category: DEFENSIVE
   target: SINGLE_ALLY
   is_innate: false
+  insight_amplified: true
   description: "Conjures a protective ward that bolsters RES for 3 rounds. Scales with RES."
   effects:
     - stat_buff:

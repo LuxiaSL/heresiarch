@@ -11,7 +11,8 @@ import pytest
 from heresiarch.engine.combat import CombatEngine, EffectContext
 from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.formulas import (
-    FRENZY_BASE,
+    FRENZY_FLOOR,
+    FRENZY_GROWTH,
     INSIGHT_MULTIPLIER_PER_STACK,
     MARK_DAMAGE_BONUS,
     THORNS_SCALING_PER_TIER,
@@ -77,15 +78,99 @@ def _make_character(
 class TestFormulaHelpers:
     """WI-5: Verify centralized formula constants and helpers."""
 
-    def test_frenzy_multiplier_base_case(self):
-        assert calculate_frenzy_multiplier(0) == 1.0  # 1.5^0
+    def test_frenzy_multiplier_chain_zero(self):
+        assert calculate_frenzy_multiplier(0) == 1.0
+
+    def test_frenzy_multiplier_chain_1_is_floor(self):
+        assert calculate_frenzy_multiplier(1) == pytest.approx(FRENZY_FLOOR)
 
     def test_frenzy_multiplier_chain_3(self):
-        expected = FRENZY_BASE ** 3
+        expected = FRENZY_FLOOR * FRENZY_GROWTH ** 2
         assert calculate_frenzy_multiplier(3) == pytest.approx(expected)
 
-    def test_frenzy_multiplier_custom_base(self):
-        assert calculate_frenzy_multiplier(2, base=2.0) == 4.0
+    def test_frenzy_multiplier_custom_params(self):
+        assert calculate_frenzy_multiplier(2, floor=3.0, growth=1.5) == pytest.approx(4.5)
+
+    def test_frenzy_monotonically_increasing(self):
+        """Each chain step must strictly increase the multiplier."""
+        for chain in range(1, 15):
+            assert calculate_frenzy_multiplier(chain) > calculate_frenzy_multiplier(chain - 1)
+
+    def test_frenzy_chain_zero_is_neutral(self):
+        """Chain 0 must return exactly 1.0 — prevents double-dip on chain restart."""
+        assert calculate_frenzy_multiplier(0) == 1.0
+        # Negative chains should also be neutral (defensive)
+        assert calculate_frenzy_multiplier(-1) == 1.0
+
+    def test_frenzy_continuous_chain_beats_broken_patterns(self):
+        """Regression: breaking chain to re-apply floor must never beat continuous chaining.
+
+        Simulates the ratchet model (level = max(level, formula(chain))) and verifies
+        that no survive-interrupted pattern produces more cumulative damage than
+        continuous attacking for the same number of attacks.
+        """
+
+        def simulate(actions: list[str]) -> tuple[float, float, int]:
+            """Simulate frenzy ratchet. Returns (cumulative_mult, final_level, attacks)."""
+            chain = 0
+            level = 1.0
+            cumulative = 0.0
+            attacks = 0
+
+            for action in actions:
+                if action == "survive":
+                    chain = 0  # round boundary reset
+                elif action == "attack":
+                    mult = max(level, calculate_frenzy_multiplier(chain))
+                    cumulative += mult
+                    level = max(level, calculate_frenzy_multiplier(chain))
+                    chain += 1
+                    attacks += 1
+
+            return cumulative, level, attacks
+
+        # --- 4-attack comparisons ---
+        cont_4 = simulate(["attack"] * 4)
+
+        # attack, survive, attack, survive, attack, attack
+        broken_asas = simulate(
+            ["attack", "survive", "attack", "survive", "attack", "attack"],
+        )
+        assert cont_4[2] == broken_asas[2] == 4
+        assert cont_4[0] > broken_asas[0]
+        assert cont_4[1] >= broken_asas[1]
+
+        # survive, attack, attack, survive, attack, attack
+        broken_saas = simulate(
+            ["survive", "attack", "attack", "survive", "attack", "attack"],
+        )
+        assert cont_4[2] == broken_saas[2] == 4
+        assert cont_4[0] > broken_saas[0]
+
+        # --- 3-attack: survive, cheat(attack×2), survive, attack ---
+        broken_cheat = simulate(
+            ["survive", "attack", "attack", "survive", "attack"],
+        )
+        cont_3 = simulate(["attack"] * 3)
+        assert cont_3[2] == broken_cheat[2] == 3
+        assert cont_3[0] >= broken_cheat[0]
+        assert cont_3[1] >= broken_cheat[1]
+
+        # --- Worst case: alternating survive/attack (maximum chain breaks) ---
+        broken_alternating = simulate(
+            ["attack", "survive"] * 4,  # 4 attacks, each followed by a break
+        )
+        assert cont_4[2] == broken_alternating[2] == 4
+        assert cont_4[0] > broken_alternating[0]
+
+        # --- 6-attack: two cheat bursts with survive between ---
+        broken_burst = simulate(
+            ["attack", "attack", "attack", "survive", "attack", "attack", "attack"],
+        )
+        cont_6 = simulate(["attack"] * 6)
+        assert cont_6[2] == broken_burst[2] == 6
+        assert cont_6[0] > broken_burst[0]
+        assert cont_6[1] >= broken_burst[1]
 
     def test_insight_multiplier_zero_stacks(self):
         assert calculate_insight_multiplier(0) == 1.0

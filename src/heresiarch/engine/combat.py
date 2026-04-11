@@ -305,18 +305,20 @@ class CombatEngine:
         # Cheat/Survive resolution
         match decision.cheat_survive:
             case CheatSurviveChoice.SURVIVE:
-                combatant.action_points = min(
-                    combatant.action_points + 1, MAX_ACTION_POINT_BANK
-                )
-                combatant.is_surviving = True
                 state.log.append(
                     CombatEvent(
                         event_type=CombatEventType.CHEAT_SURVIVE_DECISION,
                         round_number=state.round_number,
                         actor_id=combatant_id,
-                        details={"choice": "SURVIVE", "ap": combatant.action_points},
+                        details={"choice": "SURVIVE"},
                     )
                 )
+                survive_action = CombatAction(
+                    actor_id=combatant_id,
+                    ability_id="survive",
+                    target_ids=[combatant_id],
+                )
+                state = self._resolve_action(state, combatant_id, survive_action)
                 return state
 
             case CheatSurviveChoice.CHEAT:
@@ -528,21 +530,22 @@ class CombatEngine:
                     retargeted.append(replacements[0])
         effective_target_ids = retargeted
 
-        # Insight consumption: consume 1 stack per ability cast, empower all effects
+        # Insight: amplified abilities consume stacks, others grant stacks
         insight_multiplier = 1.0
-        insight_passive = self._get_passive(actor, TriggerCondition.ON_NON_DAMAGE_ROUND, state)
-        if insight_passive and actor.insight_stacks > 0:
-            insight_multiplier = calculate_insight_multiplier(actor.insight_stacks)
-            state.log.append(
-                CombatEvent(
-                    event_type=CombatEventType.INSIGHT_CONSUMED,
-                    round_number=state.round_number,
-                    actor_id=actor.id,
-                    value=actor.insight_stacks,
-                    details={"multiplier": round(insight_multiplier, 2)},
+        insight_passive = self._get_passive(actor, TriggerCondition.ON_NON_DAMAGE_ACTION, state)
+        if insight_passive:
+            if ability.insight_amplified and actor.insight_stacks > 0:
+                insight_multiplier = calculate_insight_multiplier(actor.insight_stacks)
+                state.log.append(
+                    CombatEvent(
+                        event_type=CombatEventType.INSIGHT_CONSUMED,
+                        round_number=state.round_number,
+                        actor_id=actor.id,
+                        value=actor.insight_stacks,
+                        details={"multiplier": round(insight_multiplier, 2)},
+                    )
                 )
-            )
-            actor.insight_stacks -= 1
+                actor.insight_stacks -= 1
 
         for effect in ability.effects:
             if state.is_finished:
@@ -596,7 +599,23 @@ class CombatEngine:
                         )
                     )
 
+        # Post-action insight: non-amplified abilities grant stacks
+        if actor.is_alive and insight_passive and not ability.insight_amplified:
+            self._evaluate_post_action_passives(state, actor)
+
         return state
+
+    def _evaluate_post_action_passives(
+        self, state: CombatState, combatant: CombatantState,
+    ) -> None:
+        """Dispatch post-action passives (insight) via handler table."""
+        trigger = TriggerCondition.ON_NON_DAMAGE_ACTION
+        handler = PASSIVE_DISPATCH.get(trigger)
+        if handler is None:
+            return
+        for passive in self._get_all_passives(combatant, trigger):
+            pctx = PassiveContext(state=state, owner=combatant)
+            handler(passive, pctx)
 
     def _apply_effect(
         self,
@@ -899,7 +918,17 @@ class CombatEngine:
             )
 
     def _phase_utility(self, ctx: EffectContext) -> None:
-        """Phase 10: Gold steal, heal, mark, taunt."""
+        """Phase 10: Gold steal, heal, mark, taunt, AP gain, surviving stance."""
+        # AP gain (Survive etc.)
+        if ctx.effect.ap_gain > 0:
+            ctx.actor.action_points = min(
+                ctx.actor.action_points + ctx.effect.ap_gain, MAX_ACTION_POINT_BANK
+            )
+
+        # Surviving stance (halves incoming damage for the round)
+        if ctx.effect.grants_surviving:
+            ctx.actor.is_surviving = True
+
         # Gold steal (Pilfer etc.)
         if (ctx.effect.gold_steal_flat > 0 or ctx.effect.gold_steal_per_level > 0) and ctx.target.is_alive:
             steal_amount = ctx.effect.gold_steal_flat + int(ctx.effect.gold_steal_per_level * ctx.actor.level)
@@ -1107,8 +1136,8 @@ class CombatEngine:
     def _evaluate_round_boundary_passives(
         self, state: CombatState, combatant: CombatantState,
     ) -> None:
-        """Dispatch round-boundary passives (frenzy, insight) via handler table."""
-        for trigger in (TriggerCondition.ON_CONSECUTIVE_ATTACK, TriggerCondition.ON_NON_DAMAGE_ROUND):
+        """Dispatch round-boundary passives (frenzy) via handler table."""
+        for trigger in (TriggerCondition.ON_CONSECUTIVE_ATTACK,):
             handler = PASSIVE_DISPATCH.get(trigger)
             if handler is None:
                 continue
@@ -1190,29 +1219,46 @@ class CombatEngine:
         state: CombatState,
         player_decisions: dict[str, PlayerTurnDecision] | None = None,
     ) -> list[str]:
-        """Order combatants by effective SPD descending. Players win ties.
+        """Order combatants by priority → SPD → player tiebreak (all descending).
 
-        Survive players always go first — their defensive stance activates
-        before enemies attack.
+        Priority abilities (e.g. Survive) resolve before non-priority.
+        Multiple priority users tiebreak by SPD as usual.
         """
         alive = [c for c in state.all_combatants if c.is_alive]
-        survive_ids: set[str] = set()
-        if player_decisions:
-            survive_ids = {
-                cid
-                for cid, d in player_decisions.items()
-                if d.cheat_survive == CheatSurviveChoice.SURVIVE
-            }
+
+        priority_ids: set[str] = set()
+        for c in alive:
+            ability = self._get_intended_ability(c, player_decisions)
+            if ability is not None and ability.priority:
+                priority_ids.add(c.id)
 
         alive.sort(
             key=lambda c: (
-                2 if c.id in survive_ids else 0,  # Survive players first
+                1 if c.id in priority_ids else 0,
                 c.effective_stats.SPD,
                 1 if c.is_player else 0,
             ),
             reverse=True,
         )
         return [c.id for c in alive]
+
+    def _get_intended_ability(
+        self,
+        combatant: CombatantState,
+        player_decisions: dict[str, PlayerTurnDecision] | None,
+    ) -> Ability | None:
+        """Look up the ability a combatant intends to use this round."""
+        if combatant.is_player and player_decisions:
+            decision = player_decisions.get(combatant.id)
+            if decision is None:
+                return None
+            if decision.cheat_survive == CheatSurviveChoice.SURVIVE:
+                return self.abilities.get("survive")
+            if decision.primary_action:
+                return self.abilities.get(decision.primary_action.ability_id)
+        elif not combatant.is_player and combatant.pending_action:
+            return self.abilities.get(combatant.pending_action.ability_id)
+        return None
 
     def _check_combat_end(self, state: CombatState) -> CombatState:
         """Set is_finished and player_won if one side is eliminated."""

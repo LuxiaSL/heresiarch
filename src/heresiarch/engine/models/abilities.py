@@ -43,7 +43,7 @@ class TriggerCondition(str, Enum):
     HP_BELOW_THRESHOLD = "HP_BELOW_THRESHOLD"
     RES_GATE_PASSED = "RES_GATE_PASSED"
     ON_CONSECUTIVE_ATTACK = "ON_CONSECUTIVE_ATTACK"
-    ON_NON_DAMAGE_ROUND = "ON_NON_DAMAGE_ROUND"
+    ON_NON_DAMAGE_ACTION = "ON_NON_DAMAGE_ACTION"
 
 
 class AbilityEffect(BaseModel):
@@ -89,6 +89,8 @@ class AbilityEffect(BaseModel):
     applies_taunt: bool = False    # Forces enemies to target this combatant
     applies_mark: bool = False     # Marks target for bonus damage from all sources
     ap_refund: int = 0             # Refund this many AP on trigger (e.g., momentum)
+    ap_gain: int = 0               # Grant this many AP to the actor (capped at bank max)
+    grants_surviving: bool = False  # Set actor's surviving stance (halves incoming damage)
 
 
 class Ability(BaseModel):
@@ -102,4 +104,6 @@ class Ability(BaseModel):
     trigger_threshold: float = 0.0
     is_innate: bool = False
     is_partial_action: bool = False
+    insight_amplified: bool = False
+    priority: bool = False
     description: str = ""

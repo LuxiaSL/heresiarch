@@ -4,6 +4,7 @@
   name: Basic Attack
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "A simple physical attack."
   effects:
     - base_damage: 5
@@ -14,6 +15,7 @@
   name: Heavy Strike
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "A powerful but slow strike."
   effects:
     - base_damage: 15
@@ -24,6 +26,7 @@
   name: Bolt
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "A bolt of magical energy."
   effects:
     - base_damage: 10
@@ -34,6 +37,7 @@
   name: Quick Strike
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "A fast physical strike that favours speed."
   effects:
     - base_damage: 3
@@ -44,6 +48,7 @@
   name: Double Hit
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "Two rapid strikes in succession."
   effects:
     - base_damage: 2
@@ -59,6 +64,7 @@
   name: Searing Edge
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "Burn over N rounds, bypasses DEF. Bread and butter vs high-DEF."
   effects:
     - quality: DOT
@@ -71,6 +77,7 @@
   name: Fracture
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "Reduces target DEF for N rounds. Enabler for STR allies."
   effects:
     - quality: SHATTER
@@ -84,6 +91,7 @@
   name: Arc Slash
   category: OFFENSIVE
   target: ALL_ENEMIES
+  insight_amplified: true
   description: "Hits all enemies at reduced power. Mob clear."
   effects:
     - quality: CHAIN
@@ -96,6 +104,7 @@
   name: Thrust
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "Ignores a percentage of DEF. Direct, good vs armor."
   effects:
     - quality: PIERCE
@@ -108,6 +117,7 @@
   name: Hex
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "Shifts enemy action weights and delays. Tempo control, pairs with Foresight."
   effects:
     - quality: DISRUPT
@@ -120,6 +130,7 @@
   name: Drain
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "Heals for a percentage of damage dealt. Sustain, enables low-DEF builds."
   effects:
     - quality: LEECH
@@ -132,6 +143,7 @@
   name: Crescendo
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "Scaling damage with consecutive uses. Extended boss fight ability."
   effects:
     - quality: SURGE
@@ -144,6 +156,7 @@
   name: Reckless Blow
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "Big damage plus self-damage. Risk/reward, pairs with Leech."
   effects:
     - base_damage: 20
@@ -155,6 +168,7 @@
   name: Void Bolt
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "Degenerate scaling: weak early, monstrous late. Trust the curve."
   effects:
     - base_damage: -5
@@ -172,6 +186,7 @@
   name: Pilfer
   category: OFFENSIVE
   target: SINGLE_ENEMY
+  insight_amplified: true
   description: "A quick swipe that steals gold. Light damage, but your wallet hurts more."
   effects:
     - base_damage: 2
