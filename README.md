@@ -30,19 +30,26 @@ heresiarch/
   src/heresiarch/
     engine/         # Pure game logic — zero I/O, event-driven, injected RNG
       models/       # Pydantic models for all game entities
-      formulas.py   # All math as pure functions
-      combat.py     # Combat engine (Cheat/Survive, turns, damage, statuses)
+      formulas.py   # All math as pure functions + named constants
+      combat.py     # Combat engine: phased effect pipeline, Cheat/Survive turns
+      passive_handlers.py  # Data-driven passive ability dispatch table
       ai.py         # Enemy AI (weighted action tables, conditions, targeting)
-      game_loop.py  # Stateless orchestrator: combat → XP → loot → zones
+      game_loop.py  # Stateless orchestrator: combat -> XP -> loot -> zones
       save_manager.py # JSON save/load, permadeath deletion
       ...
     tui/            # Textual TUI — renders engine state, collects decisions
       app.py        # App shell, state owner, screen routing
-      screens/      # Title, job select, zone, combat, post-combat, party,
-                    # inventory, shop, recruitment, death
-      event_renderer.py  # CombatEvent → display text (verbose/summary modes)
-      styles/       # TCSS theme
-  tests/            # 180 pytest tests — deterministic, seeded RNG
+      screens/      # 14 screens: title through death
+      event_renderer.py  # CombatEvent -> display text (verbose/summary modes)
+    agent/          # MCP server for LLM-as-player
+      server.py     # 30 MCP tools (pure pass-through)
+      session.py    # Game session state + phase gating
+      summarizer.py # Engine state -> text for LLM consumption
+    tools/          # CLI balance simulation tools
+      sim.py        # Sweep, DPR, economy, progression sims
+      shared.py     # Shared damage computation helpers
+    dashboard/      # FastAPI balance dashboard with runtime formula overrides
+  tests/            # ~300 pytest tests — deterministic, seeded RNG
 ```
 
 ## Tech Stack
@@ -61,8 +68,10 @@ uv run pytest tests/ -v
 
 ## Status
 
-- **Phase 1** (complete): Engine core — formulas, combat, AI, models, data loader. 52 tests.
-- **Phase 3** (complete): Game loop — zones, encounters, loot, XP, shops, recruitment, saves. 180 tests.
-- **Phase 2** (playable): TUI via Textual — full game loop from title screen through combat to death. Sequential JRPG-style turn planning, line-by-line combat log, battle history tracking, per-run autosave, permadeath.
+- **Phase 1** (complete): Engine core — formulas, combat, AI, models, data loader.
+- **Phase 3** (complete): Game loop — zones, encounters, loot, XP, shops, recruitment, saves.
+- **Phase 2** (playable): TUI — full game loop from title screen through combat to death. 14 screens, line-by-line combat log, battle history, autosave, permadeath.
+- **Agent player** (functional): MCP server for LLM-driven play. 30 tools, phase-gated session management.
+- **Dashboard** (functional): FastAPI balance dashboard with runtime formula overrides.
 - **Phase 4** (planned): Meta-progression (CHA accumulation, job unlocks, acceleration system).
 - **Phase 5** (planned): LLM integration (flavor text, combat narration, death recaps).
