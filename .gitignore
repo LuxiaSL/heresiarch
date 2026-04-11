@@ -12,3 +12,7 @@ wheels/
 # Game saves and screenshots
 saves/
 screenshots/
+
+# Agent state
+agent_saves/
+agent_notes.json
