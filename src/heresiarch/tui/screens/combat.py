@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from enum import Enum, auto
 
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
@@ -282,6 +283,14 @@ class CombatScreen(Screen):
             case CombatPhase.EXECUTING | CombatPhase.COMBAT_OVER:
                 return
 
+        # Rebuild options with number hotkey prefixes
+        if self._choice_keys:
+            old_prompts = [choices.get_option_at_index(i).prompt for i in range(len(self._choice_keys))]
+            choices.clear_options()
+            for i, prompt in enumerate(old_prompts):
+                prefix = f"[bold #888888]{i + 1}.[/bold #888888] " if i < 9 else "   "
+                choices.add_option(Option(f"{prefix}{prompt}"))
+
         # Focus and highlight first option for all planning phases
         if self._choice_keys:
             choices.focus()
@@ -443,6 +452,16 @@ class CombatScreen(Screen):
                 self._render_party_panel(combat)
                 self._render_enemy_panel(combat)
 
+    def on_key(self, event: events.Key) -> None:
+        """Map 1-9 keys to option selection for quick combat input."""
+        if event.character and event.character.isdigit():
+            idx = int(event.character) - 1
+            if 0 <= idx < len(self._choice_keys):
+                choices = self.query_one("#action-choices", OptionList)
+                choices.highlighted = idx
+                choices.action_select()
+                event.prevent_default()
+
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         if event.option_list.id != "action-choices":
             return
@@ -489,12 +508,11 @@ class CombatScreen(Screen):
         if item is None:
             return
 
-        # Apply healing to combatant in combat state
-        combatant = combat.get_combatant(target_id)
-        if combatant and combatant.is_alive:
-            heal = item.heal_amount + int(combatant.max_hp * item.heal_percent)
-            if heal > 0:
-                combatant.current_hp = min(combatant.max_hp, combatant.current_hp + heal)
+        # Delegate healing to engine
+        actor_id = self._current_decision.combatant_id if self._current_decision else target_id
+        self.app.combat_state = self.app.game_loop.combat_engine.use_combat_item(
+            combat, actor_id, target_id, item,
+        )
 
         # Remove item from stash
         new_stash = list(run.party.stash)
@@ -908,6 +926,8 @@ class CombatScreen(Screen):
 
             ap_str = f"  AP:{p.action_points}" if p.action_points > 0 else ""
             debt_str = f" D:{p.cheat_debt}" if p.cheat_debt > 0 else ""
+            insight_str = f" I:{p.insight_stacks}" if p.insight_stacks > 0 else ""
+            frenzy_str = f" F:{p.frenzy_level:.2f}x" if p.frenzy_level > 1.0 else ""
 
             hp_pct = hp / max(max_hp, 1)
             hp_color = "#44aa44" if hp_pct > 0.5 else "#cccc44" if hp_pct > 0.25 else "#cc4444"
@@ -916,7 +936,7 @@ class CombatScreen(Screen):
             bar = f"[{hp_color}]{'█' * filled}[/{hp_color}][#333333]{'░' * (bar_w - filled)}[/#333333]"
 
             lines.append(f"{marker}[bold]{name}[/bold] ({job_name} Lv{char.level if char else '?'})")
-            lines.append(f"  {bar} {hp}/{max_hp}{ap_str}{debt_str}")
+            lines.append(f"  {bar} {hp}/{max_hp}{ap_str}{debt_str}{insight_str}{frenzy_str}")
 
         self.query_one("#party-display", Static).update("\n".join(lines))
 

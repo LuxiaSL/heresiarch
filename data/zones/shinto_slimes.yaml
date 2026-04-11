@@ -20,6 +20,7 @@
     - spirit_lens
     - iron_guard
     - spirit_mantle
+    - warding_mail
     - minor_potion
   encounters:
     - enemy_templates: [fodder_slime]
@@ -51,6 +52,7 @@
     - spirit_lens
     - iron_guard
     - spirit_mantle
+    - warding_mail
     - minor_potion
   encounters:
     - enemy_templates: [fodder_slime]
@@ -84,6 +86,7 @@
     - spirit_lens
     - iron_guard
     - spirit_mantle
+    - warding_mail
     - minor_potion
   encounters:
     - enemy_templates: [fodder_slime]

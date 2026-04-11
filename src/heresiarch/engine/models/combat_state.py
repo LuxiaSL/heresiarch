@@ -24,6 +24,8 @@ class StatusEffect(BaseModel):
     def_reduction: float = 0.0
     rounds_remaining: int = 0
     source_id: str = ""
+    grants_taunt: bool = False
+    grants_mark: bool = False
 
 
 class CombatAction(BaseModel):
@@ -63,6 +65,8 @@ class CombatEventType(str, Enum):
     PASSIVE_TRIGGERED = "PASSIVE_TRIGGERED"
     TAUNT_REDIRECT = "TAUNT_REDIRECT"
     FRENZY_STACK = "FRENZY_STACK"
+    INSIGHT_CONSUMED = "INSIGHT_CONSUMED"
+    THORNS_TRIGGERED = "THORNS_TRIGGERED"
     GOLD_STOLEN = "GOLD_STOLEN"
     COMBAT_END = "COMBAT_END"
 
@@ -94,13 +98,18 @@ class CombatantState(BaseModel):
     is_taunting: bool = False
     is_alive: bool = True
     cooldowns: dict[str, int] = Field(default_factory=dict)
-    frenzy_stacks: int = 0
+    frenzy_stacks: int = 0  # per-round attack count (used by surge, reset each round)
+    frenzy_level: float = 1.0  # persistent frenzy multiplier (ratchet: never decreases)
+    frenzy_chain: int = 0  # consecutive hit count, resets on non-damage round
     surge_stacks: dict[str, int] = Field(default_factory=dict)
     is_surviving: bool = False
+    insight_stacks: int = 0  # onmyoji: empowers next ability cast per stack
+    dealt_damage_this_round: bool = False  # tracks whether combatant dealt damage
     leech_percent: float = 0.0
     level: int = 1
     has_endured: bool = False  # True once Endure has been consumed this fight
     is_marked: bool = False  # Mark: bonus damage from all attackers
+    pending_action: CombatAction | None = None  # pre-rolled enemy intent
 
 
 class CombatState(BaseModel):

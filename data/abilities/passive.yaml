@@ -33,8 +33,7 @@
   is_innate: false
   description: "Killing an enemy refunds 1 action point, allowing an additional action this turn."
   effects:
-    - stat_scaling: STR
-      scaling_coefficient: 0.0
+    - ap_refund: 1
 
 - id: counter_hex
   name: Counter Hex
@@ -45,8 +44,7 @@
   description: "When a RES gate check is passed, reflects the debuff back to the caster."
   effects:
     - quality: DISRUPT
-      stat_scaling: RES
-      scaling_coefficient: 0.3
+      duration_rounds: 2
 
 - id: siphon
   name: Siphon

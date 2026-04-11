@@ -6,6 +6,9 @@ from .items import Item
 from .jobs import CharacterInstance
 
 
+STASH_LIMIT: int = 10
+
+
 class Party(BaseModel):
     """The player's party state."""
 

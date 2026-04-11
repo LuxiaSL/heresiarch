@@ -10,9 +10,11 @@ growth:
   SPD: 1
 base_hp: 70
 hp_growth: 12
-innate_ability_id: taunt
+innate_ability_id: thorns
 ability_unlocks:
-  - level: 5
-    ability_id: brace_strike
+  - level: 3
+    ability_id: stalwart
+  - level: 7
+    ability_id: taunt
   - level: 12
     ability_id: endure

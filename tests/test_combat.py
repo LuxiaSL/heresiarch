@@ -351,7 +351,7 @@ class TestRetaliateTriggersOnHit:
 
 
 class TestFrenzyStacking:
-    """Berserker consecutive attacks deal increasing damage via Frenzy."""
+    """Berserker consecutive attacks grow frenzy level via ratchet model."""
 
     def test_frenzy_increases_damage(
         self, combat_engine: CombatEngine,
@@ -393,11 +393,64 @@ class TestFrenzyStacking:
         }
         state = combat_engine.process_round(state, decisions, game_data.enemies)
 
-        # Check for frenzy stack events
+        # Check for frenzy events — each hit that deals damage emits one
         frenzy_events = _get_events(state, CombatEventType.FRENZY_STACK)
-        # Should have at least 1 frenzy stack event (from 2nd+ consecutive attack)
         if frenzy_events:
-            assert frenzy_events[0].value >= 2
+            # Level should have grown above 1.0 after multiple hits
+            last_event = frenzy_events[-1]
+            assert last_event.details["level"] > 1.0
+            # Chain should reflect consecutive hit count
+            assert last_event.details["chain"] >= 2
+
+    def test_frenzy_level_never_drops_on_survive(
+        self, combat_engine: CombatEngine,
+        berserker_lv15: CharacterInstance,
+        game_data: GameData,
+    ):
+        """Surviving resets chain but preserves frenzy level."""
+        template = game_data.enemies["brute_oni"]
+        enemy = combat_engine.create_enemy_instance(template, zone_level=15)
+
+        state = combat_engine.initialize_combat([berserker_lv15], [enemy])
+        enemy_id = state.enemy_combatants[0].id
+        berserker_state = state.get_combatant(berserker_lv15.id)
+        assert berserker_state is not None
+
+        # Round 1: Normal attack to build some frenzy
+        decisions = {
+            berserker_lv15.id: PlayerTurnDecision(
+                combatant_id=berserker_lv15.id,
+                cheat_survive=CheatSurviveChoice.NORMAL,
+                primary_action=CombatAction(
+                    actor_id=berserker_lv15.id,
+                    ability_id="basic_attack",
+                    target_ids=[enemy_id],
+                ),
+            )
+        }
+        state = combat_engine.process_round(state, decisions, game_data.enemies)
+        if state.is_finished:
+            return
+
+        berserker_state = state.get_combatant(berserker_lv15.id)
+        assert berserker_state is not None
+        level_before_survive = berserker_state.frenzy_level
+
+        # Round 2: Survive — should preserve level, chain resets next boundary
+        decisions = {
+            berserker_lv15.id: PlayerTurnDecision(
+                combatant_id=berserker_lv15.id,
+                cheat_survive=CheatSurviveChoice.SURVIVE,
+            )
+        }
+        state = combat_engine.process_round(state, decisions, game_data.enemies)
+        if state.is_finished:
+            return
+
+        berserker_state = state.get_combatant(berserker_lv15.id)
+        assert berserker_state is not None
+        # Level must not have decreased
+        assert berserker_state.frenzy_level >= level_before_survive
 
 
 class TestDOTBypassesDEF:

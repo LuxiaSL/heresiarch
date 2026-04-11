@@ -38,6 +38,8 @@ EVENT_DELAYS: dict[CombatEventType, int] = {
     CombatEventType.PASSIVE_TRIGGERED: 300,
     CombatEventType.TAUNT_REDIRECT: 350,
     CombatEventType.FRENZY_STACK: 250,
+    CombatEventType.INSIGHT_CONSUMED: 250,
+    CombatEventType.THORNS_TRIGGERED: 350,
     CombatEventType.GOLD_STOLEN: 400,
     CombatEventType.COMBAT_END: 500,
 }
@@ -248,11 +250,29 @@ def render_event(
 
         case CombatEventType.FRENZY_STACK:
             actor = _name(event.actor_id, combatant_names)
-            multiplier = event.details.get("multiplier", 1.0)
+            level = event.details.get("level", 1.0)
             return RenderedEvent(
-                text=f"  {actor} [bold #e6c566]Frenzy x{event.value}[/bold #e6c566] ({multiplier:.1f}x damage)",
+                text=f"  {actor} [bold #e6c566]Frenzy {level:.2f}x[/bold #e6c566] (chain {event.value})",
                 color="buff",
                 affected_ids=[event.actor_id],
+            )
+
+        case CombatEventType.INSIGHT_CONSUMED:
+            actor = _name(event.actor_id, combatant_names)
+            multiplier = event.details.get("multiplier", 1.0)
+            return RenderedEvent(
+                text=f"  {actor} [bold #8888ee]Insight x{event.value}[/bold #8888ee] ({multiplier:.1f}x power)",
+                color="buff",
+                affected_ids=[event.actor_id],
+            )
+
+        case CombatEventType.THORNS_TRIGGERED:
+            actor = _name(event.actor_id, combatant_names)
+            target = _name(event.target_id, combatant_names)
+            return RenderedEvent(
+                text=f"  {actor} [bold #cc44cc]Thorns[/bold #cc44cc] reflects {event.value} damage to {target}!",
+                color="damage",
+                affected_ids=[event.actor_id, event.target_id],
             )
 
         case CombatEventType.GOLD_STOLEN:
@@ -398,7 +418,13 @@ def render_events_summary(
                     quality = ev.details.get("quality", "effect")
                     parts.append(f"{target} resists {quality}")
                 case CombatEventType.FRENZY_STACK:
-                    parts.append(f"Frenzy x{ev.value}")
+                    parts.append(f"Frenzy {ev.details.get('level', 1.0):.1f}x")
+                case CombatEventType.INSIGHT_CONSUMED:
+                    parts.append(f"[#8888ee]Insight x{ev.value}[/#8888ee]")
+                case CombatEventType.THORNS_TRIGGERED:
+                    target = _name(ev.target_id, combatant_names)
+                    parts.append(f"[#cc44cc]Thorns {ev.value}[/#cc44cc]→{target}")
+                    affected.append(ev.target_id)
                 case CombatEventType.GOLD_STOLEN:
                     target = _name(ev.target_id, combatant_names)
                     parts.append(f"[#e6c566]{ev.value}G[/#e6c566] stolen→{target}")

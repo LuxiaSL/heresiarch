@@ -43,6 +43,7 @@ class TriggerCondition(str, Enum):
     HP_BELOW_THRESHOLD = "HP_BELOW_THRESHOLD"
     RES_GATE_PASSED = "RES_GATE_PASSED"
     ON_CONSECUTIVE_ATTACK = "ON_CONSECUTIVE_ATTACK"
+    ON_NON_DAMAGE_ROUND = "ON_NON_DAMAGE_ROUND"
 
 
 class AbilityEffect(BaseModel):
@@ -76,9 +77,18 @@ class AbilityEffect(BaseModel):
     gold_steal_flat: int = 0
     gold_steal_per_level: float = 0.0
 
+    # Thorns: reflect this percentage of damage taken back to attacker
+    reflect_percent: float = 0.0
+
     # When True, this effect applies to the actor instead of the target.
     # Used for "attack + self-buff" abilities like Brace Strike.
     applies_to_self: bool = False
+
+    # Behavioral flags — replace hardcoded ability ID checks in combat.py
+    survive_lethal: bool = False   # Survive one lethal hit at 1 HP (once per fight)
+    applies_taunt: bool = False    # Forces enemies to target this combatant
+    applies_mark: bool = False     # Marks target for bonus damage from all sources
+    ap_refund: int = 0             # Refund this many AP on trigger (e.g., momentum)
 
 
 class Ability(BaseModel):

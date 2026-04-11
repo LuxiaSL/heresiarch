@@ -6,9 +6,7 @@ from pydantic import BaseModel, Field
 
 from heresiarch.engine.formulas import calculate_buy_price, calculate_sell_price
 from heresiarch.engine.models.items import Item
-from heresiarch.engine.models.party import Party
-
-STASH_LIMIT: int = 10
+from heresiarch.engine.models.party import STASH_LIMIT, Party
 
 
 class ShopInventory(BaseModel):

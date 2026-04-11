@@ -1,5 +1,15 @@
 # --- Support abilities ---
 
+- id: foresight
+  name: Foresight
+  category: SUPPORT
+  target: ALL_ENEMIES
+  cooldown: 0
+  is_innate: false
+  is_partial_action: true
+  description: "Reveals enemy action weights for the next turn."
+  effects: []
+
 - id: bestow_split
   name: Bestow Split
   category: SUPPORT
@@ -44,8 +54,7 @@
   is_innate: false
   description: "Marks an enemy — all attacks against the marked target deal bonus damage for 3 rounds."
   effects:
-    - stat_scaling: MAG
-      scaling_coefficient: 0.0
+    - applies_mark: true
       duration_rounds: 3
 
 - id: sacrifice

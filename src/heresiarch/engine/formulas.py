@@ -34,6 +34,14 @@ MAX_ACTION_POINT_BANK: int = 3
 CHEAT_DEBT_PER_ACTION: int = 1
 CHEAT_DEBT_RECOVERY_PER_TURN: int = 1
 
+# Combat modifier constants
+FRENZY_BASE: float = 1.5  # exponential base for chain multiplier
+INSIGHT_MULTIPLIER_PER_STACK: float = 0.4
+THORNS_SCALING_PER_TIER: float = 0.2
+THORNS_TIER_LEVELS: int = 10
+MARK_DAMAGE_BONUS: float = 1.25
+VENGEANCE_DEFAULT_DURATION: int = 4
+
 
 # --- HP ---
 
@@ -201,6 +209,32 @@ def _sigmoid(stat_value: int, max_output: float, midpoint: float, rate: float) -
 
 
 # --- Survive Damage Reduction ---
+
+
+def calculate_frenzy_multiplier(
+    chain: int,
+    base: float = FRENZY_BASE,
+) -> float:
+    """Frenzy chain multiplier: base^chain (e.g., 1.5^3 = 3.375)."""
+    return base ** chain
+
+
+def calculate_insight_multiplier(
+    stacks: int,
+    per_stack: float = INSIGHT_MULTIPLIER_PER_STACK,
+) -> float:
+    """Insight damage/buff amplification: 1.0 + per_stack * stacks."""
+    return 1.0 + per_stack * stacks
+
+
+def calculate_thorns_percent(
+    base_percent: float,
+    level: int,
+    scaling_per_tier: float = THORNS_SCALING_PER_TIER,
+    tier_levels: int = THORNS_TIER_LEVELS,
+) -> float:
+    """Thorns reflect percent, scaling with level tiers."""
+    return base_percent + scaling_per_tier * (level // tier_levels)
 
 
 def apply_survive_reduction(

@@ -51,3 +51,30 @@ class CharacterInstance(BaseModel):
     abilities: list[str] = Field(default_factory=list)
     is_mc: bool = False
     growth_history: list[tuple[str, int]] = Field(default_factory=list)
+    # Source-tracked abilities: each key is a source name, value is list of ability IDs.
+    # When populated, abilities should be derived via get_all_abilities().
+    ability_sources: dict[str, list[str]] = Field(default_factory=dict)
+
+    def get_all_abilities(self) -> list[str]:
+        """Derive flat ability list from sources, preserving order, deduped.
+
+        Falls back to self.abilities if sources are empty (backwards compat).
+        """
+        if not self.ability_sources:
+            return list(self.abilities)
+        seen: set[str] = set()
+        result: list[str] = []
+        # Ordered by source priority: core, innate, breakpoints, equipment, learned
+        for source_key in ("core", "innate", "breakpoints", "equipment", "learned"):
+            for aid in self.ability_sources.get(source_key, []):
+                if aid not in seen:
+                    result.append(aid)
+                    seen.add(aid)
+        # Any other sources not in the canonical order
+        for key, aids in self.ability_sources.items():
+            if key not in ("core", "innate", "breakpoints", "equipment", "learned"):
+                for aid in aids:
+                    if aid not in seen:
+                        result.append(aid)
+                        seen.add(aid)
+        return result

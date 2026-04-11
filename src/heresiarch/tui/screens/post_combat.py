@@ -8,7 +8,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
-from heresiarch.engine.game_loop import STASH_LIMIT
+from heresiarch.engine.models.party import STASH_LIMIT
 from heresiarch.engine.models.loot import LootResult
 from heresiarch.engine.models.run_state import CombatResult
 
@@ -199,38 +199,17 @@ class PostCombatScreen(Screen):
             # keep fighting (overstay) or leave to zone selection
         else:
             # Mid-zone: check for recruitment encounter (once per zone)
-            if run.current_zone_id and run.zone_state and not run.zone_state.recruitment_offered:
-                zone = self.app.game_data.zones.get(run.current_zone_id)
-                if zone and zone.recruitment_chance > 0:
-                    roll = self.app.rng.random()
-                    if roll < zone.recruitment_chance:
-                        # Build exclusion list: last offered job
-                        exclude: list[str] = []
-                        if run.last_recruit_job_id:
-                            exclude.append(run.last_recruit_job_id)
+            run, candidate = self.app.game_loop.try_recruitment(run)
+            self.app.run_state = run
+            if candidate is not None:
+                from heresiarch.tui.screens.recruitment import RecruitmentScreen
 
-                        candidate = self.app.game_loop.recruitment_engine.generate_candidate(
-                            zone_level=zone.zone_level,
-                            exclude_job_ids=exclude,
-                            shop_pool=zone.shop_item_pool,
-                        )
-
-                        # Mark recruitment as offered for this zone
-                        new_zone_state = run.zone_state.model_copy(
-                            update={"recruitment_offered": True}
-                        )
-                        run = run.model_copy(update={"zone_state": new_zone_state})
-                        self.app.run_state = run
-
-                        from heresiarch.tui.screens.recruitment import RecruitmentScreen
-
-                        # Autosave before recruitment (state is mid-zone)
-                        try:
-                            self.app.save_manager.autosave(run)
-                        except Exception:
-                            pass
-                        self.app.switch_screen(RecruitmentScreen(candidate))
-                        return
+                try:
+                    self.app.save_manager.autosave(run)
+                except Exception:
+                    pass
+                self.app.switch_screen(RecruitmentScreen(candidate))
+                return
 
         # Autosave after all state transitions are complete
         try:

@@ -1,3 +1,14 @@
+# --- Hybrid Armor (flat, no scaling — training wheels for glass cannons) ---
+
+- id: warding_mail
+  name: Warding Mail
+  slot: ARMOR
+  description: "Blended protection. Strong early, outpaced by specialists."
+  base_price: 80
+  flat_stat_bonus:
+    DEF: 30
+    RES: 30
+
 # --- DEF Armor Tier (Layer 3 scaling, natural job: Martyr @ 6 DEF/lv) ---
 # Crossovers: Iron Guard -> Runic Plate @ Lv30, Runic Plate -> Void Bastion @ Lv60
 

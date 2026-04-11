@@ -261,10 +261,17 @@ def summarize_combat(
             continue
 
         bonus_actions = calculate_bonus_actions(c.effective_stats.SPD)
+        # Build passive state indicators
+        passive_tags = []
+        if c.insight_stacks > 0:
+            passive_tags.append(f"I:{c.insight_stacks}")
+        if c.frenzy_level > 1.0 or c.frenzy_chain > 0:
+            passive_tags.append(f"F:{c.frenzy_level:.2f}x(chain:{c.frenzy_chain})")
+        passive_str = f" | {' '.join(passive_tags)}" if passive_tags else ""
         lines.append(
             f"  {c.id} [{_job_name_from_combatant(c, run, game_data)} Lv{c.level}] "
             f"{c.current_hp}/{c.max_hp} HP ({_pct(c.current_hp, c.max_hp)}) | "
-            f"AP: {c.action_points} | "
+            f"AP: {c.action_points}{passive_str} | "
             f"STR:{c.effective_stats.STR} MAG:{c.effective_stats.MAG} "
             f"DEF:{c.effective_stats.DEF} RES:{c.effective_stats.RES} SPD:{c.effective_stats.SPD}"
         )
@@ -571,7 +578,10 @@ def summarize_shop(
     lines: list[str] = []
 
     cha = run.party.cha
-    discount_pct = min(50, max(-50, int(cha * 0.5)))
+    # Derive discount % from actual engine formula: buy_price = base * ratio
+    # ratio = clamp(1.0 - 0.005 * CHA, 0.5, 1.5), so discount = (1.0 - ratio) * 100
+    sample_ratio = calculate_buy_price(1000, cha) / 1000.0
+    discount_pct = int((1.0 - sample_ratio) * 100)
     zone_name = ""
     if run.current_zone_id:
         zone = game_data.zones.get(run.current_zone_id)
@@ -1329,8 +1339,8 @@ def _render_combat_event(
             original = event.details.get("original_target", "")
             return f"  {_n(event.target_id)} draws the attack! (redirected from {_n(original)})"
         case CombatEventType.FRENZY_STACK:
-            mult = event.details.get("multiplier", 1.0)
-            return f"  {_n(event.actor_id)} Frenzy x{event.value} ({mult:.1f}x dmg)"
+            level = event.details.get("level", 1.0)
+            return f"  {_n(event.actor_id)} Frenzy {level:.2f}x (chain {event.value})"
         case CombatEventType.GOLD_STOLEN:
             return f"  {_n(event.actor_id)} steals {event.value}G from {_n(event.target_id)}"
         case CombatEventType.COMBAT_END:

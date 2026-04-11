@@ -693,7 +693,7 @@ class GameSession:
     ) -> None:
         """Apply a combat item use: heal combatant, remove from stash.
 
-        Mutates self._combat_state and self.run in place. Called from
+        Delegates healing to CombatEngine.use_combat_item(). Called from
         _parse_decisions when action is "use_item".
         """
         run = self._require_run()
@@ -719,18 +719,10 @@ class GameSession:
         if not target.is_alive:
             raise ValueError(f"{cid}: '{target_id}' is dead.")
 
-        # Apply heal
-        heal = item.heal_amount + int(target.max_hp * item.heal_percent)
-        new_hp = min(target.current_hp + heal, target.max_hp)
-
-        new_player_combatants = []
-        for c in combat.player_combatants:
-            if c.id == target_id:
-                new_player_combatants.append(c.model_copy(update={"current_hp": new_hp}))
-            else:
-                new_player_combatants.append(c)
-        self._combat_state = combat.model_copy(
-            update={"player_combatants": new_player_combatants}
+        # Delegate healing to engine
+        gl = self._require_game_loop()
+        self._combat_state = gl.combat_engine.use_combat_item(
+            combat, cid, target_id, item,
         )
 
         # Remove item from stash

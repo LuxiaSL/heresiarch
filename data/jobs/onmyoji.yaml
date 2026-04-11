@@ -10,14 +10,16 @@ growth:
   SPD: 2
 base_hp: 30
 hp_growth: 5
-innate_ability_id: foresight
+innate_ability_id: insight
 ability_unlocks:
   - level: 1
     ability_id: bolt
   - level: 4
     ability_id: hex
-  - level: 7
+  - level: 5
     ability_id: drain
+  - level: 7
+    ability_id: foresight
   - level: 11
     ability_id: ward
   - level: 15

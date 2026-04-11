@@ -47,7 +47,8 @@
               "einherjar",
               1
             ]
-          ]
+          ],
+          "ability_sources": {}
         }
       },
       "stash": [],
@@ -175,7 +176,7 @@
                   "round_number": 1,
                   "actor_id": "mc_einherjar",
                   "target_id": "fodder_slime_0",
-                  "ability_id": "",
+                  "ability_id": "retaliate",
                   "value": 6,
                   "details": {}
                 }
@@ -285,7 +286,7 @@
                   "round_number": 2,
                   "actor_id": "mc_einherjar",
                   "target_id": "fodder_slime_0",
-                  "ability_id": "",
+                  "ability_id": "retaliate",
                   "value": 6,
                   "details": {}
                 }
@@ -395,7 +396,7 @@
                   "round_number": 3,
                   "actor_id": "mc_einherjar",
                   "target_id": "fodder_slime_0",
-                  "ability_id": "",
+                  "ability_id": "retaliate",
                   "value": 6,
                   "details": {}
                 },
@@ -438,7 +439,7 @@
       ]
     },
     "is_dead": false,
-    "created_at": "2026-04-09T20:48:22.819767+00:00",
+    "created_at": "2026-04-11T02:39:32.350666+00:00",
     "last_recruit_job_id": null
   }
 }

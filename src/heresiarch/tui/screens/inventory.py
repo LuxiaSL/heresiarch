@@ -8,7 +8,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
-from heresiarch.engine.game_loop import STASH_LIMIT
+from heresiarch.engine.models.party import STASH_LIMIT
 
 
 class InventoryScreen(Screen):

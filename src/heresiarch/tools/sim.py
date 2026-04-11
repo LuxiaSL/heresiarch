@@ -417,51 +417,8 @@ class AbilityDamageResult:
     pierce_damage: int | None = None  # damage vs armored target with pierce
 
 
-def _compute_effect_damage(
-    effect: AbilityEffect,
-    attacker_str: int,
-    attacker_mag: int,
-    enemy_def: int,
-) -> int:
-    """Compute raw damage for a single effect using game formulas.
-
-    Mirrors CombatEngine._calculate_damage but without combat state deps.
-    """
-    if effect.base_damage == 0 and effect.scaling_coefficient == 0:
-        return 0
-
-    if effect.stat_scaling == StatType.MAG:
-        return calculate_magical_damage(
-            ability_base=effect.base_damage,
-            ability_coefficient=effect.scaling_coefficient,
-            attacker_mag=attacker_mag,
-        )
-    else:
-        # STR scaling (also the default for None stat_scaling)
-        return calculate_physical_damage(
-            ability_base=effect.base_damage,
-            ability_coefficient=effect.scaling_coefficient,
-            attacker_str=attacker_str,
-            target_def=enemy_def,
-            pierce_percent=effect.pierce_percent,
-        )
-
-
-def _compute_ability_total_damage(
-    ability: Ability,
-    attacker_str: int,
-    attacker_mag: int,
-    enemy_def: int,
-) -> int:
-    """Compute total raw damage for all effects of an ability (single use, no stacks)."""
-    total = 0
-    for effect in ability.effects:
-        dmg = _compute_effect_damage(effect, attacker_str, attacker_mag, enemy_def)
-        # Apply chain damage ratio inline (CHAIN reduces per-hit)
-        if effect.quality == DamageQuality.CHAIN and dmg > 0:
-            dmg = max(1, int(dmg * effect.chain_damage_ratio))
-        total += dmg
-    return total
+from heresiarch.tools.shared import compute_ability_total_damage as _compute_ability_total_damage  # noqa: E402
+from heresiarch.tools.shared import compute_effect_damage as _compute_effect_damage  # noqa: E402
 
 
 def ability_dpr(

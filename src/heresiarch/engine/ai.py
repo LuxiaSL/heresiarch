@@ -5,8 +5,8 @@ from __future__ import annotations
 import random
 
 from heresiarch.engine.models.abilities import Ability, TargetType
-from heresiarch.engine.models.combat_state import CombatantState, CombatState
-from heresiarch.engine.models.enemies import ActionCondition, ActionWeight, EnemyTemplate
+from heresiarch.engine.models.combat_state import CombatEventType, CombatantState, CombatState
+from heresiarch.engine.models.enemies import ActionCondition, ActionWeight, EnemyTemplate, RepeatMode
 
 
 class EnemyAI:
@@ -42,6 +42,7 @@ class EnemyAI:
                 active_weights = list(condition.weight_overrides)
 
         active_weights = self._filter_cooldowns(active_weights, enemy)
+        active_weights = self._apply_history_modifiers(active_weights, enemy, combat_state)
 
         if not active_weights:
             return "basic_attack", self.select_target(
@@ -176,6 +177,82 @@ class EnemyAI:
 
             case _:
                 return [self.rng.choice(living_players).id]
+
+    def _count_prior_uses(
+        self,
+        ability_id: str,
+        actor_id: str,
+        combat_state: CombatState,
+        mode: RepeatMode,
+    ) -> int:
+        """Count how many times an actor used an ability, per repeat mode.
+
+        TOTAL: all uses across the entire fight.
+        CONSECUTIVE: unbroken streak from the most recent action backwards.
+        """
+        count = 0
+        for event in reversed(combat_state.log):
+            if event.actor_id != actor_id:
+                continue
+            if event.event_type not in (CombatEventType.ACTION_DECLARED, CombatEventType.BONUS_ACTION):
+                continue
+            if event.ability_id == ability_id:
+                count += 1
+                if mode == RepeatMode.CONSECUTIVE:
+                    continue  # keep counting the streak
+            else:
+                if mode == RepeatMode.CONSECUTIVE:
+                    break  # streak broken
+        return count
+
+    def _rounds_since_last_use(
+        self,
+        ability_id: str,
+        actor_id: str,
+        combat_state: CombatState,
+    ) -> int:
+        """Count rounds since the actor last used this ability. -1 if never used."""
+        for event in reversed(combat_state.log):
+            if event.actor_id != actor_id:
+                continue
+            if event.event_type not in (CombatEventType.ACTION_DECLARED, CombatEventType.BONUS_ACTION):
+                continue
+            if event.ability_id == ability_id:
+                return max(0, combat_state.round_number - event.round_number)
+        return -1
+
+    def _apply_history_modifiers(
+        self,
+        weights: list[ActionWeight],
+        enemy: CombatantState,
+        combat_state: CombatState,
+    ) -> list[ActionWeight]:
+        """Apply repeat_penalty decay and recency_bonus growth to weights."""
+        adjusted: list[ActionWeight] = []
+        for w in weights:
+            effective_weight = w.weight
+
+            # Repeat penalty: decay weight based on prior uses
+            if w.repeat_penalty > 0:
+                uses = self._count_prior_uses(w.ability_id, enemy.id, combat_state, w.repeat_mode)
+                if uses > 0:
+                    effective_weight *= (1.0 - w.repeat_penalty) ** uses
+
+            # Recency bonus: grow weight based on rounds since last use
+            if w.recency_bonus > 0:
+                rounds_ago = self._rounds_since_last_use(w.ability_id, enemy.id, combat_state)
+                if rounds_ago > 0:  # -1 (never used) doesn't boost
+                    effective_weight *= (1.0 + w.recency_bonus) ** rounds_ago
+
+            if effective_weight > 1e-6:
+                adjusted.append(ActionWeight(
+                    ability_id=w.ability_id,
+                    weight=effective_weight,
+                    repeat_penalty=w.repeat_penalty,
+                    repeat_mode=w.repeat_mode,
+                    recency_bonus=w.recency_bonus,
+                ))
+        return adjusted
 
     def _filter_cooldowns(
         self,

@@ -16,9 +16,17 @@ class EnemyArchetype(str, Enum):
     BOSS = "BOSS"
 
 
+class RepeatMode(str, Enum):
+    CONSECUTIVE = "consecutive"  # count only unbroken streak from most recent
+    TOTAL = "total"  # count all uses in entire fight
+
+
 class ActionWeight(BaseModel):
     ability_id: str
     weight: float
+    repeat_penalty: float = 0.0  # 0.0 = no penalty, 0.9 = weight * 0.1 per use
+    repeat_mode: RepeatMode = RepeatMode.CONSECUTIVE
+    recency_bonus: float = 0.0  # weight * (1 + bonus)^rounds_since_last_use
 
 
 class ActionCondition(BaseModel):

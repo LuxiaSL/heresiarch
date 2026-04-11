@@ -1,5 +1,30 @@
 # --- Defensive abilities ---
 
+- id: taunt
+  name: Taunt
+  category: DEFENSIVE
+  target: SELF
+  cooldown: 3
+  is_innate: false
+  description: "Forces all enemies to target this character for 1 round."
+  effects:
+    - duration_rounds: 1
+      applies_taunt: true
+
+- id: stalwart
+  name: Stalwart
+  category: DEFENSIVE
+  target: SELF
+  cooldown: 3
+  is_innate: false
+  description: "Steel the body and mind. Buffs DEF and RES for 2 turns."
+  effects:
+    - stat_buff:
+        DEF: 20
+        RES: 20
+      duration_rounds: 2
+      applies_to_self: true
+
 - id: damage_split
   name: Damage Split
   category: DEFENSIVE
@@ -39,14 +64,13 @@
 
 - id: endure
   name: Endure
-  category: DEFENSIVE
+  category: PASSIVE
   target: SELF
+  trigger: NONE
   is_innate: false
-  description: "Brace for the worst. Survive one lethal hit at 1 HP, once per fight. Scales with DEF and RES."
+  description: "Brace for the worst. Survive one lethal hit at 1 HP, once per fight."
   effects:
-    - stat_scaling: DEF
-      scaling_coefficient: 0.0
-      duration_rounds: 0
+    - survive_lethal: true
 
 - id: ward
   name: Ward

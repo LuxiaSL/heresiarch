@@ -161,6 +161,13 @@
       stat_scaling: MAG
       scaling_coefficient: 1.5
 
+- id: splash
+  name: Splash
+  category: SUPPORT
+  target: SELF
+  description: "Jiggles menacingly. Nothing happens."
+  effects: []
+
 - id: pilfer
   name: Pilfer
   category: OFFENSIVE

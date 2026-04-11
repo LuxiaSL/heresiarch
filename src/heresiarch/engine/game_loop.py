@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import random
 from datetime import datetime, timezone
+from typing import Any
 
 from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.data_loader import GameData
@@ -26,12 +27,10 @@ from heresiarch.engine.models.enemies import EnemyInstance
 from heresiarch.engine.models.items import Item
 from heresiarch.engine.models.jobs import AbilityUnlock, CharacterInstance
 from heresiarch.engine.models.loot import LootResult
-from heresiarch.engine.models.party import Party
+from heresiarch.engine.models.party import STASH_LIMIT, Party
 from heresiarch.engine.models.run_state import CombatResult, RunState
 from heresiarch.engine.models.stats import StatType
 from heresiarch.engine.models.zone import ZoneState, ZoneTemplate
-
-STASH_LIMIT: int = 10
 
 
 class GameLoop:
@@ -100,12 +99,23 @@ class GameLoop:
         if job is None:
             return char
         new_abilities = list(char.abilities)
+        new_unlocks: list[str] = []
         for unlock in job.ability_unlocks:
             if old_level < unlock.level <= new_level:
                 if unlock.ability_id not in new_abilities:
                     new_abilities.append(unlock.ability_id)
+                    new_unlocks.append(unlock.ability_id)
         if new_abilities != char.abilities:
-            return char.model_copy(update={"abilities": new_abilities})
+            # Update breakpoints source if tracking is active
+            sources = dict(char.ability_sources) if char.ability_sources else {}
+            if sources:
+                bp = list(sources.get("breakpoints", []))
+                bp.extend(new_unlocks)
+                sources["breakpoints"] = bp
+            return char.model_copy(update={
+                "abilities": new_abilities,
+                "ability_sources": sources if sources else char.ability_sources,
+            })
         return char
 
     def _rebuild_abilities(
@@ -113,41 +123,62 @@ class GameLoop:
         char: CharacterInstance,
         equipment: dict[str, str | None],
         item_lookup: dict[str, Item],
-    ) -> list[str]:
-        """Rebuild ability list from all sources, preserving scroll-taught abilities.
+    ) -> dict[str, Any]:
+        """Rebuild ability list from tracked sources.
 
-        Sources (in order):
-        1. basic_attack + innate
-        2. Job breakpoint unlocks for current level
-        3. Equipment-granted abilities from current equipment
-        4. Anything else already on the character (scroll-taught, etc.)
+        Returns a dict suitable for model_copy(update=...) containing
+        both 'abilities' (flat list) and 'ability_sources' (source tracker).
+
+        Each source is independent — changing equipment only touches the
+        'equipment' source, not 'learned'.
         """
         job = self.game_data.jobs.get(char.job_id)
         innate_id = job.innate_ability_id if job else ""
 
-        abilities: list[str] = ["basic_attack"]
-        if innate_id:
-            abilities.append(innate_id)
+        # Core: basic_attack (always present)
+        core: list[str] = ["basic_attack"]
 
-        # Breakpoint unlocks
+        # Innate: job innate ability
+        innate: list[str] = [innate_id] if innate_id else []
+
+        # Breakpoints: level-gated unlocks
+        breakpoints: list[str] = []
         if job:
             for unlock in job.ability_unlocks:
-                if unlock.level <= char.level and unlock.ability_id not in abilities:
-                    abilities.append(unlock.ability_id)
+                if unlock.level <= char.level:
+                    breakpoints.append(unlock.ability_id)
 
         # Equipment-granted
+        equip_abilities: list[str] = []
         for _slot, eid in equipment.items():
             if eid:
                 item = item_lookup.get(eid) or self.game_data.items.get(eid)
-                if item and item.granted_ability_id and item.granted_ability_id not in abilities:
-                    abilities.append(item.granted_ability_id)
+                if item and item.granted_ability_id:
+                    equip_abilities.append(item.granted_ability_id)
 
-        # Preserve scroll-taught and other learned abilities
-        for aid in char.abilities:
-            if aid not in abilities:
-                abilities.append(aid)
+        # Learned: scroll-taught and other permanent abilities.
+        # Preserve from existing sources if tracked, otherwise extract from
+        # the current flat list (backwards compatibility for old saves).
+        if char.ability_sources and "learned" in char.ability_sources:
+            learned = list(char.ability_sources["learned"])
+        else:
+            # Anything on the flat list that isn't from the other sources
+            known = set(core + innate + breakpoints + equip_abilities)
+            learned = [aid for aid in char.abilities if aid not in known]
 
-        return abilities
+        sources = {
+            "core": core,
+            "innate": innate,
+            "breakpoints": breakpoints,
+            "equipment": equip_abilities,
+            "learned": learned,
+        }
+
+        char_with_sources = char.model_copy(update={"ability_sources": sources})
+        return {
+            "abilities": char_with_sources.get_all_abilities(),
+            "ability_sources": sources,
+        }
 
     def _recompute_derived(self, char: CharacterInstance, party: Party | None = None) -> CharacterInstance:
         """Recompute effective_stats and max_hp from base_stats + equipment.
@@ -270,6 +301,44 @@ class GameLoop:
         return run.model_copy(
             update={"current_zone_id": None, "zone_state": None}
         )
+
+    def try_recruitment(self, run: RunState) -> tuple[RunState, Any]:
+        """Roll for a recruitment encounter after a non-boss combat.
+
+        Returns (updated_run, candidate) where candidate is a RecruitCandidate
+        if the roll succeeds, or None otherwise. Updates zone_state to mark
+        recruitment as offered.
+        """
+        from heresiarch.engine.recruitment import RecruitCandidate
+
+        if not run.current_zone_id or not run.zone_state:
+            return run, None
+        if run.zone_state.recruitment_offered:
+            return run, None
+
+        zone = self.game_data.zones.get(run.current_zone_id)
+        if not zone or zone.recruitment_chance <= 0:
+            return run, None
+
+        roll = self.rng.random()
+        if roll >= zone.recruitment_chance:
+            return run, None
+
+        exclude: list[str] = []
+        if run.last_recruit_job_id:
+            exclude.append(run.last_recruit_job_id)
+
+        candidate: RecruitCandidate = self.recruitment_engine.generate_candidate(
+            zone_level=zone.zone_level,
+            exclude_job_ids=exclude,
+            shop_pool=zone.shop_item_pool,
+        )
+
+        new_zone_state = run.zone_state.model_copy(
+            update={"recruitment_offered": True},
+        )
+        run = run.model_copy(update={"zone_state": new_zone_state})
+        return run, candidate
 
     def get_next_encounter(self, run: RunState) -> list[EnemyInstance]:
         """Generate the next encounter in current zone.
@@ -559,8 +628,8 @@ class GameLoop:
                 "growth_history": history,
             }
         )
-        new_abilities = self._rebuild_abilities(new_mc, mc.equipment, party.items)
-        new_mc = new_mc.model_copy(update={"abilities": new_abilities})
+        ability_update = self._rebuild_abilities(new_mc, mc.equipment, party.items)
+        new_mc = new_mc.model_copy(update=ability_update)
         new_mc = self._recompute_derived(new_mc, party)
         new_mc = new_mc.model_copy(
             update={"current_hp": min(mc.current_hp, new_mc.max_hp)}
@@ -610,10 +679,10 @@ class GameLoop:
         new_equipment[slot] = item_id
         new_items[item_id] = item
 
-        new_abilities = self._rebuild_abilities(char, new_equipment, new_items)
+        ability_update = self._rebuild_abilities(char, new_equipment, new_items)
 
         new_char = char.model_copy(
-            update={"equipment": new_equipment, "abilities": new_abilities}
+            update={"equipment": new_equipment, **ability_update}
         )
         new_characters = dict(party.characters)
         new_characters[character_id] = new_char
@@ -650,9 +719,9 @@ class GameLoop:
         new_equipment = dict(char.equipment)
         new_equipment[slot] = None
 
-        new_abilities = self._rebuild_abilities(char, new_equipment, party.items)
+        ability_update = self._rebuild_abilities(char, new_equipment, party.items)
 
-        new_char = char.model_copy(update={"equipment": new_equipment, "abilities": new_abilities})
+        new_char = char.model_copy(update={"equipment": new_equipment, **ability_update})
         new_characters = dict(party.characters)
         new_characters[character_id] = new_char
         new_party = party.model_copy(
@@ -739,10 +808,19 @@ class GameLoop:
 
         # Grant the ability if not already known
         new_abilities = list(char.abilities)
+        update: dict[str, Any] = {}
         if ability_id not in new_abilities:
             new_abilities.append(ability_id)
+            # Track in learned source
+            sources = dict(char.ability_sources) if char.ability_sources else {}
+            if sources:
+                learned = list(sources.get("learned", []))
+                learned.append(ability_id)
+                sources["learned"] = learned
+                update["ability_sources"] = sources
+        update["abilities"] = new_abilities
 
-        new_char = char.model_copy(update={"abilities": new_abilities})
+        new_char = char.model_copy(update=update)
 
         # Remove scroll from stash
         new_stash = list(party.stash)
