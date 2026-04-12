@@ -80,9 +80,15 @@ _CURSOR_STYLE = "bold reverse #e6c566"
 
 
 def _load_map(path: Path) -> RegionMap:
-    """Load a region map from a YAML file."""
+    """Load an ASCII map from a YAML file."""
     with open(path) as f:
         data = yaml.safe_load(f)
+    # Migrate old field names
+    if "region_id" in data and "map_id" not in data:
+        data["map_id"] = data.pop("region_id")
+    for anchor_data in data.get("anchors", []):
+        if "zone_id" in anchor_data and "id" not in anchor_data:
+            anchor_data["id"] = anchor_data.pop("zone_id")
     return RegionMap(**data)
 
 
@@ -112,13 +118,13 @@ def cmd_preview(args: argparse.Namespace) -> None:
     selected = args.select
 
     if args.all_available:
-        available = {a.zone_id for a in region_map.anchors}
+        available = {a.id for a in region_map.anchors}
 
     # Auto-determine statuses if nothing specified
     if not cleared and not available and not args.all_available:
         # Default: first zone available, rest locked
         if region_map.anchors:
-            available.add(region_map.anchors[0].zone_id)
+            available.add(region_map.anchors[0].id)
 
     # Ensure selected zone is in available or cleared
     if selected and selected not in available and selected not in cleared:
@@ -127,8 +133,8 @@ def cmd_preview(args: argparse.Namespace) -> None:
     # If no selection specified, select the first available
     if not selected:
         for a in region_map.anchors:
-            if a.zone_id in available:
-                selected = a.zone_id
+            if a.id in available:
+                selected = a.id
                 break
 
     # Build grid
@@ -141,7 +147,7 @@ def cmd_preview(args: argparse.Namespace) -> None:
         if r < 0 or r >= len(grid) or c < 0 or c >= width:
             continue
 
-        zid = anchor.zone_id
+        zid = anchor.id
         is_selected = zid == selected
 
         if is_selected:
@@ -194,15 +200,15 @@ def _render_grid(
     anchor_positions: dict[tuple[int, int], tuple[str, bool]] = {}
     for anchor in region_map.anchors:
         anchor_positions[(anchor.row, anchor.col)] = (
-            anchor.zone_id,
-            anchor.zone_id == selected,
+            anchor.id,
+            anchor.id == selected,
         )
         # Flag position
-        if anchor.zone_id == selected and anchor.row >= 1:
-            anchor_positions[(anchor.row - 1, anchor.col)] = (anchor.zone_id, True)
+        if anchor.id == selected and anchor.row >= 1:
+            anchor_positions[(anchor.row - 1, anchor.col)] = (anchor.id, True)
             if anchor.col + 1 < width:
                 anchor_positions[(anchor.row - 1, anchor.col + 1)] = (
-                    anchor.zone_id,
+                    anchor.id,
                     True,
                 )
 
@@ -335,7 +341,7 @@ def cmd_inspect(args: argparse.Namespace) -> None:
         console.print()
         console.print("  [bold]Anchors in view:[/bold]")
         for a in visible_anchors:
-            console.print(f"    {a.zone_id:<12} ({a.row:3d},{a.col:3d})")
+            console.print(f"    {a.id:<12} ({a.row:3d},{a.col:3d})")
 
     # Show character at center
     char_at = " "
@@ -386,7 +392,7 @@ def cmd_find(args: argparse.Namespace) -> None:
         return
 
     # Check which positions are anchor locations
-    anchor_positions = {(a.row, a.col): a.zone_id for a in region_map.anchors}
+    anchor_positions = {(a.row, a.col): a.id for a in region_map.anchors}
 
     for r, c, context in hits:
         anchor_note = ""
@@ -422,20 +428,20 @@ def cmd_validate(args: argparse.Namespace) -> None:
         warnings.append(f"Could not load game data for cross-reference: {e}")
 
     console.print(f"\n  [bold]Validating:[/bold] {args.map_file}")
-    console.print(f"  Region: {region_map.region_id}  |  Size: {region_map.width}x{region_map.height}  |  Anchors: {len(region_map.anchors)}")
+    console.print(f"  Region: {region_map.map_id}  |  Size: {region_map.width}x{region_map.height}  |  Anchors: {len(region_map.anchors)}")
     console.print()
 
     # Check bounds
     for anchor in region_map.anchors:
         if anchor.row < 0 or anchor.row >= region_map.height:
-            errors.append(f"{anchor.zone_id}: row {anchor.row} out of bounds (0-{region_map.height - 1})")
+            errors.append(f"{anchor.id}: row {anchor.row} out of bounds (0-{region_map.height - 1})")
         elif anchor.col < 0 or anchor.col >= len(region_map.art[anchor.row]):
-            errors.append(f"{anchor.zone_id}: col {anchor.col} out of bounds for row {anchor.row}")
+            errors.append(f"{anchor.id}: col {anchor.col} out of bounds for row {anchor.row}")
         else:
             char = region_map.art[anchor.row][anchor.col]
             if char != "o" and char != " ":
                 warnings.append(
-                    f"{anchor.zone_id}: char at ({anchor.row},{anchor.col}) is '{char}', expected 'o' or space"
+                    f"{anchor.id}: char at ({anchor.row},{anchor.col}) is '{char}', expected 'o' or space"
                 )
 
     # Check for duplicate positions
@@ -444,38 +450,39 @@ def cmd_validate(args: argparse.Namespace) -> None:
         pos = (anchor.row, anchor.col)
         if pos in seen_positions:
             errors.append(
-                f"{anchor.zone_id}: overlaps with {seen_positions[pos]} at ({anchor.row},{anchor.col})"
+                f"{anchor.id}: overlaps with {seen_positions[pos]} at ({anchor.row},{anchor.col})"
             )
-        seen_positions[pos] = anchor.zone_id
+        seen_positions[pos] = anchor.id
 
     # Check for duplicate zone_ids
     seen_ids: dict[str, int] = {}
     for anchor in region_map.anchors:
-        seen_ids[anchor.zone_id] = seen_ids.get(anchor.zone_id, 0) + 1
+        seen_ids[anchor.id] = seen_ids.get(anchor.id, 0) + 1
     for zid, count in seen_ids.items():
         if count > 1:
             errors.append(f"{zid}: appears {count} times in anchors")
 
     # Cross-reference with zone data
     if zones:
-        anchor_zone_ids = {a.zone_id for a in region_map.anchors}
+        anchor_ids = {a.id for a in region_map.anchors}
+        towns = game_data.towns if hasattr(game_data, "towns") else {}
 
-        # Anchors referencing nonexistent zones
-        for zid in anchor_zone_ids:
-            if zid not in zones:
-                errors.append(f"{zid}: anchor references zone that doesn't exist in game data")
+        # Anchors referencing nonexistent zones or towns
+        for aid in anchor_ids:
+            if aid not in zones and aid not in towns:
+                errors.append(f"{aid}: anchor references unknown zone/town in game data")
 
         # Zones in this region that lack anchors
         for zid, zone in zones.items():
-            if zone.region == region_map.region_id and zid not in anchor_zone_ids:
+            if zone.region == region_map.map_id and zid not in anchor_ids:
                 warnings.append(f"{zid} ({zone.name}): zone exists in region but has no anchor on map")
 
     # Flag clearance check (is there room for the |> flag above each anchor?)
     for anchor in region_map.anchors:
         if anchor.row == 0:
-            warnings.append(f"{anchor.zone_id}: anchor at row 0, no room for selection flag above")
+            warnings.append(f"{anchor.id}: anchor at row 0, no room for selection flag above")
         elif anchor.col + 1 >= region_map.width:
-            warnings.append(f"{anchor.zone_id}: anchor at rightmost col, flag '>' would be clipped")
+            warnings.append(f"{anchor.id}: anchor at rightmost col, flag '>' would be clipped")
 
     # Report
     if errors:
@@ -497,10 +504,10 @@ def cmd_validate(args: argparse.Namespace) -> None:
             if 0 <= anchor.col < len(line):
                 char = line[anchor.col]
         zone_name = ""
-        if zones and anchor.zone_id in zones:
-            zone_name = f"  ({zones[anchor.zone_id].name})"
+        if zones and anchor.id in zones:
+            zone_name = f"  ({zones[anchor.id].name})"
         status = "[green]OK[/green]" if char in ("o", " ") else f"[yellow]'{char}'[/yellow]"
-        console.print(f"    {anchor.zone_id:<12} ({anchor.row:3d},{anchor.col:3d})  {status}{zone_name}")
+        console.print(f"    {anchor.id:<12} ({anchor.row:3d},{anchor.col:3d})  {status}{zone_name}")
 
     console.print()
 
@@ -579,7 +586,7 @@ def _run_placer_app(region_map: RegionMap) -> None:
             self.dropped: list[tuple[int, int, str]] = []
             # Pre-populate with existing anchors
             for a in rmap.anchors:
-                self.dropped.append((a.row, a.col, a.zone_id))
+                self.dropped.append((a.row, a.col, a.id))
 
         def compose(self) -> ComposeResult:
             with ScrollableContainer(id="placer-scroll"):

@@ -15,7 +15,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Label, OptionList, RichLog, Static
 from textual.widgets.option_list import Option
 
-from heresiarch.engine.formulas import MAX_ACTION_POINT_BANK, calculate_bonus_actions
+from heresiarch.engine.formulas import MAX_ACTION_POINT_BANK, calculate_speed_bonus
 from heresiarch.engine.models.abilities import AbilityCategory, TargetType
 from heresiarch.engine.models.battle_record import EncounterRecord, RoundRecord
 from heresiarch.engine.models.combat_state import (
@@ -120,6 +120,7 @@ class CombatScreen(Screen):
         self._highlighted_target_id: str | None = None
         # Item use in combat
         self._selected_item_id: str | None = None
+        self._claimed_items: list[str] = []  # items queued this round (prevents double-use)
         self._combatant_names: dict[str, str] = {}
         self._ability_names: dict[str, str] = {}
         self._encounter_record: EncounterRecord | None = None
@@ -201,6 +202,7 @@ class CombatScreen(Screen):
     def _start_planning(self) -> None:
         self._current_char_index = 0
         self._decisions = {}
+        self._claimed_items = []
         combat = self.app.combat_state
         if combat is None:
             return
@@ -237,7 +239,7 @@ class CombatScreen(Screen):
                 if self._current_decision and self.app.combat_state:
                     combatant = self.app.combat_state.get_combatant(self._current_decision.combatant_id)
                 ap = combatant.action_points if combatant else 0
-                debt = combatant.cheat_debt if combatant else 0
+                is_taunted = bool(combatant and combatant.taunted_by)
 
                 choices.add_option(Option("Normal — take your turn"))
                 self._choice_keys.append("cs:normal")
@@ -246,10 +248,14 @@ class CombatScreen(Screen):
                     choices.add_option(Option(f"Cheat — spend AP for extra actions ({ap} AP banked)"))
                     self._choice_keys.append("cs:cheat")
 
-                next_ap = min(ap + 1, MAX_ACTION_POINT_BANK)
-                cap_note = " MAX" if next_ap == ap else ""
-                choices.add_option(Option(f"Survive — bank AP, reduce damage (AP: {next_ap}{cap_note})"))
-                self._choice_keys.append("cs:survive")
+                if is_taunted:
+                    choices.add_option(Option("[strike dim]Survive[/strike dim] [bold #cc4444]TAUNTED[/bold #cc4444]"))
+                    self._choice_keys.append("disabled")
+                else:
+                    next_ap = min(ap + 1, MAX_ACTION_POINT_BANK)
+                    cap_note = " MAX" if next_ap == ap else ""
+                    choices.add_option(Option(f"Survive — bank AP, reduce damage (AP: {next_ap}{cap_note})"))
+                    self._choice_keys.append("cs:survive")
 
             case CombatPhase.PLANNING_CHEAT_AP:
                 combatant = None
@@ -310,20 +316,37 @@ class CombatScreen(Screen):
             return
 
         combatant = combat.get_combatant(self._current_decision.combatant_id)
+        is_taunted = bool(combatant and combatant.taunted_by)
+
+        # Windup push — when charging, offer "Wait" to accelerate the charge
+        if combatant and combatant.charge_turns_remaining > 0:
+            turns = combatant.charge_turns_remaining
+            ability_name = combatant.charging_ability_id or "ability"
+            choices.add_option(Option(
+                f"[bold #e6c566]Wait[/bold #e6c566] (push {ability_name}, {turns} turn{'s' if turns != 1 else ''} left)"
+            ))
+            self._choice_keys.append("action:windup_push")
 
         # Basic Attack — always available (no sub-menu)
         choices.add_option(Option("Basic Attack"))
         self._choice_keys.append("action:basic_attack")
 
         # Abilities — enabled only if character has non-basic_attack, non-passive abilities
+        # When taunted, only count abilities that deal damage to enemies
         has_extra_abilities = False
         for ability_id in char.abilities:
             if ability_id == "basic_attack":
                 continue
             ability = self.app.game_data.abilities.get(ability_id)
-            if ability is not None and ability.category != AbilityCategory.PASSIVE:
-                has_extra_abilities = True
-                break
+            if ability is None or ability.category == AbilityCategory.PASSIVE:
+                continue
+            if is_taunted:
+                has_damage = any(e.base_damage > 0 for e in ability.effects)
+                targets_enemy = ability.target in (TargetType.SINGLE_ENEMY, TargetType.ALL_ENEMIES)
+                if not (has_damage and targets_enemy):
+                    continue
+            has_extra_abilities = True
+            break
 
         if has_extra_abilities:
             choices.add_option(Option("Abilities"))
@@ -332,18 +355,25 @@ class CombatScreen(Screen):
             choices.add_option(Option("[dim]Abilities (none available)[/dim]"))
             self._choice_keys.append("disabled")
 
-        # Items — enabled only if party stash has consumables
-        has_consumables = any(
-            (item := (run.party.items.get(iid) or self.app.game_data.items.get(iid)))
-            and item.is_consumable
-            for iid in run.party.stash
-        )
-        if has_consumables:
-            choices.add_option(Option("[#44aa44]Items[/#44aa44]"))
-            self._choice_keys.append("action:items")
-        else:
-            choices.add_option(Option("[dim]Items (none)[/dim]"))
+        # Items — disabled when taunted or during bonus actions
+        if is_taunted:
+            choices.add_option(Option("[strike dim]Items[/strike dim] [bold #cc4444]TAUNTED[/bold #cc4444]"))
             self._choice_keys.append("disabled")
+        elif self._partial_actions_remaining > 0:
+            choices.add_option(Option("[dim]Items (not for bonus actions)[/dim]"))
+            self._choice_keys.append("disabled")
+        else:
+            has_consumables = any(
+                (item := (run.party.items.get(iid) or self.app.game_data.items.get(iid)))
+                and item.is_consumable
+                for iid in run.party.stash
+            )
+            if has_consumables:
+                choices.add_option(Option("[#44aa44]Items[/#44aa44]"))
+                self._choice_keys.append("action:items")
+            else:
+                choices.add_option(Option("[dim]Items (none)[/dim]"))
+                self._choice_keys.append("disabled")
 
     def _populate_ability_options(self, choices: OptionList) -> None:
         """Shared ability list population for primary, cheat, and partial phases."""
@@ -359,6 +389,7 @@ class CombatScreen(Screen):
             return
 
         combatant = combat.get_combatant(self._current_decision.combatant_id)
+        is_taunted = bool(combatant and combatant.taunted_by)
 
         for ability_id in char.abilities:
             if ability_id == "basic_attack":
@@ -368,30 +399,60 @@ class CombatScreen(Screen):
                 continue
 
             cd = combatant.cooldowns.get(ability_id, 0) if combatant else 0
+
+            # Check taunt restriction: only damaging enemy-targeting abilities allowed
+            taunt_blocked = False
+            if is_taunted:
+                has_damage = any(e.base_damage > 0 for e in ability.effects)
+                targets_enemy = ability.target in (TargetType.SINGLE_ENEMY, TargetType.ALL_ENEMIES)
+                taunt_blocked = not (has_damage and targets_enemy)
+
             label = ability.name
             if ability.description:
                 label += f" — {ability.description}"
-            if cd > 0:
-                label += f" [dim][CD: {cd}][/dim]"
 
-            choices.add_option(Option(label))
-            self._choice_keys.append(f"ability:{ability_id}" if cd == 0 else "cooldown")
+            if taunt_blocked:
+                label = f"[strike dim]{ability.name}[/strike dim] [bold #cc4444]TAUNTED[/bold #cc4444]"
+                choices.add_option(Option(label))
+                self._choice_keys.append("disabled")
+            elif cd > 0:
+                label += f" [dim][CD: {cd}][/dim]"
+                choices.add_option(Option(label))
+                self._choice_keys.append("cooldown")
+            else:
+                choices.add_option(Option(label))
+                self._choice_keys.append(f"ability:{ability_id}")
 
     def _populate_item_options(self, choices: OptionList) -> None:
-        """List consumable items from party stash."""
+        """List consumable items from party stash, excluding already-claimed items."""
         run = self.app.run_state
         if run is None:
             return
 
-        for item_id in run.party.stash:
+        # Build available stash minus items already queued this round
+        available = list(run.party.stash)
+        for claimed in self._claimed_items:
+            try:
+                available.remove(claimed)
+            except ValueError:
+                pass
+
+        seen: set[str] = set()
+        for item_id in available:
+            if item_id in seen:
+                continue
             item = run.party.items.get(item_id) or self.app.game_data.items.get(item_id)
             if item is None or not item.is_consumable:
                 continue
+            seen.add(item_id)
+            count = available.count(item_id)
             label = item.name
             if item.heal_amount > 0:
                 label += f" (heals {item.heal_amount} HP)"
             elif item.heal_percent > 0:
                 label += f" (heals {int(item.heal_percent * 100)}% HP)"
+            if count > 1:
+                label += f" x{count}"
             choices.add_option(Option(label))
             self._choice_keys.append(f"item:{item_id}")
 
@@ -419,9 +480,19 @@ class CombatScreen(Screen):
             return
 
         targets: list[tuple[str, str]] = []
+        combatant = combat.get_combatant(self._current_decision.combatant_id) if self._current_decision else None
+        taunted_by = set(combatant.taunted_by) if combatant else set()
+
         match ability.target:
             case TargetType.SINGLE_ENEMY:
-                targets = [(e.id, self._combatant_names.get(e.id, e.id)) for e in combat.living_enemies]
+                if taunted_by:
+                    # Taunted: can only target the taunter(s)
+                    targets = [
+                        (e.id, self._combatant_names.get(e.id, e.id))
+                        for e in combat.living_enemies if e.id in taunted_by
+                    ]
+                else:
+                    targets = [(e.id, self._combatant_names.get(e.id, e.id)) for e in combat.living_enemies]
             case TargetType.SINGLE_ALLY:
                 targets = [(p.id, self._combatant_names.get(p.id, p.id)) for p in combat.living_players]
 
@@ -498,53 +569,32 @@ class CombatScreen(Screen):
                 self._handle_item_use(parts[1])
 
     def _handle_item_use(self, target_id: str) -> None:
-        """Apply a consumable item to a combatant mid-combat."""
+        """Queue a consumable item use as a proper combat action."""
         run = self.app.run_state
         combat = self.app.combat_state
         if run is None or combat is None or self._selected_item_id is None:
             return
 
-        item = run.party.items.get(self._selected_item_id) or self.app.game_data.items.get(self._selected_item_id)
-        if item is None:
-            return
-
-        # Delegate healing to engine
-        actor_id = self._current_decision.combatant_id if self._current_decision else target_id
-        self.app.combat_state = self.app.game_loop.combat_engine.use_combat_item(
-            combat, actor_id, target_id, item,
-        )
-
-        # Remove item from stash
-        new_stash = list(run.party.stash)
-        if self._selected_item_id in new_stash:
-            new_stash.remove(self._selected_item_id)
-        party = run.party.model_copy(update={"stash": new_stash})
-        self.app.run_state = run.model_copy(update={"party": party})
-
-        # Log the item use
-        log = self.query_one("#combat-log", RichLog)
-        user_name = self._combatant_names.get(self._current_decision.combatant_id, "") if self._current_decision else ""
-        target_name = self._combatant_names.get(target_id, target_id)
-        log.write(f"[#44aa44]{user_name} uses {item.name} on {target_name}[/#44aa44]")
-
-        self._selected_item_id = None
-
-        # Route through the same action-slot logic as abilities.
-        # The item was already applied; we use a no-op CombatAction as a
-        # sentinel so the engine knows an action slot was consumed.
-        # (basic_attack with empty targets resolves harmlessly in the engine)
         if self._current_decision is None:
             return
 
-        noop = CombatAction(
+        item_id = self._selected_item_id
+        self._selected_item_id = None
+
+        # Claim item so it can't be double-queued this round
+        self._claimed_items.append(item_id)
+
+        # Build item action — resolved during turn order by the engine
+        item_action = CombatAction(
             actor_id=self._current_decision.combatant_id,
-            ability_id="basic_attack",
-            target_ids=[],  # empty targets = engine skips cleanly
+            ability_id="use_item",
+            item_id=item_id,
+            target_ids=[target_id],
         )
 
         # Cheat extra action (primary already set, cheat slots remaining)
         if self._cheat_actions_remaining > 0 and self._current_decision.primary_action is not None:
-            self._cheat_extra_actions.append(noop)
+            self._cheat_extra_actions.append(item_action)
             self._cheat_actions_remaining -= 1
             if self._cheat_actions_remaining > 0:
                 self._phase = CombatPhase.PLANNING_ACTION_MENU
@@ -556,22 +606,9 @@ class CombatScreen(Screen):
             self._check_partial_actions()
             return
 
-        # Partial (SPD bonus) action
-        if self._partial_actions_remaining > 0 and self._current_decision.primary_action is not None:
-            self._partial_actions.append(noop)
-            self._partial_actions_remaining -= 1
-            if self._partial_actions_remaining > 0:
-                self._phase = CombatPhase.PLANNING_ACTION_MENU
-                self._selected_ability_id = None
-                self._populate_choices()
-                self._update_display()
-                return
-            self._current_decision.partial_actions = self._partial_actions
-            self._finalize_character()
-            return
-
         # Primary action slot — item consumes it
-        self._current_decision.primary_action = noop
+        # (Items cannot be used as partial/SPD-bonus actions — abilities only)
+        self._current_decision.primary_action = item_action
 
         # Still need cheat extra actions?
         if self._cheat_actions_remaining > 0:
@@ -586,6 +623,9 @@ class CombatScreen(Screen):
     def _handle_action_menu(self, choice: str) -> None:
         """Handle selection from the action menu (Basic Attack / Abilities / Items)."""
         match choice:
+            case "windup_push":
+                self._handle_windup_push()
+                return
             case "basic_attack":
                 # Route through the same ability handler for consistent targeting
                 self._handle_ability("basic_attack")
@@ -599,6 +639,44 @@ class CombatScreen(Screen):
                 self._selected_ability_id = None
                 self._populate_choices()
                 self._update_display()
+
+    def _handle_windup_push(self) -> None:
+        """Handle the player choosing to push their active windup forward."""
+        if self._current_decision is None:
+            return
+
+        push_action = CombatAction(
+            actor_id=self._current_decision.combatant_id,
+            is_windup_push=True,
+        )
+
+        # Cheat extra action slot
+        if self._cheat_actions_remaining > 0 and self._current_decision.primary_action is not None:
+            self._cheat_extra_actions.append(push_action)
+            self._cheat_actions_remaining -= 1
+            if self._cheat_actions_remaining > 0:
+                self._phase = CombatPhase.PLANNING_ACTION_MENU
+                self._selected_ability_id = None
+                self._populate_choices()
+                self._update_display()
+                return
+            self._current_decision.cheat_extra_actions = self._cheat_extra_actions
+            self._check_partial_actions()
+            return
+
+        # Bonus action slot
+        if self._partial_actions_remaining > 0 and self._current_decision.primary_action is not None:
+            self._partial_actions.append(push_action)
+            self._partial_actions_remaining -= 1
+            if self._partial_actions_remaining > 0:
+                self._phase = CombatPhase.PLANNING_ACTION_MENU
+                self._selected_ability_id = None
+                self._populate_choices()
+                self._update_display()
+                return
+            self._current_decision.bonus_actions = self._partial_actions
+            self._finalize_character()
+            return
 
     def _handle_cs(self, choice: str) -> None:
         if self._current_decision is None:
@@ -707,7 +785,7 @@ class CombatScreen(Screen):
                 self._populate_choices()
                 self._update_display()
                 return
-            self._current_decision.partial_actions = self._partial_actions
+            self._current_decision.bonus_actions = self._partial_actions
             self._finalize_character()
             return
 
@@ -725,20 +803,44 @@ class CombatScreen(Screen):
         self._check_partial_actions()
 
     def _check_partial_actions(self) -> None:
-        """After primary + cheat actions, check for SPD bonus actions."""
+        """If the player has speed bonus actions, let them choose abilities/targets."""
         combat = self.app.combat_state
-        if combat and self._current_decision:
-            combatant = combat.get_combatant(self._current_decision.combatant_id)
-            if combatant:
-                bonus = calculate_bonus_actions(combatant.effective_stats.SPD)
-                if bonus > 0:
-                    self._partial_actions_remaining = bonus
-                    self._partial_actions = []
-                    self._phase = CombatPhase.PLANNING_ACTION_MENU
-                    self._selected_ability_id = None
-                    self._populate_choices()
-                    self._update_display()
-                    return
+        if combat is None or self._current_decision is None:
+            self._finalize_character()
+            return
+
+        # Survive suppresses speed bonus
+        if self._current_decision.cheat_survive == CheatSurviveChoice.SURVIVE:
+            self._finalize_character()
+            return
+
+        # Item primary suppresses speed bonus (no free item repeats)
+        if (
+            self._current_decision.primary_action
+            and self._current_decision.primary_action.item_id is not None
+        ):
+            self._finalize_character()
+            return
+
+        cid = self._current_decision.combatant_id
+        combatant = combat.get_combatant(cid)
+        if combatant is None:
+            self._finalize_character()
+            return
+
+        slowest_enemy_spd = min(
+            (e.effective_stats.SPD for e in combat.living_enemies), default=0,
+        )
+        bonus = calculate_speed_bonus(combatant.effective_stats.SPD, slowest_enemy_spd)
+        if bonus > 0:
+            self._partial_actions_remaining = bonus
+            self._partial_actions = []
+            self._phase = CombatPhase.PLANNING_ACTION_MENU
+            self._selected_ability_id = None
+            self._populate_choices()
+            self._update_display()
+            return
+
         self._finalize_character()
 
     def action_go_back(self) -> None:
@@ -926,6 +1028,10 @@ class CombatScreen(Screen):
 
             ap_str = f"  AP:{p.action_points}" if p.action_points > 0 else ""
             debt_str = f" D:{p.cheat_debt}" if p.cheat_debt > 0 else ""
+            # Speed bonus: compare to slowest living enemy
+            slowest_e = min((e.effective_stats.SPD for e in combat.living_enemies), default=0)
+            spd_bonus = calculate_speed_bonus(p.effective_stats.SPD, slowest_e)
+            ba_str = f" BA:{spd_bonus}" if spd_bonus > 0 else ""
             insight_str = f" I:{p.insight_stacks}" if p.insight_stacks > 0 else ""
             frenzy_str = f" F:{p.frenzy_level:.2f}x" if p.frenzy_level > 1.0 else ""
 
@@ -936,7 +1042,8 @@ class CombatScreen(Screen):
             bar = f"[{hp_color}]{'█' * filled}[/{hp_color}][#333333]{'░' * (bar_w - filled)}[/#333333]"
 
             lines.append(f"{marker}[bold]{name}[/bold] ({job_name} Lv{char.level if char else '?'})")
-            lines.append(f"  {bar} {hp}/{max_hp}{ap_str}{debt_str}{insight_str}{frenzy_str}")
+            taunt_str = f" [bold #cc4444]TAUNTED[/bold #cc4444]" if p.taunted_by else ""
+            lines.append(f"  {bar} {hp}/{max_hp}{ap_str}{ba_str}{debt_str}{insight_str}{frenzy_str}{taunt_str}")
 
         self.query_one("#party-display", Static).update("\n".join(lines))
 
@@ -963,8 +1070,9 @@ class CombatScreen(Screen):
             filled = int(hp_pct * bar_w)
             bar = f"[{hp_color}]{'█' * filled}[/{hp_color}][#333333]{'░' * (bar_w - filled)}[/#333333]"
 
+            taunt_str = f" [bold #cc4444]TAUNTED[/bold #cc4444]" if e.taunted_by else ""
             lines.append(f"{marker}[bold]{name}[/bold]")
-            lines.append(f"  {bar} {hp}/{max_hp}")
+            lines.append(f"  {bar} {hp}/{max_hp}{taunt_str}")
 
         self.query_one("#enemy-display", Static).update("\n".join(lines))
 
@@ -1000,6 +1108,18 @@ class CombatScreen(Screen):
             combat, self._decisions, enemy_templates
         )
         self.app.combat_state = combat
+
+        # Remove consumed items from stash
+        if combat.consumed_items and self.app.run_state is not None:
+            run = self.app.run_state
+            new_stash = list(run.party.stash)
+            for item_id in combat.consumed_items:
+                try:
+                    new_stash.remove(item_id)
+                except ValueError:
+                    pass
+            party = run.party.model_copy(update={"stash": new_stash})
+            self.app.run_state = run.model_copy(update={"party": party})
 
         new_events = combat.log[self._round_events_start:]
 
@@ -1132,19 +1252,31 @@ class CombatScreen(Screen):
         if combat is None or run is None:
             return
 
+        defeated_enemies_data = [
+            (e.id.rsplit("_", 1)[0] if "_" in e.id else e.id, e.level)
+            for e in combat.enemy_combatants if not e.is_alive
+        ]
+        defeated_templates = [tmpl_id for tmpl_id, _lv in defeated_enemies_data]
+        defeated_levels = [lv for _tmpl_id, lv in defeated_enemies_data]
+        defeated_budgets: list[float] = []
+        defeated_xp_mults: list[float] = []
+        defeated_gold_mults: list[float] = []
+        for tmpl_id, _lv in defeated_enemies_data:
+            template = self.app.game_data.enemies.get(tmpl_id)
+            if template:
+                defeated_budgets.append(template.budget_multiplier)
+                defeated_xp_mults.append(template.xp_multiplier or 0.0)
+                defeated_gold_mults.append(template.gold_multiplier or 0.0)
+
         result = CombatResult(
             player_won=True,
             surviving_character_ids=[p.id for p in combat.living_players],
             surviving_character_hp={p.id: p.current_hp for p in combat.living_players},
-            defeated_enemy_template_ids=[
-                e.id.rsplit("_", 1)[0] if "_" in e.id else e.id
-                for e in combat.enemy_combatants if not e.is_alive
-            ],
-            defeated_enemy_budget_multipliers=[
-                self.app.game_data.enemies[e.id.rsplit("_", 1)[0]].budget_multiplier
-                for e in combat.enemy_combatants
-                if not e.is_alive and (e.id.rsplit("_", 1)[0] if "_" in e.id else e.id) in self.app.game_data.enemies
-            ],
+            defeated_enemy_template_ids=defeated_templates,
+            defeated_enemy_budget_multipliers=defeated_budgets,
+            defeated_enemy_levels=defeated_levels,
+            defeated_enemy_xp_multipliers=defeated_xp_mults,
+            defeated_enemy_gold_multipliers=defeated_gold_mults,
             rounds_taken=combat.round_number,
             zone_level=self.app.game_data.zones[run.current_zone_id].zone_level if run.current_zone_id else 0,
             gold_stolen_by_enemies=combat.gold_stolen_by_enemies,

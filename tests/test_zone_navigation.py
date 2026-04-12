@@ -64,7 +64,7 @@ class TestZoneUnlock:
     ) -> None:
         """Clearing each zone unlocks exactly the next one."""
         run = game_loop.new_run("run_001", "Hero", "einherjar")
-        zone_order = ["zone_01", "zone_02", "zone_03", "zone_05", "zone_08", "zone_12", "zone_15"]
+        zone_order = ["zone_01", "zone_02", "zone_03", "zone_04", "zone_05", "zone_06", "zone_07"]
 
         for i, zone_id in enumerate(zone_order):
             assert game_loop.is_zone_unlocked(run, zone_id), f"{zone_id} should be unlocked"
@@ -304,12 +304,12 @@ class TestLeaveZone:
 
 
 class TestFinalZone:
-    def test_zone_15_is_final(self, game_data: GameData) -> None:
-        assert game_data.zones["zone_15"].is_final is True
+    def test_zone_07_is_final(self, game_data: GameData) -> None:
+        assert game_data.zones["zone_07"].is_final is True
 
     def test_non_final_zones(self, game_data: GameData) -> None:
         for zone_id, zone in game_data.zones.items():
-            if zone_id != "zone_15":
+            if zone_id != "zone_07":
                 assert zone.is_final is False, f"{zone_id} should not be final"
 
     def test_all_zones_have_unlock_requirements(self, game_data: GameData) -> None:
@@ -348,3 +348,121 @@ class TestOverstayIntegration:
         new_run, loot = game_loop.resolve_combat_result(run, result)
         # Money should still exist
         assert loot.money > 0
+
+
+class TestTownNavigation:
+    def test_town_loads(self, game_data: GameData) -> None:
+        assert "shinto_town" in game_data.towns
+        town = game_data.towns["shinto_town"]
+        assert town.name == "Kitsune Crossing"
+        assert town.region == "shinto_slimes"
+
+    def test_town_always_unlocked_region_1(self, game_loop: GameLoop) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        assert game_loop.is_town_unlocked(run, "shinto_town")
+
+    def test_enter_leave_town(self, game_loop: GameLoop) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        run = game_loop.enter_town(run, "shinto_town")
+        assert run.current_town_id == "shinto_town"
+        assert run.current_zone_id is None
+        run = game_loop.leave_town(run)
+        assert run.current_town_id is None
+
+    def test_cannot_enter_town_while_in_zone(self, game_loop: GameLoop) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        run = game_loop.enter_zone(run, "zone_01")
+        with pytest.raises(ValueError, match="Cannot enter town while in a zone"):
+            game_loop.enter_town(run, "shinto_town")
+
+    def test_resolve_town_shop_before_clears(self, game_loop: GameLoop) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        items = game_loop.resolve_town_shop(run)
+        assert "minor_potion" in items
+        assert "iron_blade" not in items
+
+    def test_resolve_town_shop_after_zone_01(
+        self, game_loop: GameLoop, game_data: GameData
+    ) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        run = _clear_zone(game_loop, run, "zone_01", game_data)
+        items = game_loop.resolve_town_shop(run)
+        assert "minor_potion" in items
+        assert "iron_blade" in items
+        assert "spirit_lens" in items
+        assert "potion" not in items  # requires zone_03
+
+    def test_resolve_town_shop_after_zone_03(
+        self, game_loop: GameLoop, game_data: GameData
+    ) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        for z in ["zone_01", "zone_02", "zone_03"]:
+            run = _clear_zone(game_loop, run, z, game_data)
+        items = game_loop.resolve_town_shop(run)
+        assert "potion" in items
+        assert "runic_edge" not in items  # requires zone_05
+
+
+class TestLodgeRewardSuppression:
+    def test_lodge_resets_zone_and_suppresses_xp(
+        self, game_loop: GameLoop, game_data: GameData
+    ) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        # Progress through 3 encounters in zone 01
+        run = game_loop.enter_zone(run, "zone_01")
+        for _ in range(3):
+            run = game_loop.advance_zone(run)
+        run = game_loop.leave_zone(run)
+
+        # Rest at lodge
+        party = run.party.model_copy(update={"money": 5000})
+        run = run.model_copy(update={"party": party, "current_town_id": "shinto_town"})
+        run = game_loop.rest_at_lodge(run)
+
+        assert run.lodge_reset_zones.get("zone_01") == 3
+        assert "zone_01" not in run.zone_progress
+
+        # Re-enter zone — progress resets to encounter 0
+        run = game_loop.enter_zone(run, "zone_01")
+        assert run.zone_state.current_encounter_index == 0
+
+        # Encounter 0 (below lodge cap of 3) should give 0 XP
+        result = CombatResult(
+            player_won=True,
+            surviving_character_ids=["mc_einherjar"],
+            surviving_character_hp={"mc_einherjar": 50},
+            defeated_enemy_template_ids=["fodder_slime"],
+            defeated_enemy_budget_multipliers=[1.0],
+            defeated_enemy_levels=[1],
+            defeated_enemy_xp_multipliers=[1.0],
+            defeated_enemy_gold_multipliers=[1.0],
+            rounds_taken=2,
+            zone_level=1,
+        )
+        mc_xp_before = run.party.characters["mc_einherjar"].xp
+        new_run, loot = game_loop.resolve_combat_result(run, result)
+        mc_xp_after = new_run.party.characters["mc_einherjar"].xp
+        assert mc_xp_after == mc_xp_before  # zero XP
+        assert loot.money == 0  # zero gold
+        assert loot.item_ids == []  # zero loot
+
+    def test_lodge_suppression_clears_past_cap(
+        self, game_loop: GameLoop, game_data: GameData
+    ) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        # Progress 2 encounters then lodge reset
+        run = game_loop.enter_zone(run, "zone_01")
+        run = game_loop.advance_zone(run)
+        run = game_loop.advance_zone(run)
+        run = game_loop.leave_zone(run)
+
+        party = run.party.model_copy(update={"money": 5000})
+        run = run.model_copy(update={"party": party, "current_town_id": "shinto_town"})
+        run = game_loop.rest_at_lodge(run)
+        assert run.lodge_reset_zones.get("zone_01") == 2
+
+        # Re-enter and advance past the cap
+        run = game_loop.enter_zone(run, "zone_01")
+        run = game_loop.advance_zone(run)  # idx 0 -> 1 (still < 2, suppressed)
+        run = game_loop.advance_zone(run)  # idx 1 -> 2 (reaches cap, clears)
+        assert "zone_01" not in run.lodge_reset_zones

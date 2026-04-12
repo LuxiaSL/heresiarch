@@ -6,7 +6,9 @@ import pytest
 
 from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.data_loader import GameData
+from heresiarch.engine.formulas import calculate_max_hp, calculate_stats_at_level
 from heresiarch.engine.game_loop import GameLoop
+from heresiarch.engine.models.jobs import CharacterInstance
 from heresiarch.engine.models.combat_state import (
     CombatAction,
     CheatSurviveChoice,
@@ -254,13 +256,36 @@ class TestDeathNukesSaves:
 
 
 class TestMCJobSwapDuringRun:
+    def _add_ally(self, run: RunState, game_loop: GameLoop, job_id: str) -> RunState:
+        """Add an ally with the given job to the party for mimic tests."""
+        job = game_loop.game_data.jobs[job_id]
+        stats = calculate_stats_at_level(job.growth, 1)
+        ally = CharacterInstance(
+            id=f"ally_{job_id}",
+            name=f"Ally {job_id}",
+            job_id=job_id,
+            level=1,
+            base_stats=stats,
+            current_hp=calculate_max_hp(job.base_hp, job.hp_growth, 1, stats.DEF),
+            max_hp=calculate_max_hp(job.base_hp, job.hp_growth, 1, stats.DEF),
+            abilities=["basic_attack"],
+        )
+        new_chars = dict(run.party.characters)
+        new_chars[ally.id] = ally
+        new_active = list(run.party.active) + [ally.id]
+        new_party = run.party.model_copy(
+            update={"characters": new_chars, "active": new_active}
+        )
+        return run.model_copy(update={"party": new_party})
+
     def test_swap_preserves_xp(self, game_loop: GameLoop) -> None:
         run = game_loop.new_run("run_001", "Hero", "einherjar")
+        run = self._add_ally(run, game_loop, "onmyoji")
 
         # Gain some XP first
         result = CombatResult(
             player_won=True,
-            surviving_character_ids=["mc_einherjar"],
+            surviving_character_ids=["mc_einherjar", "ally_onmyoji"],
             defeated_enemy_template_ids=["brute_oni"] * 3,
             defeated_enemy_budget_multipliers=[14.0] * 3,
             rounds_taken=5,

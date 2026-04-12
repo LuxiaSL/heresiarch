@@ -5,7 +5,7 @@
   category: DEFENSIVE
   target: SELF
   priority: true
-  description: "Brace for impact. Gain 1 AP, halve incoming damage this round."
+  description: "Halves all incoming damage this round and gains 1 AP. Priority action (resolves first)."
   effects:
     - ap_gain: 1
       grants_surviving: true
@@ -15,11 +15,11 @@
 - id: taunt
   name: Taunt
   category: DEFENSIVE
-  target: SELF
+  target: SINGLE_ENEMY
   cooldown: 3
   is_innate: false
-  insight_amplified: true
-  description: "Forces all enemies to target this character for 1 round."
+  insight_amplified: false
+  description: "Forces target to attack this character next round. 3-turn cooldown."
   effects:
     - duration_rounds: 1
       applies_taunt: true
@@ -31,7 +31,7 @@
   cooldown: 3
   is_innate: false
   insight_amplified: true
-  description: "Steel the body and mind. Buffs DEF and RES for 2 turns."
+  description: "Grants +20 DEF and +20 RES for 2 rounds. 3-turn cooldown."
   effects:
     - stat_buff:
         DEF: 20
@@ -45,7 +45,7 @@
   target: SINGLE_ALLY
   is_innate: false
   insight_amplified: true
-  description: "Absorbs a percentage of ally damage and redirects it to self. DEF scaling reduces redirected damage taken."
+  description: "Redirects a portion of damage from an ally to self for 3 rounds. Grants +20 DEF to absorb the redirected hits."
   effects:
     - def_buff: 20
       stat_scaling: DEF
@@ -58,7 +58,7 @@
   target: SINGLE_ENEMY
   is_innate: false
   insight_amplified: true
-  description: "A disciplined attack that hardens the user's guard. Deals STR damage and grants a minor DEF buff for 1 turn."
+  description: "Deals 8 + 0.4x STR damage and grants +15 DEF to self for 1 round."
   effects:
     - base_damage: 8
       stat_scaling: STR
@@ -73,7 +73,7 @@
   target: SELF
   is_innate: false
   insight_amplified: true
-  description: "Plants feet and steels resolve. Reduces effectiveness of Disrupt-quality effects for the duration."
+  description: "Reduces effectiveness of Disrupt-quality effects on self for 3 rounds."
   effects:
     - stat_scaling: DEF
       scaling_coefficient: 0.0
@@ -85,9 +85,19 @@
   target: SELF
   trigger: NONE
   is_innate: false
-  description: "Brace for the worst. Survive one lethal hit at 1 HP, once per fight."
+  description: "Survive one lethal hit at 1 HP, once per combat."
   effects:
     - survive_lethal: true
+
+- id: shell_retreat
+  name: Shell Retreat
+  category: DEFENSIVE
+  target: SELF
+  cooldown: 3
+  is_innate: false
+  description: "Becomes immune to all damage for 1 turn. 3-turn cooldown."
+  effects:
+    - grants_invulnerable: 1
 
 - id: ward
   name: Ward
@@ -95,7 +105,7 @@
   target: SINGLE_ALLY
   is_innate: false
   insight_amplified: true
-  description: "Conjures a protective ward that bolsters RES for 3 rounds. Scales with RES."
+  description: "Grants +30 RES to an ally for 3 rounds."
   effects:
     - stat_buff:
         RES: 30

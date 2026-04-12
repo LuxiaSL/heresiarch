@@ -14,22 +14,22 @@ from heresiarch.engine.models.stats import GrowthVector, StatType
 
 
 class TestXPReward:
-    """XP reward = zone_level * budget_multiplier."""
+    """XP reward = enemy_level * budget_multiplier."""
 
     def test_fodder_zone5(self) -> None:
-        xp = calculate_xp_reward(zone_level=5, budget_multiplier=8.0, character_level=5)
+        xp = calculate_xp_reward(enemy_level=5, budget_multiplier=8.0, character_level=5)
         assert xp == 40
 
     def test_brute_zone15(self) -> None:
-        xp = calculate_xp_reward(zone_level=15, budget_multiplier=14.0, character_level=15)
+        xp = calculate_xp_reward(enemy_level=15, budget_multiplier=14.0, character_level=15)
         assert xp == 210
 
     def test_caster_zone10(self) -> None:
-        xp = calculate_xp_reward(zone_level=10, budget_multiplier=12.0, character_level=10)
+        xp = calculate_xp_reward(enemy_level=10, budget_multiplier=12.0, character_level=10)
         assert xp == 120
 
     def test_support_zone8(self) -> None:
-        xp = calculate_xp_reward(zone_level=8, budget_multiplier=10.0, character_level=8)
+        xp = calculate_xp_reward(enemy_level=8, budget_multiplier=10.0, character_level=8)
         assert xp == 80
 
 
@@ -38,14 +38,14 @@ class TestXPOverlevelPenalty:
 
     def test_at_cap_full_xp(self) -> None:
         xp = calculate_xp_reward(
-            zone_level=10, budget_multiplier=14.0, character_level=15, xp_cap_level=15
+            enemy_level=10, budget_multiplier=14.0, character_level=15, xp_cap_level=15
         )
         assert xp == 140
 
     def test_one_over_cap(self) -> None:
-        base = calculate_xp_reward(zone_level=10, budget_multiplier=14.0, character_level=15)
+        base = calculate_xp_reward(enemy_level=10, budget_multiplier=14.0, character_level=15)
         penalized = calculate_xp_reward(
-            zone_level=10, budget_multiplier=14.0, character_level=16, xp_cap_level=15
+            enemy_level=10, budget_multiplier=14.0, character_level=16, xp_cap_level=15
         )
         assert penalized < base
         assert penalized == int(base * 0.5)
@@ -53,20 +53,20 @@ class TestXPOverlevelPenalty:
     def test_two_over_cap(self) -> None:
         base = 140  # zone 10, brute budget
         penalized = calculate_xp_reward(
-            zone_level=10, budget_multiplier=14.0, character_level=17, xp_cap_level=15
+            enemy_level=10, budget_multiplier=14.0, character_level=17, xp_cap_level=15
         )
         assert penalized == int(base * 0.25)
 
     def test_many_over_cap_floors_at_minimum(self) -> None:
         penalized = calculate_xp_reward(
-            zone_level=10, budget_multiplier=14.0, character_level=30, xp_cap_level=15
+            enemy_level=10, budget_multiplier=14.0, character_level=30, xp_cap_level=15
         )
         assert penalized == max(1, int(140 * XP_MINIMUM_RATIO))
 
     def test_no_cap_no_penalty(self) -> None:
         """xp_cap_level=0 means no cap applied."""
         xp = calculate_xp_reward(
-            zone_level=10, budget_multiplier=14.0, character_level=50, xp_cap_level=0
+            enemy_level=10, budget_multiplier=14.0, character_level=50, xp_cap_level=0
         )
         assert xp == 140
 

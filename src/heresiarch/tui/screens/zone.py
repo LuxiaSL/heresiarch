@@ -36,7 +36,6 @@ class ZoneScreen(Screen):
         ("f", "fight", "Fight"),
         ("p", "party", "Party"),
         ("i", "inventory", "Inventory"),
-        ("s", "shop", "Shop"),
         ("l", "leave", "Leave Zone"),
     ]
 
@@ -129,10 +128,6 @@ class ZoneScreen(Screen):
         action_list.add_option(Option("[i] Inventory"))
         self._action_keys.append("inventory")
 
-        if len(zone.shop_item_pool) > 0:
-            action_list.add_option(Option("[s] Shop"))
-            self._action_keys.append("shop")
-
         action_list.add_option(Option("[l] Leave Zone"))
         self._action_keys.append("leave")
 
@@ -153,8 +148,6 @@ class ZoneScreen(Screen):
                 self.action_party()
             case "inventory":
                 self.action_inventory()
-            case "shop":
-                self.action_shop()
             case "leave":
                 self.action_leave()
 
@@ -172,11 +165,6 @@ class ZoneScreen(Screen):
         from heresiarch.tui.screens.inventory import InventoryScreen
 
         self.app.push_screen(InventoryScreen())
-
-    def action_shop(self) -> None:
-        from heresiarch.tui.screens.shop import ShopScreen
-
-        self.app.push_screen(ShopScreen())
 
     def action_leave(self) -> None:
         """Exit the current zone, heal, return to zone selection."""

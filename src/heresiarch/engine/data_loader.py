@@ -13,7 +13,8 @@ from heresiarch.engine.models.enemies import EnemyTemplate
 from heresiarch.engine.models.items import Item
 from heresiarch.engine.models.jobs import JobTemplate
 from heresiarch.engine.models.loot import DropTable
-from heresiarch.engine.models.region_map import RegionMap
+from heresiarch.engine.models.region_map import AsciiMap
+from heresiarch.engine.models.town import TownTemplate
 from heresiarch.engine.models.zone import ZoneTemplate
 
 
@@ -25,8 +26,9 @@ class GameData(BaseModel):
     items: dict[str, Item]
     enemies: dict[str, EnemyTemplate]
     drop_tables: dict[str, DropTable] = {}
+    towns: dict[str, TownTemplate] = {}
     zones: dict[str, ZoneTemplate] = {}
-    maps: dict[str, RegionMap] = {}
+    maps: dict[str, AsciiMap] = {}
 
     def validate_cross_references(self) -> list[str]:
         """Check that all ID references resolve. Returns list of errors."""
@@ -85,11 +87,6 @@ class GameData(BaseModel):
                         errors.append(
                             f"Zone '{zone_id}' encounter references unknown enemy '{tmpl_id}'"
                         )
-            for item_id in zone.shop_item_pool:
-                if item_id not in self.items:
-                    errors.append(
-                        f"Zone '{zone_id}' shop references unknown item '{item_id}'"
-                    )
             for spawn in zone.random_spawns:
                 if spawn.enemy_template_id not in self.enemies:
                     errors.append(
@@ -114,6 +111,23 @@ class GameData(BaseModel):
                 if req.type == "item" and req.item_id not in self.items:
                     errors.append(
                         f"Zone '{zone_id}' unlock requires unknown item '{req.item_id}'"
+                    )
+
+        for town_id, town in self.towns.items():
+            for tier in town.shop_tiers:
+                if tier.zone_clear is not None and tier.zone_clear not in self.zones:
+                    errors.append(
+                        f"Town '{town_id}' shop tier references unknown zone '{tier.zone_clear}'"
+                    )
+                for item_id in tier.items:
+                    if item_id not in self.items:
+                        errors.append(
+                            f"Town '{town_id}' shop tier references unknown item '{item_id}'"
+                        )
+            for req in town.unlock_requires:
+                if req.type == "zone_clear" and req.zone_id not in self.zones:
+                    errors.append(
+                        f"Town '{town_id}' unlock requires unknown zone '{req.zone_id}'"
                     )
 
         return errors
@@ -256,12 +270,12 @@ def load_zones(directory: Path) -> dict[str, ZoneTemplate]:
     return zones
 
 
-def load_maps(directory: Path) -> dict[str, RegionMap]:
-    """Load all region map YAML files from a directory.
+def load_maps(directory: Path) -> dict[str, AsciiMap]:
+    """Load all ASCII map YAML files from a directory.
 
-    Returns region_id -> RegionMap.
+    Returns map_id -> AsciiMap.
     """
-    maps: dict[str, RegionMap] = {}
+    maps: dict[str, AsciiMap] = {}
     if not directory.exists():
         return maps
 
@@ -269,21 +283,62 @@ def load_maps(directory: Path) -> dict[str, RegionMap]:
         data = _load_yaml(path)
         if data is None:
             continue
-        region_map = RegionMap(**data)
-        maps[region_map.region_id] = region_map
+        # Support both old 'region_id' and new 'map_id' keys
+        if "region_id" in data and "map_id" not in data:
+            data["map_id"] = data.pop("region_id")
+        # Migrate old 'zone_id' anchors to 'id' field
+        for anchor_data in data.get("anchors", []):
+            if "zone_id" in anchor_data and "id" not in anchor_data:
+                anchor_data["id"] = anchor_data.pop("zone_id")
+        ascii_map = AsciiMap(**data)
+        maps[ascii_map.map_id] = ascii_map
 
     return maps
 
 
+def load_towns(directory: Path) -> dict[str, TownTemplate]:
+    """Load all town YAML files from a directory.
+
+    Returns id -> TownTemplate.
+    """
+    towns: dict[str, TownTemplate] = {}
+    if not directory.exists():
+        return towns
+
+    for path in sorted(directory.glob("*.yaml")):
+        data = _load_yaml(path)
+        if data is None:
+            continue
+        town = TownTemplate(**data)
+        towns[town.id] = town
+
+    return towns
+
+
 def load_all(data_dir: Path) -> GameData:
-    """Load everything from the data directory. Returns a GameData container."""
+    """Load everything from the data directory. Returns a GameData container.
+
+    Shared data (jobs, abilities, items, enemies, loot) loads from flat
+    directories under ``data_dir``.  Region-specific data (zones, maps,
+    towns) loads from ``data_dir/region_*/`` subdirectories.
+    """
+    # Shared data
     jobs = load_jobs(data_dir / "jobs")
     abilities = load_abilities(data_dir / "abilities")
     items = load_items(data_dir / "items")
     enemies = load_enemies(data_dir / "enemies")
     drop_tables = load_drop_tables(data_dir / "loot")
-    zones = load_zones(data_dir / "zones")
-    maps = load_maps(data_dir / "maps")
+
+    # Region-specific data — scan all region_* directories
+    zones: dict[str, ZoneTemplate] = {}
+    maps: dict[str, AsciiMap] = {}
+    towns: dict[str, TownTemplate] = {}
+
+    for region_dir in sorted(data_dir.glob("region_*")):
+        if region_dir.is_dir():
+            zones.update(load_zones(region_dir / "zones"))
+            maps.update(load_maps(region_dir / "maps"))
+            towns.update(load_towns(region_dir / "towns"))
 
     game_data = GameData(
         jobs=jobs,
@@ -291,6 +346,7 @@ def load_all(data_dir: Path) -> GameData:
         items=items,
         enemies=enemies,
         drop_tables=drop_tables,
+        towns=towns,
         zones=zones,
         maps=maps,
     )

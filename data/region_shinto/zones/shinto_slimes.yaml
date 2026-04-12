@@ -1,0 +1,288 @@
+# Slime Curriculum: Shinto early game (zones 1-15)
+# Region 1 of 3. Player levels 1-33.
+#
+# Zone progression:
+#   zone_01: Tutorial (fodder slime only)
+#   zone_02: Slime variants — specialized stats, one equip each
+#   zone_03+: Real archetypes — kitsune, oni, tengu, tanuki (full equip)
+#
+# enemy_level_range: [min, max] — each enemy's level is rolled from this range.
+# Boss encounters use enemy_level_override to hardcode a specific level.
+# zone_level is kept for sorting and display.
+# Shop items are defined per-town, not per-zone (see region_shinto/towns/).
+#
+# Unlock chain: linear (zone_01 always available, each requires prior cleared)
+
+- id: zone_01
+  name: Shrine Entrance
+  zone_level: 1
+  enemy_level_range: [1, 2]
+  region: shinto_slimes
+  xp_cap_level: 5
+  loot_tier: 1
+  unlock_requires: []
+  encounters:
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [1]
+      enemy_level_range: [1, 1]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [2]
+      enemy_level_range: [1, 1]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [2]
+      enemy_level_range: [1, 1]
+    - enemy_templates: [fodder_slime]
+      enemy_counts: [3]
+      enemy_level_range: [1, 2]
+    - enemy_templates: [alpha_slime]
+      enemy_counts: [1]
+      is_boss: true
+      enemy_level_override: 2
+
+# Zone 2: Slime variants. Each encounter introduces a new type.
+# No more fodder slime — every enemy here is a step up.
+- id: zone_02
+  name: Mossy Path
+  zone_level: 3
+  enemy_level_range: [3, 5]
+  region: shinto_slimes
+  xp_cap_level: 8
+  loot_tier: 1
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_01
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
+  encounters:
+    # Encounter 1: "These aren't fodder anymore"
+    - enemy_templates: [slime]
+      enemy_counts: [2]
+    # Encounter 2: Weapon threat introduced
+    - enemy_templates: [swime, slime]
+      enemy_counts: [1, 1]
+    # Encounter 3: Magic damage — DEF doesn't save you
+    - enemy_templates: [mystic_slime, slime]
+      enemy_counts: [1, 2]
+    # Encounter 4: Tank + damage combo
+    - enemy_templates: [chunky_slime, swime]
+      enemy_counts: [1, 1]
+    # Encounter 5: DOT introduced
+    - enemy_templates: [toxic_slime, slime]
+      enemy_counts: [1, 2]
+    # Encounter 6: Full variety
+    - enemy_templates: [swime, mystic_slime, chunky_slime]
+      enemy_counts: [1, 1, 1]
+    # Boss: Omega Slime — regen + charge-up, phase shift at 50% HP
+    - enemy_templates: [omega_slime]
+      enemy_counts: [1]
+      is_boss: true
+      enemy_level_override: 5
+
+# Zone 3: Real archetypes enter. Each encounter introduces one new type
+# alongside familiar slimes so the player learns one thing at a time.
+- id: zone_03
+  name: Bamboo Thicket
+  zone_level: 5
+  enemy_level_range: [5, 8]
+  region: shinto_slimes
+  xp_cap_level: 12
+  loot_tier: 1
+  recruitment_chance: 0.10
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_02
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
+  encounters:
+    # Introduces Brute Oni — "what IS that thing"
+    - enemy_templates: [brute_oni, slime]
+      enemy_counts: [1, 2]
+    # Introduces Caster Kitsune — magic archetype
+    - enemy_templates: [caster_kitsune, slime]
+      enemy_counts: [1, 2]
+    # Introduces Speeder Tengu — speed archetype
+    - enemy_templates: [speeder_tengu, swime]
+      enemy_counts: [1, 2]
+    # Introduces Support Tanuki — "kill the healer first"
+    - enemy_templates: [support_tanuki, brute_oni]
+      enemy_counts: [1, 1]
+    # Mixed comp
+    - enemy_templates: [caster_kitsune, speeder_tengu, slime]
+      enemy_counts: [1, 1, 1]
+    # Tank + support, prep for boss
+    - enemy_templates: [brute_oni, support_tanuki, slime]
+      enemy_counts: [1, 1, 2]
+    # Boss: Kodama Elder — summons adds, heals, buffs. Kill it before it floods the field.
+    - enemy_templates: [kodama_elder]
+      enemy_counts: [1]
+      is_boss: true
+      enemy_level_override: 8
+
+# Zone 4: Mix of zone 2-3 enemies. Split Slime added in Chunk D.
+- id: zone_04
+  name: Spirit Clearing
+  zone_level: 8
+  enemy_level_range: [8, 11]
+  region: shinto_slimes
+  xp_cap_level: 15
+  loot_tier: 1
+  recruitment_chance: 0.15
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_03
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
+  encounters:
+    # Split Slime introduced — kill it and deal with the swarm
+    - enemy_templates: [split_slime, slime]
+      enemy_counts: [2, 1]
+    - enemy_templates: [brute_oni, mystic_slime]
+      enemy_counts: [1, 1]
+    - enemy_templates: [caster_kitsune, chunky_slime]
+      enemy_counts: [1, 2]
+    - enemy_templates: [split_slime, speeder_tengu, slime]
+      enemy_counts: [1, 1, 1]
+    - enemy_templates: [support_tanuki, swime, brute_oni]
+      enemy_counts: [1, 1, 1]
+    - enemy_templates: [brute_oni, caster_kitsune, split_slime]
+      enemy_counts: [1, 1, 1]
+    # Boss: Kappa — shell retreat (invuln) + tidal surge. Predictable rhythm.
+    - enemy_templates: [kappa]
+      enemy_counts: [1]
+      is_boss: true
+      enemy_level_override: 11
+
+# Zone 5: Full mix + Leech Slime + buffed Tengu (added in Chunk D)
+- id: zone_05
+  name: Torii Descent
+  zone_level: 11
+  enemy_level_range: [11, 15]
+  region: shinto_slimes
+  xp_cap_level: 18
+  loot_tier: 2
+  recruitment_chance: 0.15
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_04
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
+  encounters:
+    # Leech Slime introduced — outlasts you if ignored
+    - enemy_templates: [leech_slime, slime]
+      enemy_counts: [1, 2]
+    - enemy_templates: [speeder_tengu, caster_kitsune]
+      enemy_counts: [1, 1]
+    - enemy_templates: [brute_oni, leech_slime, swime]
+      enemy_counts: [1, 1, 1]
+    - enemy_templates: [split_slime, support_tanuki, chunky_slime]
+      enemy_counts: [2, 1, 1]
+    - enemy_templates: [speeder_tengu, caster_kitsune, toxic_slime]
+      enemy_counts: [2, 1, 1]
+    - enemy_templates: [brute_oni, caster_kitsune, leech_slime]
+      enemy_counts: [1, 1, 1]
+    # Boss: Tanuki Trickster — mimics player's last action type.
+    - enemy_templates: [tanuki_boss]
+      enemy_counts: [1]
+      is_boss: true
+      enemy_level_override: 15
+
+# Zone 6: Hardest pre-endless. Full pool, dense compositions.
+- id: zone_06
+  name: Inner Sanctum
+  zone_level: 15
+  enemy_level_range: [15, 20]
+  region: shinto_slimes
+  xp_cap_level: 22
+  loot_tier: 2
+  recruitment_chance: 0.15
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_05
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
+  encounters:
+    - enemy_templates: [brute_oni, caster_kitsune, mystic_slime]
+      enemy_counts: [1, 1, 1]
+    - enemy_templates: [speeder_tengu, support_tanuki, swime]
+      enemy_counts: [2, 1, 1]
+    - enemy_templates: [brute_oni, speeder_tengu, toxic_slime]
+      enemy_counts: [1, 1, 2]
+    - enemy_templates: [caster_kitsune, support_tanuki, chunky_slime]
+      enemy_counts: [1, 1, 2]
+    - enemy_templates: [brute_oni, caster_kitsune, speeder_tengu]
+      enemy_counts: [1, 1, 1]
+    - enemy_templates: [brute_oni, caster_kitsune, speeder_tengu, support_tanuki]
+      enemy_counts: [1, 1, 1, 1]
+    # Boss: Nue — multi-phase chimera (phys → magic → desperate).
+    - enemy_templates: [nue]
+      enemy_counts: [1]
+      is_boss: true
+      enemy_level_override: 20
+
+# The Pit: Endless zone. Dynamic encounters, diminishing returns. Optional grinding.
+# Unlocks after zone 6 alongside zone 7 — the player chooses whether to grind here
+# or push straight into the Giga Slime Lair.
+- id: the_pit
+  name: The Pit
+  zone_level: 20
+  enemy_level_range: [18, 28]
+  region: shinto_slimes
+  is_endless: true
+  endless_enemy_pool:
+    - slime
+    - swime
+    - mystic_slime
+    - chunky_slime
+    - toxic_slime
+    - split_slime
+    - leech_slime
+    - brute_oni
+    - caster_kitsune
+    - speeder_tengu
+    - support_tanuki
+  endless_min_level: 18
+  endless_max_level: 28
+  recruitment_chance: 0.20
+  xp_cap_level: 30
+  loot_tier: 2
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_06
+  encounters: []  # empty — generated dynamically
+
+# Zone 7: Final zone. Giga Slime Lair.
+- id: zone_07
+  name: Giga Slime Lair
+  zone_level: 25
+  enemy_level_range: [25, 33]
+  region: shinto_slimes
+  xp_cap_level: 33
+  loot_tier: 3
+  is_final: true
+  unlock_requires:
+    - type: zone_clear
+      zone_id: zone_06
+  random_spawns:
+    - enemy_template_id: bandit_slime
+      chance: 0.10
+  encounters:
+    - enemy_templates: [brute_oni, caster_kitsune, slime]
+      enemy_counts: [1, 1, 2]
+    - enemy_templates: [speeder_tengu, caster_kitsune, support_tanuki]
+      enemy_counts: [1, 1, 1]
+    - enemy_templates: [brute_oni, speeder_tengu, split_slime]
+      enemy_counts: [1, 1, 2]
+    - enemy_templates: [caster_kitsune, support_tanuki, leech_slime]
+      enemy_counts: [2, 1, 1]
+    - enemy_templates: [brute_oni, caster_kitsune, speeder_tengu]
+      enemy_counts: [1, 1, 1]
+    # Boss: Giga Slime — regen, armor phase at 50%, splits into 3 mini-bosses on death
+    - enemy_templates: [giga_slime]
+      enemy_counts: [1]
+      is_boss: true
+      enemy_level_override: 33

@@ -82,7 +82,7 @@ def list_zones(request: Request) -> dict[str, ZoneSummary]:
         zid: ZoneSummary(
             id=z.id, name=z.name, zone_level=z.zone_level, region=z.region,
             encounter_count=len(z.encounters),
-            shop_item_count=len(z.shop_item_pool),
+            shop_item_count=0,  # shops are now per-town, not per-zone
         )
         for zid, z in gd.zones.items()
     }

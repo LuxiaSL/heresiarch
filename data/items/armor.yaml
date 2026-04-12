@@ -3,6 +3,7 @@
 - id: warding_mail
   name: Warding Mail
   slot: ARMOR
+  tier: 1
   description: "Blended protection. Strong early, outpaced by specialists."
   base_price: 80
   flat_stat_bonus:
@@ -15,6 +16,7 @@
 - id: iron_guard
   name: Iron Guard
   slot: ARMOR
+  tier: 1
   description: "Reliable. Holds the line."
   base_price: 120
   scaling:
@@ -26,8 +28,9 @@
 - id: runic_plate
   name: Runic Plate
   slot: ARMOR
+  tier: 2
   description: "Investment piece. Overtakes Iron Guard around Lv30."
-  base_price: 3500
+  base_price: 5000
   scaling:
     scaling_type: SUPERLINEAR
     stat: DEF
@@ -38,6 +41,7 @@
 - id: void_bastion
   name: Void Bastion
   slot: ARMOR
+  tier: 3
   description: "Hurts you early. Unkillable late. Overtakes Runic Plate around Lv60."
   base_price: 9000
   scaling:
@@ -52,6 +56,7 @@
 - id: spirit_mantle
   name: Spirit Mantle
   slot: ARMOR
+  tier: 1
   description: "Wards off secondary effects. Caster baseline."
   base_price: 120
   scaling:
@@ -63,8 +68,9 @@
 - id: resonance_veil
   name: Resonance Veil
   slot: ARMOR
+  tier: 2
   description: "Deep RES commitment. Overtakes Spirit Mantle around Lv30."
-  base_price: 4000
+  base_price: 5000
   scaling:
     scaling_type: QUADRATIC
     stat: RES

@@ -89,11 +89,11 @@ def berserker_lv15(game_data: GameData) -> CharacterInstance:
 def brute_oni_zone15(game_data: GameData, combat_engine: CombatEngine) -> EnemyInstance:
     """Zone 15 Oni (Brute archetype)."""
     template = game_data.enemies["brute_oni"]
-    return combat_engine.create_enemy_instance(template, zone_level=15)
+    return combat_engine.create_enemy_instance(template, enemy_level=15)
 
 
 @pytest.fixture
 def fodder_slime_zone5(game_data: GameData, combat_engine: CombatEngine) -> EnemyInstance:
     """Zone 5 Slime (Fodder archetype)."""
     template = game_data.enemies["fodder_slime"]
-    return combat_engine.create_enemy_instance(template, zone_level=5)
+    return combat_engine.create_enemy_instance(template, enemy_level=5)

@@ -1,0 +1,46 @@
+# Kitsune Crossing — Region 1 town
+# Always unlocked in region 1. Game starts here.
+#
+# Shop progression:
+#   - minor_potion available from the start (buy before zone 1)
+#   - Tier 1 gear unlocks after zone 1 clear
+#   - Standard potion unlocks after zone 3
+#   - Tier 2 gear unlocks after zone 5
+#
+# Lodge cost: max(floor, missing_hp_total * gold_per_hp)
+#   floor = floor_base + floor_per_level * mc_level
+#   Starter values from sim (lodge-tuning --party-size 3):
+#     gph=3.0 gives ~30% gold at 75% injury mid-game.
+#     Playtest and adjust.
+
+id: shinto_town
+name: Kitsune Crossing
+region: shinto_slimes
+unlock_requires: []
+lodge_gold_per_hp: 3.0
+lodge_floor_base: 100
+lodge_floor_per_level: 5
+shop_tiers:
+  # Always available — buy a potion before entering zone 1
+  - zone_clear: null
+    items:
+      - minor_potion
+  # After zone 1 — starter gear
+  - zone_clear: zone_01
+    items:
+      - iron_blade
+      - spirit_lens
+      - iron_guard
+      - spirit_mantle
+      - warding_mail
+  # After zone 3 — standard potion
+  - zone_clear: zone_03
+    items:
+      - potion
+  # After zone 5 — tier 2 gear
+  - zone_clear: zone_05
+    items:
+      - runic_edge
+      - runic_plate
+      - resonance_orb
+      - resonance_veil

@@ -1,0 +1,112 @@
+# Region map: Shinto Slimes
+# Winding path from town through shrine to the giga slime lair.
+# The camera pans across the map as the player cycles through zones.
+#
+# Marker positions (row, col) are where the dynamic zone marker is composited.
+# The base art has an 'o' at each anchor position — the renderer overwrites it
+# with the appropriate state marker (?, o, *, X, T) at runtime.
+#
+# TERRAIN VOCABULARY (for authoring/extending):
+#   ~        water / streams (rendered blue)
+#   *  .     cherry blossoms / path dots (rendered dim pink / gray)
+#   |  /  \  structures, bamboo stalks, walls (rendered dim gray)
+#   _  -  =  floors, paths, bridges (rendered dim gray)
+#   ( ) [ ]  structural brackets (rendered dim gray)
+#   A-Z a-z  zone names and labels (rendered slightly brighter gray)
+#   o        anchor placeholder — will be overwritten by marker renderer
+#            (must be at the exact anchor coordinate)
+#   <space>  empty / sky — no color applied
+#
+# AUTHORING TIPS:
+#   - Use `heresiarch-map find <file> o` to list all 'o' positions
+#   - Use `heresiarch-map inspect <file> <row> <col>` to view a region with rulers
+#   - Use `heresiarch-map validate <file>` to check anchors against zone data
+#   - Leave at least 1 empty row ABOVE each anchor for the selection flag (|>)
+#   - Map should be wider+taller than a typical terminal for meaningful panning
+
+region_id: shinto_slimes
+name: "~ Shinto Slimes ~"
+
+art:
+  - "                                                                                                          "
+  - "                                                                                                          "
+  - "          .   *   .   *   .                                                                               "
+  - "            _______________                                                                               "
+  - "           |  __|     |__  |                                                                              "
+  - "           | |  | . . |  | |                                                                              "
+  - "           | |__|     |__| |                                                                              "
+  - "           |       o       |                                                                              "
+  - "           |    Kitsune    |                                                                              "
+  - "           |    Crossing   |                                                                              "
+  - "           |_____| . |_____|                                                                              "
+  - "                 | . |                                                                                    "
+  - "         .  *    | . |   *  .                                                                             "
+  - "      *     .  . | . | .     *                       ~ ~ ~ ~ ~ ~ ~ ~ ~                                    "
+  - "        .  .   . | . | .  .                         ~~~~~~~~~~~~~~~~~~~                  ||| ||| ||| |||  "
+  - "        ___|__|_||_._||__|___                     ~~                   ~~                |/| |\\| |/| |\\|  "
+  - "       |         | . |       |                   ~~                     ~~               ||| ||| ||| |||  "
+  - "       |         |_._|       |. . . . . . . . . .~~         o           ~~ . . . . . . . ||| ||| ||| |||  "
+  - "       |                     |                   ~~    Mossy            ~~               ||| ||| ||| |||  "
+  - "       |          o          |                   ~~          Path       ~~               |||  o  ||| |||  "
+  - "       |     Shrine          |                    ~~                   ~~                ||| Bamboo  |||  "
+  - "       |          Entrance   |                      ~~~~~~~~~~~~~~~~~~~                  ||| Thicket |||  "
+  - "       |_____________________|                              |                            ||| ||| ||| |||  "
+  - "                  |                                         |                                |            "
+  - "                  |_________________________________________|________________________________|            "
+  - "                                                            |                                             "
+  - "                                                      ______|______                                       "
+  - "                                                     /             \\                                      "
+  - "                                                    /               \\                                     "
+  - "                                                   /    *       *    \\                                    "
+  - "                                                  /                   \\                                   "
+  - "                                                 /         o           \\                                  "
+  - "                                                /     Spirit Clearing   \\                                 "
+  - "                                               /                         \\                                "
+  - "                                              /___________________________\\                               "
+  - "                                                           |     __                                       "
+  - "                                                           |____/ /___                                    "
+  - "                                                           |    o  _  /                                   "
+  - "                                                           | The Pit /                                    "
+  - "                                                           |__/ /___/                                     "
+  - "               ___________________________                 |                                              "
+  - "              |    __|__   __|__   __|__   |               |          _________________                   "
+  - "              |   |     | |     | |     |  |               |         |                 |                  "
+  - "              |   |     | |     | |     |  |_______________|_________|        o        |                  "
+  - "              |          o                 |               |         |  Inner Sanctum  |          _________    "
+  - "              |      Torii Descent         |               |         |                 |         /  ~~~~~  \\   "
+  - "              |   |     | |     | |     |  |               |         |_________________|        /  ~~~~~~~  \\  "
+  - "              |   |_____| |_____| |_____|  |               |                |                  /     o       \\ "
+  - "              |____________________________|               |                |                 /  Giga  Slime  \\"
+  - "                                                           |                |________________/     Lair       \\"
+  - "                                                           |_________________________________\\________________/"
+  - "                                                                                                          "
+
+anchors:
+  - id: shinto_town
+    row: 7
+    col: 19
+    anchor_type: town
+  - id: zone_01
+    row: 19
+    col: 18
+  - id: zone_02
+    row: 17
+    col: 60
+  - id: zone_03
+    row: 19
+    col: 94
+  - id: zone_04
+    row: 31
+    col: 59
+  - id: the_pit
+    row: 37
+    col: 64
+  - id: zone_05
+    row: 44
+    col: 25
+  - id: zone_06
+    row: 43
+    col: 79
+  - id: zone_07
+    row: 47
+    col: 102

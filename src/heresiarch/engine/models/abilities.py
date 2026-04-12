@@ -44,6 +44,7 @@ class TriggerCondition(str, Enum):
     RES_GATE_PASSED = "RES_GATE_PASSED"
     ON_CONSECUTIVE_ATTACK = "ON_CONSECUTIVE_ATTACK"
     ON_NON_DAMAGE_ACTION = "ON_NON_DAMAGE_ACTION"
+    ON_TURN_START = "ON_TURN_START"  # fires at start of combatant's turn (regen, etc.)
 
 
 class AbilityEffect(BaseModel):
@@ -86,11 +87,22 @@ class AbilityEffect(BaseModel):
 
     # Behavioral flags — replace hardcoded ability ID checks in combat.py
     survive_lethal: bool = False   # Survive one lethal hit at 1 HP (once per fight)
-    applies_taunt: bool = False    # Forces enemies to target this combatant
+    applies_taunt: bool = False    # Forces target to attack this combatant next round
     applies_mark: bool = False     # Marks target for bonus damage from all sources
     ap_refund: int = 0             # Refund this many AP on trigger (e.g., momentum)
     ap_gain: int = 0               # Grant this many AP to the actor (capped at bank max)
     grants_surviving: bool = False  # Set actor's surviving stance (halves incoming damage)
+
+    # Regen: heal this % of missing HP per trigger (ON_TURN_START)
+    regen_missing_hp_percent: float = 0.0
+
+    # Summon: spawn enemies mid-combat (boss summon abilities)
+    summon_template_id: str = ""     # enemy template to summon
+    summon_count: int = 0            # how many to summon
+    summon_level_offset: int = 0     # level relative to summoner (0 = same level)
+
+    # Invulnerability: reduce all incoming damage to 0 for N turns
+    grants_invulnerable: int = 0     # number of turns of invulnerability to grant
 
 
 class Ability(BaseModel):
@@ -103,7 +115,7 @@ class Ability(BaseModel):
     trigger: TriggerCondition = TriggerCondition.NONE
     trigger_threshold: float = 0.0
     is_innate: bool = False
-    is_partial_action: bool = False
     insight_amplified: bool = False
     priority: bool = False
     description: str = ""
+    windup_turns: int = 0  # 0 = instant. N = telegraph for N turns, fire on turn N+1

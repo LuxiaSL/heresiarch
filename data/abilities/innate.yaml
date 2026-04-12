@@ -4,7 +4,7 @@
   target: SINGLE_ENEMY
   trigger: ON_HIT_RECEIVED
   is_innate: true
-  description: "Passive counter-attack when hit. Scales with STR."
+  description: "When hit, counter-attacks for 5 + 0.5x STR damage, reduced by attacker's DEF."
   effects:
     - base_damage: 5
       stat_scaling: STR
@@ -16,7 +16,7 @@
   target: SELF
   trigger: ON_CONSECUTIVE_ATTACK
   is_innate: true
-  description: "Each consecutive attack in the same turn deals increasing damage."
+  description: "Each consecutive attack action in the same round deals +15% more damage (stacks multiplicatively)."
   effects:
     - surge_stack_bonus: 0.15
 
@@ -26,7 +26,7 @@
   target: SELF
   trigger: ON_NON_DAMAGE_ACTION
   is_innate: true
-  description: "Passivity sharpens perception. Non-amplified actions and Survive build stacks; amplified abilities consume one stack for +40% effectiveness."
+  description: "Non-damage actions and Survive build stacks. Insight-amplified abilities consume 1 stack for +40% effectiveness."
   effects:
     - surge_stack_bonus: 0.40
 
@@ -36,6 +36,6 @@
   target: SELF
   trigger: ON_HIT_RECEIVED
   is_innate: true
-  description: "Suffering reflected. Reflects 50% of damage taken back to the attacker."
+  description: "Reflects 70% of incoming pre-defense damage back to the attacker. Scales +20% per 10 levels."
   effects:
-    - reflect_percent: 0.50
+    - reflect_percent: 0.70

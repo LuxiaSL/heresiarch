@@ -6,8 +6,7 @@
   target: ALL_ENEMIES
   cooldown: 0
   is_innate: false
-  is_partial_action: true
-  description: "Reveals enemy action weights for the next turn."
+  description: "Reveals enemy action weights for the next turn. Partial action (doesn't consume full turn)."
   effects: []
 
 - id: bestow_split
@@ -16,7 +15,7 @@
   target: SINGLE_ALLY
   is_innate: false
   insight_amplified: true
-  description: "Cast Damage Split on an ally. THE support enabler — lets non-tanks protect their team."
+  description: "Grants Damage Split to an ally for 3 rounds, letting them absorb hits for their team."
   effects:
     - stat_scaling: MAG
       scaling_coefficient: 0.0
@@ -28,7 +27,7 @@
   target: SINGLE_ALLY
   is_innate: false
   insight_amplified: true
-  description: "Accelerates an ally, granting bonus SPD for 3 rounds. Scales with MAG."
+  description: "Grants +50 SPD to an ally for 3 rounds."
   effects:
     - stat_buff:
         SPD: 50
@@ -42,7 +41,7 @@
   target: SINGLE_ALLY
   is_innate: false
   insight_amplified: true
-  description: "Channels magical energy into an ally, boosting their MAG scaling on their next attack."
+  description: "Grants +40 MAG to an ally for 1 round. Use before their magic attack."
   effects:
     - stat_buff:
         MAG: 40
@@ -56,7 +55,7 @@
   target: SINGLE_ENEMY
   is_innate: false
   insight_amplified: true
-  description: "Marks an enemy — all attacks against the marked target deal bonus damage for 3 rounds."
+  description: "Marks an enemy for 3 rounds. All attacks against it deal 1.25x damage."
   effects:
     - applies_mark: true
       duration_rounds: 3
@@ -66,12 +65,36 @@
   category: SUPPORT
   target: SINGLE_ALLY
   is_innate: false
-  description: "Transfer own HP to an ally. Heals the target for 30% of user's max HP at the cost of the same amount."
+  description: "Transfers 30% of user's max HP to an ally as healing. Costs the same amount as self-damage."
   effects:
     - heal_percent: 0.3
       self_damage_ratio: 0.3
       stat_scaling: DEF
       scaling_coefficient: 0.0
+
+# --- Summon abilities ---
+
+- id: summon_kodama
+  name: Summon Kodama
+  category: SUPPORT
+  target: SELF
+  cooldown: 5
+  description: "Summons 2 Kodama spirits at the caster's level. 5-turn cooldown."
+  effects:
+    - summon_template_id: kodama
+      summon_count: 2
+      summon_level_offset: 0
+
+- id: summon_slimes
+  name: Summon Slimes
+  category: SUPPORT
+  target: SELF
+  cooldown: 5
+  description: "Summons 2 Slimes at caster's level minus 2. 5-turn cooldown."
+  effects:
+    - summon_template_id: slime
+      summon_count: 2
+      summon_level_offset: -2
 
 # --- Enemy support abilities ---
 
@@ -81,7 +104,7 @@
   target: SINGLE_ALLY
   cooldown: 2
   insight_amplified: true
-  description: "Channels restorative energy into a wounded ally."
+  description: "Heals an ally for 25% of their max HP. 2-turn cooldown."
   effects:
     - heal_percent: 0.25
       stat_scaling: MAG
@@ -93,7 +116,7 @@
   target: SINGLE_ALLY
   cooldown: 3
   insight_amplified: true
-  description: "Bolsters an ally's offensive power for 2 rounds."
+  description: "Grants +20 STR and +20 MAG to an ally for 2 rounds. 3-turn cooldown."
   effects:
     - stat_buff:
         STR: 20

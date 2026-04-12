@@ -1,0 +1,51 @@
+# Town interior map: Kitsune Crossing
+# Cul-de-sac with central fountain, three buildings, road south.
+#
+# Buildings:
+#   Lodge (west)  — rest and heal
+#   Shop (north)  — buy/sell gear
+#   Tavern (east) — NPC hints (future)
+
+map_id: shinto_town
+name: "Kitsune Crossing"
+
+art:
+  - "                                          "
+  - "                  ___________             "
+  - "                 |   SHOP    |            "
+  - "                 |  _     _  |            "
+  - "                 | |_|   |_| |            "
+  - "                 |     o     |            "
+  - "                 |_____._____|            "
+  - "                /      .      \\          "
+  - "    _________  /       .       \\  _________  "
+  - "   |  LODGE  |/   .  ~ ~ ~  .   \\|  TAVERN | "
+  - "   |  _   _  |      ~     ~      |  _   _  | "
+  - "   | |_| |_| |  .  ~   ~   ~  .  | |_| |_| | "
+  - "   |    o    |      ~     ~      |    o    | "
+  - "   |_________|  .  ~ ~ ~ ~ ~  .  |_________| "
+  - "              \\        .        /            "
+  - "               \\       .       /             "
+  - "                \\______.______/               "
+  - "                       .                    "
+  - "                      ] [                   "
+  - "                       .                    "
+  - "                                            "
+
+anchors:
+  - id: shop
+    row: 5
+    col: 23
+    anchor_type: building
+  - id: lodge
+    row: 12
+    col: 8
+    anchor_type: building
+  - id: tavern
+    row: 12
+    col: 38
+    anchor_type: building
+  - id: exit
+    row: 19
+    col: 23
+    anchor_type: exit

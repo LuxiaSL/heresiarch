@@ -1,4 +1,4 @@
-"""Tests for equip/unequip, party swap, consumables, safe zone healing."""
+"""Tests for equip/unequip, party swap, consumables, lodge rest."""
 
 import random
 
@@ -185,22 +185,66 @@ class TestUseConsumable:
             game_loop.use_consumable(run, "minor_potion", "mc_einherjar")
 
 
-class TestSafeZoneHealing:
+class TestLodgeRest:
     def test_heals_all_to_full(self, game_loop: GameLoop, game_data: GameData) -> None:
         run = game_loop.new_run("run_001", "Hero", "einherjar")
+        # Damage the MC
         mc = run.party.characters["mc_einherjar"]
         mc = mc.model_copy(update={"current_hp": 1})
         party = run.party.model_copy(
-            update={"characters": {**run.party.characters, "mc_einherjar": mc}}
+            update={
+                "characters": {**run.party.characters, "mc_einherjar": mc},
+                "money": 5000,
+            }
         )
-        run = run.model_copy(update={"party": party})
-        run = game_loop.enter_safe_zone(run)
+        run = run.model_copy(update={"party": party, "current_town_id": "shinto_town"})
+        run = game_loop.rest_at_lodge(run)
         job = game_data.jobs["einherjar"]
         max_hp = calculate_max_hp(job.base_hp, job.hp_growth, mc.level, mc.base_stats.DEF)
         assert run.party.characters["mc_einherjar"].current_hp == max_hp
 
-    def test_already_full_no_change(self, game_loop: GameLoop) -> None:
+    def test_costs_gold(self, game_loop: GameLoop) -> None:
         run = game_loop.new_run("run_001", "Hero", "einherjar")
-        hp_before = run.party.characters["mc_einherjar"].current_hp
-        run = game_loop.enter_safe_zone(run)
-        assert run.party.characters["mc_einherjar"].current_hp == hp_before
+        party = run.party.model_copy(update={"money": 5000})
+        run = run.model_copy(update={"party": party, "current_town_id": "shinto_town"})
+        gold_before = run.party.money
+        run = game_loop.rest_at_lodge(run)
+        assert run.party.money < gold_before
+
+    def test_insufficient_gold_raises(self, game_loop: GameLoop) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        run = run.model_copy(update={"current_town_id": "shinto_town"})
+        # Default gold is 0
+        with pytest.raises(ValueError, match="Insufficient funds"):
+            game_loop.rest_at_lodge(run)
+
+    def test_resets_zone_progress(self, game_loop: GameLoop) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        # Enter and partially progress through zone 1
+        run = game_loop.enter_zone(run, "zone_01")
+        assert run.zone_state is not None
+        run = run.model_copy(
+            update={
+                "zone_state": run.zone_state.model_copy(
+                    update={"current_encounter_index": 3}
+                )
+            }
+        )
+        run = game_loop.leave_zone(run)
+        assert "zone_01" in run.zone_progress
+
+        # Rest at lodge
+        party = run.party.model_copy(update={"money": 5000})
+        run = run.model_copy(update={"party": party, "current_town_id": "shinto_town"})
+        run = game_loop.rest_at_lodge(run)
+
+        # Zone progress reset, lodge_reset_zones tracks high-water mark
+        assert "zone_01" not in run.zone_progress
+        assert run.lodge_reset_zones.get("zone_01") == 3
+
+    def test_not_in_town_raises(self, game_loop: GameLoop) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        party = run.party.model_copy(update={"money": 5000})
+        run = run.model_copy(update={"party": party})
+        with pytest.raises(ValueError, match="Must be in a town"):
+            game_loop.rest_at_lodge(run)

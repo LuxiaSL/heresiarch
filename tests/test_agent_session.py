@@ -259,19 +259,24 @@ class TestPartyManagement:
 
     def test_equip_unequip(self, session: GameSession) -> None:
         session.new_run("Kael", "einherjar", seed=42)
-        # Buy an item first
-        session.enter_zone("zone_01")
 
-        # Give gold and add item to stash manually for test
+        # Give gold and mark zone_01 cleared so town shop has gear
         run = session.run
         assert run is not None
-        from heresiarch.engine.models.party import Party
+        zones_done = list(run.zones_completed)
+        if "zone_01" not in zones_done:
+            zones_done.append("zone_01")
         new_party = run.party.model_copy(update={"money": 1000})
-        session.run = run.model_copy(update={"party": new_party})
+        session.run = run.model_copy(
+            update={"party": new_party, "zones_completed": zones_done}
+        )
 
+        # Buy from town shop
+        session.enter_town("shinto_town")
         session.shop_buy("iron_blade")
+        session.leave_town()
 
-        # Equip it
+        # Equip it (in zone select phase)
         mc_id = session.run.party.active[0]
         result = session.equip(mc_id, "iron_blade", "WEAPON")
         assert "Equipped" in result
@@ -294,22 +299,35 @@ class TestPartyManagement:
 
 
 class TestShopping:
+    @staticmethod
+    def _mark_zone_cleared(session: GameSession, zone_id: str = "zone_01") -> None:
+        """Mark a zone as cleared so the town shop unlocks its tier."""
+        run = session.run
+        assert run is not None
+        zones_done = list(run.zones_completed)
+        if zone_id not in zones_done:
+            zones_done.append(zone_id)
+        session.run = run.model_copy(update={"zones_completed": zones_done})
+
     def test_shop_browse(self, session: GameSession) -> None:
         session.new_run("Kael", "einherjar", seed=42)
-        session.enter_zone("zone_01")
+        self._mark_zone_cleared(session)
+        session.enter_town("shinto_town")
         result = session.shop_browse()
         assert "SHOP" in result
         assert "FOR SALE" in result
 
     def test_shop_buy_insufficient_funds(self, session: GameSession) -> None:
         session.new_run("Kael", "einherjar", seed=42)
-        session.enter_zone("zone_01")
+        self._mark_zone_cleared(session)
+        session.enter_town("shinto_town")
         with pytest.raises(AgentError, match="Insufficient funds"):
             session.shop_buy("iron_blade")
 
     def test_shop_buy_sell(self, session: GameSession) -> None:
         session.new_run("Kael", "einherjar", seed=42)
-        session.enter_zone("zone_01")
+        self._mark_zone_cleared(session)
+        session.enter_town("shinto_town")
 
         # Give gold
         run = session.run

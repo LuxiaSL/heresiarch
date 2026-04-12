@@ -260,10 +260,64 @@ class PartyScreen(Screen):
                     action_list.add_option(Option(f"Mimic → {jname}"))
                     self._action_keys.append(f"mimic:{c.job_id}")
 
+        # Dismiss (non-MC, not last active)
+        if not char.is_mc:
+            can_dismiss = (
+                char_id in run.party.reserve
+                or len(run.party.active) > 1
+            )
+            if can_dismiss:
+                equipped = [iid for iid in char.equipment.values() if iid]
+                if equipped:
+                    gear_names = []
+                    for eid in equipped:
+                        item = self.app.game_data.items.get(eid)
+                        gear_names.append(item.name if item else eid)
+                    warning = f" [#cc4444](loses: {', '.join(gear_names)})[/#cc4444]"
+                else:
+                    warning = ""
+                action_list.add_option(Option(f"[#cc4444]Dismiss{warning}[/#cc4444]"))
+                self._action_keys.append(f"dismiss:{char_id}")
+
         action_list.add_option(Option("Cancel"))
         self._action_keys.append("cancel")
 
         action_list.focus()
+
+    def _confirm_dismiss(self, character_id: str) -> None:
+        """Show dismiss confirmation with gear loss warning."""
+        run = self.app.run_state
+        if run is None:
+            return
+        char = run.party.characters.get(character_id)
+        if char is None:
+            return
+
+        action_list = self.query_one("#action-option-list", OptionList)
+        action_list.clear_options()
+        self._action_keys = []
+
+        # Build warning text
+        equipped = [item_id for item_id in char.equipment.values() if item_id]
+        gear_lines: list[str] = []
+        for eid in equipped:
+            item = self.app.game_data.items.get(eid)
+            gear_lines.append(item.name if item else eid)
+
+        if gear_lines:
+            warn = f"[bold #cc4444]Dismiss {char.name}? They leave with: {', '.join(gear_lines)}[/bold #cc4444]"
+        else:
+            warn = f"[bold #cc4444]Dismiss {char.name}? (No equipped gear to lose.)[/bold #cc4444]"
+
+        action_list.add_option(Option(warn))
+        self._action_keys.append("")  # non-selectable label
+
+        action_list.add_option(Option(f"[#cc4444]Yes — dismiss {char.name}[/#cc4444]"))
+        self._action_keys.append(f"confirm_dismiss:{character_id}")
+        action_list.add_option(Option("No — cancel"))
+        self._action_keys.append("cancel_dismiss")
+        action_list.focus()
+        action_list.highlighted = 2  # Default to cancel
 
     def _handle_action(self, key: str) -> None:
         """Execute an action from the action list."""
@@ -293,7 +347,14 @@ class PartyScreen(Screen):
                 case "mimic":
                     _, job_id = parts
                     self.app.run_state = self.app.game_loop.mc_swap_job(run, job_id)
-                case "cancel":
+                case "dismiss":
+                    _, char_id = parts
+                    self._confirm_dismiss(char_id)
+                    return  # Don't refresh yet — show confirmation
+                case "confirm_dismiss":
+                    _, char_id = parts
+                    self.app.run_state = self.app.game_loop.dismiss_character(run, char_id)
+                case "cancel_dismiss" | "cancel":
                     pass
         except ValueError:
             pass

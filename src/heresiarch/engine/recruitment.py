@@ -23,7 +23,8 @@ CHA_MODERATE_THRESHOLD: int = 30
 CHA_FULL_THRESHOLD: int = 70
 
 # --- Growth Variance ---
-GROWTH_VARIANCE: int = 2
+GROWTH_VARIANCE: int = 1
+GROWTH_FLOOR: int = 1  # Minimum growth per stat — no dead stats
 
 # --- Party Limits ---
 MAX_ACTIVE_SIZE: int = 3
@@ -32,6 +33,7 @@ MAX_PARTY_SIZE: int = 4  # total active + reserve (3 active + 1 reserve)
 # --- Recruit Equipment Probabilities ---
 RECRUIT_WEAPON_CHANCE: float = 0.8
 RECRUIT_ARMOR_CHANCE: float = 0.5
+RECRUIT_ACCESSORY_CHANCE: float = 0.15
 
 
 class InspectionLevel(str, Enum):
@@ -65,15 +67,19 @@ class RecruitmentEngine:
         zone_level: int,
         exclude_job_ids: list[str] | None = None,
         shop_pool: list[str] | None = None,
+        level_range: tuple[int, int] | None = None,
     ) -> RecruitCandidate:
         """Create a random recruit at zone-appropriate level with randomized growth.
 
-        Growth variance: each stat = job_template_growth +/- randint(-2, 2),
-        clamped to [0, job_template_growth + GROWTH_VARIANCE].
-        Character level = zone_level.
+        Growth variance: each stat = job_template_growth +/- GROWTH_VARIANCE,
+        clamped to [GROWTH_FLOOR, base + GROWTH_VARIANCE].
+
+        If ``level_range`` is provided and non-zero, the recruit's level is
+        randomly chosen from that range.  Otherwise falls back to ``zone_level``.
 
         If ``shop_pool`` is provided, equips the recruit with job-appropriate
-        items from that pool (weapon 80%, armor 50%).
+        items (weapon 80%, armor 50%, accessory 15%).  Higher-tier items are
+        weighted to appear less frequently (weight = 1/tier).
 
         If ``exclude_job_ids`` is provided, those jobs are excluded from the
         candidate pool (rolling-window duplicate prevention).
@@ -88,8 +94,11 @@ class RecruitmentEngine:
         job_id = self.rng.choice(available_jobs)
         job = self.job_registry[job_id]
 
+        # Resolve candidate level from zone range or flat zone_level
+        candidate_level = self._resolve_candidate_level(zone_level, level_range)
+
         randomized_growth = self._randomize_growth(job.growth)
-        stats = calculate_stats_at_level(randomized_growth, zone_level)
+        stats = calculate_stats_at_level(randomized_growth, candidate_level)
 
         # Select equipment based on job affinity and zone shop pool
         equipment = self._select_recruit_equipment(job, shop_pool or [])
@@ -101,12 +110,12 @@ class RecruitmentEngine:
                 equipped_items.append(self.item_registry[item_id])
         effective = calculate_effective_stats(stats, equipped_items, [])
 
-        max_hp = calculate_max_hp(job.base_hp, job.hp_growth, zone_level, effective.DEF)
+        max_hp = calculate_max_hp(job.base_hp, job.hp_growth, candidate_level, effective.DEF)
 
         # Build ability list from job innate + breakpoints + equipment-granted
         abilities = ["basic_attack", job.innate_ability_id]
         for unlock in job.ability_unlocks:
-            if unlock.level <= zone_level and unlock.ability_id not in abilities:
+            if unlock.level <= candidate_level and unlock.ability_id not in abilities:
                 abilities.append(unlock.ability_id)
         for item in equipped_items:
             if item.granted_ability_id and item.granted_ability_id not in abilities:
@@ -117,7 +126,7 @@ class RecruitmentEngine:
             id=char_id,
             name=f"{job.name} Recruit",
             job_id=job_id,
-            level=zone_level,
+            level=candidate_level,
             base_stats=stats,
             effective_stats=effective,
             current_hp=max_hp,
@@ -128,6 +137,20 @@ class RecruitmentEngine:
 
         return RecruitCandidate(character=character, growth=randomized_growth)
 
+    def _resolve_candidate_level(
+        self,
+        zone_level: int,
+        level_range: tuple[int, int] | None,
+    ) -> int:
+        """Pick a recruit level from the zone's enemy level range.
+
+        Falls back to ``zone_level`` if range is None or (0, 0).
+        """
+        if level_range and level_range != (0, 0):
+            lo, hi = level_range
+            return self.rng.randint(lo, hi)
+        return zone_level
+
     def _select_recruit_equipment(
         self,
         job: JobTemplate,
@@ -135,9 +158,9 @@ class RecruitmentEngine:
     ) -> dict[str, str | None]:
         """Select random equipment for a recruit from the zone's shop pool.
 
-        Uses job growth to determine affinity:
-          - If STR >= MAG: prefer STR-scaling weapons, else MAG-scaling
-          - If DEF >= RES: prefer DEF-scaling armor, else RES-scaling
+        Uses job growth to determine weapon/armor affinity.
+        Higher-tier items are rarer (weighted by 1/tier).
+        Accessories have a small chance and are fully random (no affinity).
         """
         equipment: dict[str, str | None] = {
             "WEAPON": None,
@@ -146,7 +169,7 @@ class RecruitmentEngine:
             "ACCESSORY_2": None,
         }
 
-        if not shop_pool or not self.item_registry:
+        if not self.item_registry:
             return equipment
 
         prefers_str = job.growth.STR >= job.growth.MAG
@@ -155,6 +178,7 @@ class RecruitmentEngine:
         weapons: list[str] = []
         armors: list[str] = []
 
+        # Weapons and armor are filtered from the shop pool (affinity-based)
         for item_id in shop_pool:
             item = self.item_registry.get(item_id)
             if item is None or item.is_consumable:
@@ -169,14 +193,39 @@ class RecruitmentEngine:
                     armors.append(item_id)
                 elif not prefers_def and item.scaling.stat == StatType.RES:
                     armors.append(item_id)
+            # Flat-stat armor (e.g. warding_mail) matches either affinity
+            elif item.slot == EquipSlot.ARMOR and item.flat_stat_bonus:
+                armors.append(item_id)
 
         if weapons and self.rng.random() < RECRUIT_WEAPON_CHANCE:
-            equipment["WEAPON"] = self.rng.choice(weapons)
+            equipment["WEAPON"] = self._tier_weighted_choice(weapons)
 
         if armors and self.rng.random() < RECRUIT_ARMOR_CHANCE:
-            equipment["ARMOR"] = self.rng.choice(armors)
+            equipment["ARMOR"] = self._tier_weighted_choice(armors)
+
+        # Accessories: small chance, fully random from all accessories in registry
+        accessories = [
+            iid for iid, item in self.item_registry.items()
+            if item.slot in (EquipSlot.ACCESSORY_1, EquipSlot.ACCESSORY_2)
+            and not item.is_consumable
+        ]
+        if accessories and self.rng.random() < RECRUIT_ACCESSORY_CHANCE:
+            equipment["ACCESSORY_1"] = self.rng.choice(accessories)
 
         return equipment
+
+    def _tier_weighted_choice(self, item_ids: list[str]) -> str:
+        """Pick an item weighted inversely by tier (higher tier = rarer).
+
+        Weight = 1 / tier.  Tier 1 = weight 1.0, tier 2 = 0.5, tier 3 = 0.33.
+        Falls back to uniform choice if items have no registry entries.
+        """
+        weights: list[float] = []
+        for item_id in item_ids:
+            item = self.item_registry.get(item_id)
+            tier = item.tier if item else 1
+            weights.append(1.0 / tier)
+        return self.rng.choices(item_ids, weights=weights, k=1)[0]
 
     def get_inspection_level(self, cha: int) -> InspectionLevel:
         """CHA < 30: MINIMAL. CHA 30-69: MODERATE. CHA >= 70: FULL."""
@@ -260,11 +309,11 @@ class RecruitmentEngine:
         )
 
     def _randomize_growth(self, base_growth: GrowthVector) -> GrowthVector:
-        """Apply +/- GROWTH_VARIANCE to each stat, clamped to [0, base + GROWTH_VARIANCE]."""
+        """Apply +/- GROWTH_VARIANCE to each stat, clamped to [GROWTH_FLOOR, base + GROWTH_VARIANCE]."""
         data: dict[str, int] = {}
         for stat in StatType:
             base_val = getattr(base_growth, stat.value)
             delta = self.rng.randint(-GROWTH_VARIANCE, GROWTH_VARIANCE)
-            new_val = max(0, min(base_val + GROWTH_VARIANCE, base_val + delta))
+            new_val = max(GROWTH_FLOOR, min(base_val + GROWTH_VARIANCE, base_val + delta))
             data[stat.value] = new_val
         return GrowthVector(**data)

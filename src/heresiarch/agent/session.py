@@ -16,7 +16,7 @@ from typing import Any
 from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.data_loader import GameData, load_all
 from heresiarch.engine.formulas import (
-    calculate_bonus_actions,
+    calculate_speed_bonus,
     calculate_buy_price,
     calculate_sell_price,
 )
@@ -47,6 +47,7 @@ from . import summarizer as S
 class Phase(str, Enum):
     SETUP = "SETUP"
     ZONE_SELECT = "ZONE_SELECT"
+    IN_TOWN = "IN_TOWN"
     IN_ZONE = "IN_ZONE"
     COMBAT = "COMBAT"
     POST_COMBAT = "POST_COMBAT"
@@ -66,17 +67,28 @@ _PHASE_TOOLS: dict[Phase, set[str]] = {
         "save_note", "read_notes", "save_run", "load_run", "list_saves", "save_run", "load_run", "list_saves",
     },
     Phase.ZONE_SELECT: {
-        "new_run", "list_zones", "enter_zone", "party_status", "equip", "unequip",
+        "new_run", "list_zones", "enter_zone", "enter_town",
+        "party_status", "equip", "unequip", "dismiss",
         "swap_roster", "use_scroll", "use_consumable", "mc_swap_job",
         "get_battle_record", "get_run_summary",
         "lookup_job", "lookup_ability", "lookup_item", "lookup_enemy",
         "lookup_zone", "lookup_formula", "get_state",
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
     },
+    Phase.IN_TOWN: {
+        "new_run", "leave_town", "rest_at_lodge",
+        "shop_browse", "shop_buy", "shop_sell",
+        "party_status", "equip", "unequip", "dismiss", "swap_roster",
+        "use_scroll", "use_consumable", "mc_swap_job",
+        "get_battle_record", "get_run_summary",
+        "lookup_job", "lookup_ability", "lookup_item", "lookup_enemy",
+        "lookup_zone", "lookup_formula", "get_state",
+        "save_note", "read_notes", "save_run", "load_run", "list_saves",
+    },
     Phase.IN_ZONE: {
-        "new_run", "fight", "party_status", "equip", "unequip", "swap_roster",
-        "use_scroll", "use_consumable", "shop_browse", "shop_buy",
-        "shop_sell", "leave_zone", "get_zone_status", "get_battle_record",
+        "new_run", "fight", "party_status", "equip", "unequip", "dismiss", "swap_roster",
+        "use_scroll", "use_consumable",
+        "leave_zone", "get_zone_status", "get_battle_record",
         "lookup_job", "lookup_ability", "lookup_item", "lookup_enemy",
         "lookup_zone", "lookup_formula", "get_state",
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
@@ -94,7 +106,7 @@ _PHASE_TOOLS: dict[Phase, set[str]] = {
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
     },
     Phase.RECRUITING: {
-        "inspect_candidate", "recruit",
+        "inspect_candidate", "recruit", "dismiss", "party_status",
         "lookup_job", "lookup_ability", "lookup_item", "lookup_enemy",
         "lookup_zone", "lookup_formula", "get_state",
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
@@ -219,6 +231,22 @@ class GameSession:
                 gl = self._require_game_loop()
                 zones = gl.get_available_zones(run)
                 return S.summarize_zone_select(run, zones, self.game_data)
+            case Phase.IN_TOWN:
+                gl = self._require_game_loop()
+                town = self.game_data.towns.get(run.current_town_id or "")
+                if town:
+                    shop_items = gl.resolve_town_shop(run)
+                    lodge_cost = gl.get_lodge_cost(run)
+                    lines = [
+                        f"=== {town.name} ===",
+                        f"Gold: {run.party.money}",
+                        f"Lodge rest cost: {lodge_cost}g",
+                        f"Shop items: {len(shop_items)} available",
+                        "",
+                        "Actions: shop_browse, shop_buy, shop_sell, rest_at_lodge, leave_town",
+                    ]
+                    return "\n".join(lines)
+                return "In town."
             case Phase.IN_ZONE:
                 return S.summarize_zone_status(run, self.game_data)
             case Phase.COMBAT:
@@ -288,6 +316,75 @@ class GameSession:
         zones = gl.get_available_zones(self.run)
         return S.summarize_zone_select(self.run, zones, self.game_data)
 
+    # ------------------------------------------------------------------
+    # Town Navigation
+    # ------------------------------------------------------------------
+
+    def enter_town(self, town_id: str) -> str:
+        """Enter a town for shopping, resting, etc."""
+        self._require_phase("enter_town")
+        run = self._require_run()
+        gl = self._require_game_loop()
+
+        try:
+            self.run = gl.enter_town(run, town_id)
+        except ValueError as e:
+            raise AgentError(str(e)) from e
+
+        self.phase = Phase.IN_TOWN
+        self._autosave()
+
+        town = self.game_data.towns[town_id]
+        shop_items = gl.resolve_town_shop(self.run)
+        lodge_cost = gl.get_lodge_cost(self.run)
+        lines = [
+            f"=== {town.name} ===",
+            f"Gold: {self.run.party.money}",
+            "",
+            f"Lodge rest cost: {lodge_cost}g (full party heal, resets zone progress)",
+            f"Shop items: {len(shop_items)} available",
+            "",
+            "Actions: shop_browse, shop_buy, shop_sell, rest_at_lodge, leave_town",
+        ]
+        return "\n".join(lines)
+
+    def leave_town(self) -> str:
+        """Leave the current town back to zone select."""
+        self._require_phase("leave_town")
+        run = self._require_run()
+        gl = self._require_game_loop()
+
+        self.run = gl.leave_town(run)
+        self.phase = Phase.ZONE_SELECT
+        self._autosave()
+
+        zones = gl.get_available_zones(self.run)
+        return S.summarize_zone_select(self.run, zones, self.game_data)
+
+    def rest_at_lodge(self) -> str:
+        """Rest at the lodge: full party heal, costs gold, resets zone progress."""
+        self._require_phase("rest_at_lodge")
+        run = self._require_run()
+        gl = self._require_game_loop()
+
+        cost = gl.get_lodge_cost(run)
+        try:
+            self.run = gl.rest_at_lodge(run)
+        except ValueError as e:
+            raise AgentError(str(e)) from e
+
+        self._autosave()
+
+        lines = [
+            f"Rested at the lodge. Paid {cost}g.",
+            f"All party members healed to full HP.",
+            f"Gold remaining: {self.run.party.money}",
+        ]
+        if self.run.lodge_reset_zones:
+            zones = ", ".join(self.run.lodge_reset_zones.keys())
+            lines.append(f"Zone progress reset: {zones}")
+        return "\n".join(lines)
+
     def get_zone_status(self) -> str:
         """Show current zone progress."""
         self._require_phase("get_zone_status")
@@ -344,16 +441,10 @@ class GameSession:
             raise AgentError("No active combat.")
 
         # Translate agent decisions into PlayerTurnDecision objects
-        # NOTE: _parse_decisions may mutate self._combat_state via item use
         try:
             player_decisions = self._parse_decisions(decisions, combat)
         except (ValueError, KeyError) as e:
             raise AgentError(f"Invalid decisions: {e}") from e
-
-        # Re-read combat state — item use during parsing may have changed HP
-        combat = self._combat_state
-        if combat is None:
-            raise AgentError("Combat state lost during decision parsing.")
 
         # Build enemy template lookup for AI
         enemy_templates = {}
@@ -369,6 +460,18 @@ class GameSession:
             combat, player_decisions, enemy_templates,
         )
         self._combat_state = new_combat
+
+        # Remove consumed items from stash
+        if new_combat.consumed_items:
+            new_stash = list(run.party.stash)
+            for item_id in new_combat.consumed_items:
+                try:
+                    new_stash.remove(item_id)
+                except ValueError:
+                    pass  # item already removed (shouldn't happen)
+            new_party = run.party.model_copy(update={"stash": new_stash})
+            run = run.model_copy(update={"party": new_party})
+            self.run = run
 
         # Extract this round's events
         self._round_events = new_combat.log[pre_event_count:]
@@ -466,14 +569,24 @@ class GameSession:
 
         defeated_templates: list[str] = []
         defeated_budgets: list[float] = []
+        defeated_levels: list[int] = []
+        defeated_xp_mults: list[float] = []
+        defeated_gold_mults: list[float] = []
         for c in combat.enemy_combatants:
             if not c.is_alive:
                 tmpl_id = self._enemy_combatant_templates.get(c.id, "")
                 if tmpl_id:
                     defeated_templates.append(tmpl_id)
+                    defeated_levels.append(c.level)
                     template = self.game_data.enemies.get(tmpl_id)
                     if template:
                         defeated_budgets.append(template.budget_multiplier)
+                        defeated_xp_mults.append(template.xp_multiplier or 0.0)
+                        defeated_gold_mults.append(template.gold_multiplier or 0.0)
+                    else:
+                        defeated_budgets.append(0.0)
+                        defeated_xp_mults.append(0.0)
+                        defeated_gold_mults.append(0.0)
 
         zone_level = 0
         if run.current_zone_id:
@@ -487,6 +600,9 @@ class GameSession:
             surviving_character_hp=surviving_hp,
             defeated_enemy_template_ids=defeated_templates,
             defeated_enemy_budget_multipliers=defeated_budgets,
+            defeated_enemy_levels=defeated_levels,
+            defeated_enemy_xp_multipliers=defeated_xp_mults,
+            defeated_enemy_gold_multipliers=defeated_gold_mults,
             rounds_taken=combat.round_number,
             zone_level=zone_level,
             gold_stolen_by_enemies=combat.gold_stolen_by_enemies,
@@ -570,8 +686,7 @@ class GameSession:
 
         Supports "action": "use_item" with "item_id" and "target" fields.
         Using an item costs the character's primary action for the round.
-        The item heal is applied to combat state and removed from stash
-        before the round processes.
+        Item effects are resolved during turn order (not instant).
         """
         decisions: dict[str, PlayerTurnDecision] = {}
 
@@ -592,6 +707,10 @@ class GameSession:
                 f"Missing decisions for: {', '.join(sorted(missing))}. "
                 f"All living characters need decisions."
             )
+
+        # Track claimed items so the same item can't be used twice
+        run = self._require_run()
+        remaining_stash = list(run.party.stash)
 
         for cid, dec in raw.items():
             combatant = combat.get_combatant(cid)
@@ -620,8 +739,9 @@ class GameSession:
             primary_action = None
 
             if action_id == "use_item":
-                # Item use costs the primary action
-                self._apply_combat_item_use(cid, dec, combat)
+                primary_action = self._validate_item_action(
+                    cid, dec, combat, remaining_stash,
+                )
             elif action_id:
                 # Ability use
                 if action_id not in combatant.ability_ids:
@@ -650,32 +770,40 @@ class GameSession:
                         f"{cid}: wants to spend {ap_spend} AP but only has {combatant.action_points}"
                     )
                 for extra in dec.get("cheat_extras", []):
-                    if extra.get("action") == "use_item" or extra.get("ability") == "use_item":
-                        # Item use as a cheat extra action
-                        self._apply_combat_item_use(cid, extra, combat)
+                    extra_action = extra.get("ability", extra.get("action", ""))
+                    if extra_action == "wait":
+                        cheat_extras.append(CombatAction(
+                            actor_id=cid, is_windup_push=True,
+                        ))
+                    elif extra_action == "use_item":
+                        cheat_extras.append(self._validate_item_action(
+                            cid, extra, combat, remaining_stash,
+                        ))
                     else:
-                        ability = extra.get("ability", extra.get("action", ""))
                         cheat_extras.append(CombatAction(
                             actor_id=cid,
-                            ability_id=ability,
+                            ability_id=extra_action,
                             target_ids=[extra["target"]] if extra.get("target") else [],
                         ))
 
-            # --- Partial actions (SPD bonus): abilities only ---
-            partial_actions: list[CombatAction] = []
-            max_partials = calculate_bonus_actions(combatant.effective_stats.SPD)
-            for partial in dec.get("partial_actions", []):
-                if len(partial_actions) >= max_partials:
-                    raise ValueError(
-                        f"{cid}: too many partial actions. Max: {max_partials} "
-                        f"(SPD {combatant.effective_stats.SPD})"
-                    )
-                partial_actions.append(CombatAction(
-                    actor_id=cid,
-                    ability_id=partial["ability"],
-                    target_ids=[partial["target"]] if partial.get("target") else [],
-                    is_partial=True,
-                ))
+            # --- Speed bonus actions: agent-chosen, same format as cheat_extras ---
+            bonus_acts: list[CombatAction] = []
+            for ba in dec.get("bonus_actions", []):
+                ba_action = ba.get("ability", ba.get("action", ""))
+                if ba_action == "wait":
+                    bonus_acts.append(CombatAction(
+                        actor_id=cid, is_windup_push=True,
+                    ))
+                elif ba_action == "use_item":
+                    bonus_acts.append(self._validate_item_action(
+                        cid, ba, combat, remaining_stash,
+                    ))
+                else:
+                    bonus_acts.append(CombatAction(
+                        actor_id=cid,
+                        ability_id=ba_action,
+                        target_ids=[ba["target"]] if ba.get("target") else [],
+                    ))
 
             decisions[cid] = PlayerTurnDecision(
                 combatant_id=cid,
@@ -683,33 +811,40 @@ class GameSession:
                 cheat_actions=ap_spend,
                 primary_action=primary_action,
                 cheat_extra_actions=cheat_extras,
-                partial_actions=partial_actions,
+                bonus_actions=bonus_acts,
             )
 
         return decisions
 
-    def _apply_combat_item_use(
-        self, cid: str, dec: dict[str, Any], combat: CombatState,
-    ) -> None:
-        """Apply a combat item use: heal combatant, remove from stash.
+    def _validate_item_action(
+        self,
+        cid: str,
+        dec: dict[str, Any],
+        combat: CombatState,
+        remaining_stash: list[str],
+    ) -> CombatAction:
+        """Validate an item use and return a CombatAction for it.
 
-        Delegates healing to CombatEngine.use_combat_item(). Called from
-        _parse_decisions when action is "use_item".
+        Claims the item from remaining_stash so the same copy can't be
+        used twice in one round.  The actual effect is resolved during
+        turn order by CombatEngine._resolve_item_action().
         """
-        run = self._require_run()
         item_id = dec.get("item_id")
-        target_id = dec.get("target", cid)  # Default to self
+        target_id = dec.get("target", cid)
 
         if not item_id:
             raise ValueError(f"{cid}: use_item requires 'item_id'.")
 
-        if item_id not in run.party.stash:
+        if item_id not in remaining_stash:
             raise ValueError(
                 f"{cid}: '{item_id}' not in stash. "
-                f"Stash: {', '.join(run.party.stash) or 'empty'}"
+                f"Stash: {', '.join(remaining_stash) or 'empty'}"
             )
 
-        item = self.game_data.items.get(item_id) or run.party.items.get(item_id)
+        item = self.game_data.items.get(item_id)
+        if item is None:
+            run = self._require_run()
+            item = run.party.items.get(item_id)
         if item is None or not item.is_consumable:
             raise ValueError(f"{cid}: '{item_id}' is not a consumable.")
 
@@ -719,17 +854,15 @@ class GameSession:
         if not target.is_alive:
             raise ValueError(f"{cid}: '{target_id}' is dead.")
 
-        # Delegate healing to engine
-        gl = self._require_game_loop()
-        self._combat_state = gl.combat_engine.use_combat_item(
-            combat, cid, target_id, item,
-        )
+        # Claim from remaining stash (prevents double-use of same copy)
+        remaining_stash.remove(item_id)
 
-        # Remove item from stash
-        new_stash = list(run.party.stash)
-        new_stash.remove(item_id)
-        new_party = run.party.model_copy(update={"stash": new_stash})
-        self.run = run.model_copy(update={"party": new_party})
+        return CombatAction(
+            actor_id=cid,
+            ability_id="use_item",
+            item_id=item_id,
+            target_ids=[target_id],
+        )
 
     # ------------------------------------------------------------------
     # Post-Combat
@@ -795,11 +928,6 @@ class GameSession:
         if zone is None or zone.recruitment_chance <= 0:
             return False
 
-        # Party full
-        total = len(run.party.active) + len(run.party.reserve)
-        if total >= MAX_PARTY_SIZE:
-            return False
-
         # Roll recruitment chance
         if gl.rng.random() >= zone.recruitment_chance:
             return False
@@ -813,7 +941,8 @@ class GameSession:
 
         zone = self.game_data.zones.get(run.current_zone_id or "")
         zone_level = zone.zone_level if zone else 1
-        shop_pool = zone.shop_item_pool if zone else []
+        level_range = zone.enemy_level_range if zone else None
+        shop_pool = gl.resolve_town_shop(run)
 
         exclude: list[str] = []
         if run.last_recruit_job_id:
@@ -823,6 +952,7 @@ class GameSession:
             zone_level=zone_level,
             exclude_job_ids=exclude,
             shop_pool=shop_pool,
+            level_range=level_range,
         )
 
         # Mark recruitment as offered in zone state
@@ -961,6 +1091,55 @@ class GameSession:
             f"Reserve: {', '.join(reserve_names) or 'none'}"
         )
 
+    def dismiss(self, character_id: str) -> str:
+        """Dismiss a party member. They leave with their equipped gear.
+
+        Returns a warning-style summary showing what will be lost.
+        """
+        self._require_phase("dismiss")
+        run = self._require_run()
+        gl = self._require_game_loop()
+
+        if character_id not in run.party.characters:
+            raise AgentError(f"Character {character_id!r} not in party")
+
+        char = run.party.characters[character_id]
+        job_name = S._job_name(char.job_id, self.game_data)
+
+        # Build the list of gear that will be lost
+        lost_items: list[str] = []
+        for slot, item_id_val in char.equipment.items():
+            if item_id_val:
+                item = run.party.items.get(item_id_val)
+                name = item.name if item else item_id_val
+                lost_items.append(f"  {slot}: {name}")
+
+        try:
+            self.run = gl.dismiss_character(run, character_id)
+        except ValueError as e:
+            raise AgentError(str(e)) from e
+
+        lines = [
+            f"Dismissed {char.name} ({job_name} Lv{char.level}).",
+        ]
+        if lost_items:
+            lines.append("Equipment lost:")
+            lines.extend(lost_items)
+        else:
+            lines.append("(No equipped items lost.)")
+
+        active_names = [
+            self.run.party.characters[cid].name
+            for cid in self.run.party.active
+        ]
+        reserve_names = [
+            self.run.party.characters[cid].name
+            for cid in self.run.party.reserve
+        ]
+        lines.append(f"\nRoster — Active: {', '.join(active_names)}")
+        lines.append(f"Reserve: {', '.join(reserve_names) or 'none'}")
+        return "\n".join(lines)
+
     def use_scroll(self, item_id: str, character_id: str) -> str:
         """Use a teach scroll."""
         self._require_phase("use_scroll")
@@ -1029,40 +1208,28 @@ class GameSession:
     # ------------------------------------------------------------------
 
     def shop_browse(self) -> str:
-        """View zone shop."""
+        """View town shop."""
         self._require_phase("shop_browse")
         run = self._require_run()
-
-        if not run.current_zone_id:
-            raise AgentError("Not in a zone.")
-
-        zone = self.game_data.zones.get(run.current_zone_id)
-        if not zone:
-            raise AgentError(f"Unknown zone: {run.current_zone_id}")
+        gl = self._require_game_loop()
 
         shop = ShopInventory(
-            available_items=zone.shop_item_pool,
-            zone_level=zone.zone_level,
+            available_items=gl.resolve_town_shop(run),
+            zone_level=1,
         )
         return S.summarize_shop(shop, run, self.game_data)
 
     def shop_buy(self, item_id: str) -> str:
-        """Buy an item."""
+        """Buy an item from the town shop."""
         self._require_phase("shop_buy")
         run = self._require_run()
         gl = self._require_game_loop()
 
-        if not run.current_zone_id:
-            raise AgentError("Not in a zone.")
-
-        zone = self.game_data.zones.get(run.current_zone_id)
-        if not zone:
-            raise AgentError(f"Unknown zone: {run.current_zone_id}")
-
-        if item_id not in zone.shop_item_pool:
+        town_shop = gl.resolve_town_shop(run)
+        if item_id not in town_shop:
             raise AgentError(
                 f"'{item_id}' not in this shop. "
-                f"Available: {', '.join(zone.shop_item_pool)}"
+                f"Available: {', '.join(town_shop)}"
             )
 
         item = self.game_data.items.get(item_id)

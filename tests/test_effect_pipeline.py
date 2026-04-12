@@ -227,7 +227,7 @@ class TestSurviveLethalFlag:
 
         # Create an overpowered enemy
         enemy = combat_engine.create_enemy_instance(
-            game_data.enemies["brute_oni"], zone_level=50,
+            game_data.enemies["brute_oni"], enemy_level=50,
         )
 
         state = combat_engine.initialize_combat([martyr], [enemy])
@@ -285,9 +285,12 @@ class TestSurviveLethalFlag:
             "current_hp": 1,  # Near death
         })
 
+        # Use level 1 to avoid speed bonus (enemy SPD must not be 2x player SPD)
+        # but boost HP so the fight doesn't end in one hit
         enemy = engine.create_enemy_instance(
-            game_data.enemies["brute_oni"], zone_level=50,
+            game_data.enemies["brute_oni"], enemy_level=1,
         )
+        enemy = enemy.model_copy(update={"current_hp": 999, "max_hp": 999})
 
         state = engine.initialize_combat([char], [enemy])
         decisions = {
@@ -325,25 +328,26 @@ class TestAppliesTauntFlag:
         assert taunt is not None
         assert any(e.applies_taunt for e in taunt.effects)
 
-    def test_taunt_status_has_grants_taunt(
+    def test_taunt_status_applied_to_target(
         self, game_data: GameData, combat_engine: CombatEngine,
     ):
-        """When taunt is used, the resulting status has grants_taunt=True."""
+        """When taunt is used, the target gets a grants_taunted=True status."""
         martyr = _make_character(game_data, "martyr", 7)
         martyr = martyr.model_copy(update={
             "abilities": list(martyr.abilities) + ["taunt"],
         })
         enemy = combat_engine.create_enemy_instance(
-            game_data.enemies["fodder_slime"], zone_level=5,
+            game_data.enemies["fodder_slime"], enemy_level=5,
         )
 
         state = combat_engine.initialize_combat([martyr], [enemy])
         player_id = state.living_players[0].id
+        enemy_id = state.living_enemies[0].id
         decisions = {
             player_id: PlayerTurnDecision(
                 combatant_id=player_id,
                 primary_action=CombatAction(
-                    actor_id=player_id, ability_id="taunt", target_ids=[player_id],
+                    actor_id=player_id, ability_id="taunt", target_ids=[enemy_id],
                 ),
             ),
         }
@@ -351,9 +355,10 @@ class TestAppliesTauntFlag:
             state, decisions, {"fodder_slime": game_data.enemies["fodder_slime"]},
         )
 
-        player = state.get_combatant(player_id)
-        taunt_statuses = [s for s in player.active_statuses if s.grants_taunt]
+        enemy_state = state.get_combatant(enemy_id)
+        taunt_statuses = [s for s in enemy_state.active_statuses if s.grants_taunted]
         assert len(taunt_statuses) >= 1
+        assert taunt_statuses[0].source_id == player_id
 
 
 class TestAppliesMarkFlag:
@@ -377,7 +382,7 @@ class TestAppliesMarkFlag:
             "abilities": list(char.abilities) + ["mark"],
         })
         enemy = combat_engine.create_enemy_instance(
-            game_data.enemies["fodder_slime"], zone_level=5,
+            game_data.enemies["fodder_slime"], enemy_level=5,
         )
 
         state = combat_engine.initialize_combat([char], [enemy])
@@ -490,10 +495,10 @@ class TestCombatItemUse:
 
 
 class TestStatusFlagSync:
-    """Verify grants_taunt/grants_mark flags drive is_taunting/is_marked correctly."""
+    """Verify grants_taunted/grants_mark flags drive taunted_by/is_marked correctly."""
 
-    def test_grants_taunt_syncs_is_taunting(self, combat_engine: CombatEngine):
-        """StatusEffect.grants_taunt=True sets CombatantState.is_taunting after tick."""
+    def test_grants_taunted_syncs_taunted_by(self, combat_engine: CombatEngine):
+        """StatusEffect.grants_taunted=True populates CombatantState.taunted_by after tick."""
         player = CombatantState(
             id="p1", is_player=True, current_hp=100, max_hp=100,
             base_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
@@ -501,19 +506,56 @@ class TestStatusFlagSync:
             effective_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
             active_statuses=[
                 StatusEffect(
-                    id="taunt_active", name="Taunt",
-                    rounds_remaining=3, grants_taunt=True,
+                    id="taunted", name="Taunted",
+                    rounds_remaining=3, grants_taunted=True, source_id="e1",
                 ),
             ],
+        )
+        enemy = CombatantState(
+            id="e1", is_player=False, current_hp=100, max_hp=100,
+            base_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            equipment_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            effective_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
         )
         state = CombatState(
             round_number=2,
             player_combatants=[player],
-            enemy_combatants=[],
+            enemy_combatants=[enemy],
         )
 
         state = combat_engine._tick_statuses(state)
-        assert state.player_combatants[0].is_taunting is True
+        assert state.player_combatants[0].taunted_by == ["e1"]
+
+    def test_taunted_by_cleared_when_source_dead(self, combat_engine: CombatEngine):
+        """Taunted status from a dead source is cleaned up during tick."""
+        player = CombatantState(
+            id="p1", is_player=True, current_hp=100, max_hp=100,
+            base_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            equipment_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            effective_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            active_statuses=[
+                StatusEffect(
+                    id="taunted", name="Taunted",
+                    rounds_remaining=3, grants_taunted=True, source_id="e1",
+                ),
+            ],
+        )
+        dead_enemy = CombatantState(
+            id="e1", is_player=False, current_hp=0, max_hp=100,
+            base_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            equipment_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            effective_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            is_alive=False,
+        )
+        state = CombatState(
+            round_number=2,
+            player_combatants=[player],
+            enemy_combatants=[dead_enemy],
+        )
+
+        state = combat_engine._tick_statuses(state)
+        assert state.player_combatants[0].taunted_by == []
+        assert len(state.player_combatants[0].active_statuses) == 0
 
     def test_grants_mark_syncs_is_marked(self, combat_engine: CombatEngine):
         """StatusEffect.grants_mark=True sets CombatantState.is_marked after tick."""
@@ -538,8 +580,8 @@ class TestStatusFlagSync:
         state = combat_engine._tick_statuses(state)
         assert state.enemy_combatants[0].is_marked is True
 
-    def test_taunt_persists_on_final_round(self, combat_engine: CombatEngine):
-        """Taunt with 1 round remaining is still active during that tick (expires after)."""
+    def test_taunted_expires_after_final_round(self, combat_engine: CombatEngine):
+        """Taunted status with 1 round remaining expires after tick."""
         player = CombatantState(
             id="p1", is_player=True, current_hp=100, max_hp=100,
             base_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
@@ -547,31 +589,27 @@ class TestStatusFlagSync:
             effective_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
             active_statuses=[
                 StatusEffect(
-                    id="taunt_active", name="Taunt",
-                    rounds_remaining=1, grants_taunt=True,
+                    id="taunted", name="Taunted",
+                    rounds_remaining=1, grants_taunted=True, source_id="e1",
                 ),
             ],
+        )
+        enemy = CombatantState(
+            id="e1", is_player=False, current_hp=100, max_hp=100,
+            base_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            equipment_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            effective_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
         )
         state = CombatState(
             round_number=2,
             player_combatants=[player],
-            enemy_combatants=[],
+            enemy_combatants=[enemy],
         )
 
-        # Flags sync from active statuses BEFORE tick removes them,
-        # so taunt is active during this round then expires
+        # Status expires during tick, taunted_by derived AFTER tick
         state = combat_engine._tick_statuses(state)
-        assert state.player_combatants[0].is_taunting is True
+        assert state.player_combatants[0].taunted_by == []
         assert len(state.player_combatants[0].active_statuses) == 0
-
-        # Next tick: no taunt status to derive flag from
-        state2 = CombatState(
-            round_number=3,
-            player_combatants=state.player_combatants,
-            enemy_combatants=[],
-        )
-        state2 = combat_engine._tick_statuses(state2)
-        assert state2.player_combatants[0].is_taunting is False
 
 
 # --- Ability Source Tracking Tests (WI-6) ---

@@ -55,8 +55,8 @@ class TestBuyPrice:
 
 class TestSellPrice:
     def test_sell_ratio(self) -> None:
-        # 40% of 100 = 40
-        assert calculate_sell_price(100) == 40
+        # 15% of 100 = 15
+        assert calculate_sell_price(100) == 15
 
     def test_sell_minimum(self) -> None:
         # Very cheap item still sells for at least 1
@@ -130,7 +130,7 @@ class TestSellTransaction:
             items={"test_sword": registry["test_sword"]},
         )
         new_party = engine.sell_item(party, "test_sword")
-        assert new_party.money == 140  # 100 + 40% of 100
+        assert new_party.money == 115  # 100 + 15% of 100
         assert "test_sword" not in new_party.stash
 
     def test_sell_not_in_stash(self) -> None:

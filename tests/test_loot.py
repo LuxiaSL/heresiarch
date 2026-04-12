@@ -15,12 +15,12 @@ _DUMMY_ACTION_TABLE = ActionTable(
 )
 
 
-def _make_enemy(template_id: str, equipment: list[str] | None = None) -> EnemyInstance:
+def _make_enemy(template_id: str, equipment: list[str] | None = None, level: int = 10) -> EnemyInstance:
     """Minimal EnemyInstance for loot testing."""
     return EnemyInstance(
         template_id=template_id,
         name=template_id,
-        level=10,
+        level=level,
         stats=StatBlock(STR=10, MAG=5, DEF=10, RES=5, SPD=10),
         max_hp=50,
         current_hp=0,
@@ -39,15 +39,16 @@ class TestMoneyDrops:
         result = resolver.resolve_encounter_drops([enemy], zone_level=10)
         assert 50 <= result.money <= 150
 
-    def test_money_scales_with_zone(self) -> None:
+    def test_money_scales_with_enemy_level(self) -> None:
         rng1 = random.Random(42)
         rng2 = random.Random(42)
         r_low = LootResolver(item_registry={}, drop_tables={}, rng=rng1)
         r_high = LootResolver(item_registry={}, drop_tables={}, rng=rng2)
-        e = _make_enemy("x")
-        low = r_low.resolve_encounter_drops([e], zone_level=1)
-        high = r_high.resolve_encounter_drops([e], zone_level=20)
-        # Same seed, so same multiplier, different zone -> different money
+        e_low = _make_enemy("x", level=1)
+        e_high = _make_enemy("x", level=20)
+        low = r_low.resolve_encounter_drops([e_low])
+        high = r_high.resolve_encounter_drops([e_high])
+        # Same seed, so same multiplier, different enemy level -> different money
         assert high.money == 20 * (low.money // 1)  # proportional
 
 

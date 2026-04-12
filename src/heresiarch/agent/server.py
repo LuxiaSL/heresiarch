@@ -93,7 +93,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="enter_zone",
-        description="Enter a zone to begin fighting encounters. Full heals party first.",
+        description="Enter a zone to begin fighting encounters.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -107,6 +107,30 @@ TOOLS: list[Tool] = [
         description="Exit current zone. Progress is saved for re-entry.",
         inputSchema={"type": "object", "properties": {}},
     ),
+
+    # Town navigation
+    Tool(
+        name="enter_town",
+        description="Enter a town for shopping and resting. Must not be in a zone.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "town_id": {"type": "string", "description": "Town to enter"},
+            },
+            "required": ["town_id"],
+        },
+    ),
+    Tool(
+        name="leave_town",
+        description="Leave the current town back to zone select.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    Tool(
+        name="rest_at_lodge",
+        description="Rest at the lodge: full party heal, costs gold, resets incomplete zone progress.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+
     Tool(
         name="get_zone_status",
         description="Show current zone progress, encounter history, party HP.",
@@ -138,8 +162,8 @@ TOOLS: list[Tool] = [
                         '"action": "ability_id" or "use_item", "target": "combatant_id", '
                         '"item_id": "item_id" (only with use_item), '
                         '"ap_spend": int, '
-                        '"cheat_extras": [{"ability": "id", "target": "id"}], '
-                        '"partial_actions": [{"ability": "id", "target": "id"}]}'
+                        '"cheat_extras": [{"ability": "id", "target": "id"} or {"ability": "wait"}], '
+                        '"bonus_actions": [{"ability": "id", "target": "id"} or {"ability": "wait"}]}'
                     ),
                     "additionalProperties": {"type": "object"},
                 },
@@ -258,8 +282,29 @@ TOOLS: list[Tool] = [
         },
     ),
     Tool(
+        name="dismiss",
+        description=(
+            "Dismiss a party member. WARNING: They leave with ALL equipped gear. "
+            "Cannot dismiss the MC or the last active member. "
+            "Use during recruitment to make room for a new recruit."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "character_id": {
+                    "type": "string",
+                    "description": "ID of the character to dismiss",
+                },
+            },
+            "required": ["character_id"],
+        },
+    ),
+    Tool(
         name="mc_swap_job",
-        description="Change the MC's job to mimic a recruited party member's job.",
+        description=(
+            "Change the MC's job to mimic a recruited party member's job. "
+            "Target job must belong to a current non-MC party member."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -272,12 +317,12 @@ TOOLS: list[Tool] = [
     # Shopping
     Tool(
         name="shop_browse",
-        description="View zone shop inventory with CHA-adjusted prices.",
+        description="View town shop inventory with CHA-adjusted prices. Must be in town.",
         inputSchema={"type": "object", "properties": {}},
     ),
     Tool(
         name="shop_buy",
-        description="Purchase an item from the zone shop.",
+        description="Purchase an item from the town shop. Must be in town.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -442,6 +487,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             return _call(session.enter_zone, arguments["zone_id"])
         case "leave_zone":
             return _call(session.leave_zone)
+
+        # Town navigation
+        case "enter_town":
+            return _call(session.enter_town, arguments["town_id"])
+        case "leave_town":
+            return _call(session.leave_town)
+        case "rest_at_lodge":
+            return _call(session.rest_at_lodge)
+
         case "get_zone_status":
             return _call(session.get_zone_status)
 
@@ -476,6 +530,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             return _call(session.use_scroll, arguments["item_id"], arguments["character_id"])
         case "use_consumable":
             return _call(session.use_consumable, arguments["item_id"], arguments["character_id"])
+        case "dismiss":
+            return _call(session.dismiss, arguments["character_id"])
         case "mc_swap_job":
             return _call(session.mc_swap_job, arguments["job_id"])
 

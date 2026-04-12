@@ -11,7 +11,7 @@
   slot: ACCESSORY_1
   is_consumable: true
   heal_amount: 150
-  base_price: 80
+  base_price: 90
   description: "Restores 150 HP. Standard issue."
 
 - id: major_potion
@@ -19,7 +19,7 @@
   slot: ACCESSORY_1
   is_consumable: true
   heal_amount: 400
-  base_price: 200
+  base_price: 240
   description: "Restores 400 HP. For when it matters."
 
 - id: elixir

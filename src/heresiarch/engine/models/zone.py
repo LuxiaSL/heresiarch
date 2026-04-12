@@ -11,6 +11,8 @@ class EncounterTemplate(BaseModel):
     enemy_templates: list[str]
     enemy_counts: list[int]
     is_boss: bool = False
+    enemy_level_override: int | None = None  # hardcode enemy level (e.g. for bosses)
+    enemy_level_range: tuple[int, int] | None = None  # per-encounter level range override
 
 
 class ZoneUnlockRequirement(BaseModel):
@@ -43,13 +45,17 @@ class ZoneTemplate(BaseModel):
     zone_level: int
     region: str
     encounters: list[EncounterTemplate]
-    shop_item_pool: list[str] = Field(default_factory=list)
     recruitment_chance: float = 0.0
     xp_cap_level: int = 0
     loot_tier: int = 1
     unlock_requires: list[ZoneUnlockRequirement] = Field(default_factory=list)
     is_final: bool = False
     random_spawns: list[RandomSpawn] = Field(default_factory=list)
+    enemy_level_range: tuple[int, int] = (0, 0)  # (min, max); (0,0) falls back to zone_level
+    is_endless: bool = False
+    endless_enemy_pool: list[str] = Field(default_factory=list)  # template IDs for dynamic spawns
+    endless_min_level: int = 0
+    endless_max_level: int = 0
 
 
 class ZoneState(BaseModel):

@@ -8,7 +8,7 @@ growth:
   DEF: 0
   RES: 4
   SPD: 2
-base_hp: 30
+base_hp: 33
 hp_growth: 5
 innate_ability_id: insight
 ability_unlocks:

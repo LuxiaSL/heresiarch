@@ -51,6 +51,7 @@ class PassiveContext:
     owner: CombatantState
     trigger_source: CombatantState | None = None
     damage_dealt: int = 0
+    pre_def_damage: int = 0  # damage before target DEF reduction (for thorns)
     item_leech_percent: float = 0.0  # owner's total item leech
 
 
@@ -148,10 +149,10 @@ def handle_on_hit_received(passive: Ability, ctx: PassiveContext) -> None:
                 )
             )
 
-        # Thorns: reflect % of damage taken back to attacker
+        # Thorns: reflect % of pre-DEF damage back to attacker
         if effect.reflect_percent > 0 and ctx.trigger_source.is_alive:
             effective_pct = calculate_thorns_percent(effect.reflect_percent, ctx.owner.level)
-            reflected = max(1, int(ctx.damage_dealt * effective_pct))
+            reflected = max(1, int(ctx.pre_def_damage * effective_pct))
             ctx.trigger_source.current_hp = max(0, ctx.trigger_source.current_hp - reflected)
             ctx.state.log.append(
                 CombatEvent(
@@ -349,6 +350,33 @@ def handle_hp_threshold(passive: Ability, ctx: PassiveContext) -> None:
 
 
 # ---------------------------------------------------------------------------
+# ON_TURN_START: regen, per-turn effects
+# ---------------------------------------------------------------------------
+
+
+def handle_on_turn_start(passive: Ability, ctx: PassiveContext) -> None:
+    """Resolve ON_TURN_START effects: regen (heal % of missing HP), etc."""
+    for effect in passive.effects:
+        # Regen: heal a percentage of missing HP
+        if effect.regen_missing_hp_percent > 0:
+            missing = ctx.owner.max_hp - ctx.owner.current_hp
+            heal = max(0, int(missing * effect.regen_missing_hp_percent))
+            if heal > 0:
+                ctx.owner.current_hp = min(ctx.owner.max_hp, ctx.owner.current_hp + heal)
+                ctx.state.log.append(
+                    CombatEvent(
+                        event_type=CombatEventType.HEALING,
+                        round_number=ctx.state.round_number,
+                        actor_id=ctx.owner.id,
+                        target_id=ctx.owner.id,
+                        ability_id=passive.id,
+                        value=heal,
+                        details={"source": "regen", "missing_hp_percent": effect.regen_missing_hp_percent},
+                    )
+                )
+
+
+# ---------------------------------------------------------------------------
 # Dispatch table
 # ---------------------------------------------------------------------------
 
@@ -360,4 +388,5 @@ PASSIVE_DISPATCH: dict[TriggerCondition, PassiveHandler] = {
     TriggerCondition.ON_CONSECUTIVE_ATTACK: handle_consecutive_attack_boundary,
     TriggerCondition.ON_NON_DAMAGE_ACTION: handle_non_damage_action,
     TriggerCondition.HP_BELOW_THRESHOLD: handle_hp_threshold,
+    TriggerCondition.ON_TURN_START: handle_on_turn_start,
 }

@@ -8,7 +8,7 @@ growth:
   DEF: 0
   RES: 0
   SPD: 6
-base_hp: 25
+base_hp: 28
 hp_growth: 4
 innate_ability_id: frenzy
 ability_unlocks:

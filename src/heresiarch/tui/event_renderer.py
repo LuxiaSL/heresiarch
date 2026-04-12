@@ -32,6 +32,7 @@ EVENT_DELAYS: dict[CombatEventType, int] = {
     CombatEventType.STATUS_EXPIRED: 200,
     CombatEventType.STATUS_RESISTED: 250,
     CombatEventType.DOT_TICK: 350,
+    CombatEventType.ITEM_USED: 350,
     CombatEventType.DEATH: 800,
     CombatEventType.BONUS_ACTION: 250,
     CombatEventType.RETALIATE_TRIGGERED: 400,
@@ -165,6 +166,22 @@ def render_event(
                 affected_ids=[event.target_id, event.actor_id],
             )
 
+        case CombatEventType.ITEM_USED:
+            actor = _name(event.actor_id, combatant_names)
+            target = _name(event.target_id, combatant_names)
+            item_name = event.details.get("item_name", event.details.get("item_id", "item"))
+            if event.actor_id == event.target_id:
+                return RenderedEvent(
+                    text=f"  {actor} uses [bold #cc8844]{item_name}[/bold #cc8844]",
+                    color="heal",
+                    affected_ids=[event.actor_id],
+                )
+            return RenderedEvent(
+                text=f"  {actor} uses [bold #cc8844]{item_name}[/bold #cc8844] on {target}",
+                color="heal",
+                affected_ids=[event.actor_id, event.target_id],
+            )
+
         case CombatEventType.HEALING:
             target = _name(event.target_id, combatant_names)
             source = event.details.get("source", "")
@@ -240,13 +257,8 @@ def render_event(
             )
 
         case CombatEventType.TAUNT_REDIRECT:
-            target = _name(event.target_id, combatant_names)
-            original = _name(event.details.get("original_target", ""), combatant_names)
-            return RenderedEvent(
-                text=f"  [bold]{target}[/bold] draws the attack! (redirected from {original})",
-                color="buff",
-                affected_ids=[event.target_id],
-            )
+            # Legacy event type — no longer emitted after taunt rework
+            return None
 
         case CombatEventType.FRENZY_STACK:
             actor = _name(event.actor_id, combatant_names)
@@ -388,6 +400,11 @@ def render_events_summary(
                         parts.append(f"[#cc4444]{ev.value}[/#cc4444]→{target}")
                         affected.append(ev.target_id)
                     color = "damage"
+                case CombatEventType.ITEM_USED:
+                    item_name = ev.details.get("item_name", ev.details.get("item_id", "item"))
+                    parts.append(f"[#cc8844]{item_name}[/#cc8844]")
+                    if color == "neutral":
+                        color = "heal"
                 case CombatEventType.HEALING:
                     target = _name(ev.target_id, combatant_names)
                     parts.append(f"[#44aa44]+{ev.value}[/#44aa44]→{target}")

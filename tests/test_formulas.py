@@ -1,9 +1,8 @@
 """Unit tests for all game formulas against design-doc numbers."""
 
 from heresiarch.engine.formulas import (
-    apply_partial_action_modifier,
     apply_survive_reduction,
-    calculate_bonus_actions,
+    calculate_speed_bonus,
     calculate_enemy_hp,
     calculate_enemy_stats,
     calculate_magical_damage,
@@ -149,11 +148,31 @@ class TestResGate:
 # ------------------------------------------------------ SPD Bonus Actions
 
 
-class TestBonusActions:
-    def test_spd_bonus_actions(self) -> None:
-        assert calculate_bonus_actions(effective_spd=45) == 0
-        assert calculate_bonus_actions(effective_spd=105) == 1
-        assert calculate_bonus_actions(effective_spd=693) == 6
+class TestSpeedBonus:
+    """Speed differential bonus actions: 2x → +1, 4x → +2 (exponential)."""
+
+    def test_no_bonus_below_threshold(self) -> None:
+        assert calculate_speed_bonus(combatant_spd=7, slowest_opponent_spd=5) == 0
+
+    def test_bonus_at_2x(self) -> None:
+        assert calculate_speed_bonus(combatant_spd=10, slowest_opponent_spd=5) == 1
+
+    def test_bonus_at_4x(self) -> None:
+        assert calculate_speed_bonus(combatant_spd=20, slowest_opponent_spd=5) == 2
+
+    def test_bonus_at_8x(self) -> None:
+        assert calculate_speed_bonus(combatant_spd=40, slowest_opponent_spd=5) == 3
+
+    def test_berserker_vs_slime(self) -> None:
+        # Berserker lv1 SPD 7 vs slime SPD 2: ratio 3.5x → +1
+        assert calculate_speed_bonus(combatant_spd=7, slowest_opponent_spd=2) == 1
+
+    def test_einherjar_vs_slime(self) -> None:
+        # Einherjar lv1 SPD 3 vs slime SPD 2: ratio 1.5x → 0
+        assert calculate_speed_bonus(combatant_spd=3, slowest_opponent_spd=2) == 0
+
+    def test_zero_opponent_spd(self) -> None:
+        assert calculate_speed_bonus(combatant_spd=10, slowest_opponent_spd=0) == 0
 
 
 # ------------------------------------------------- Damage Modifiers
@@ -166,13 +185,6 @@ class TestDamageModifiers:
 
     def test_survive_no_reduction_when_not_surviving(self) -> None:
         assert apply_survive_reduction(damage=100, is_surviving=False) == 100
-
-    def test_partial_action_damage(self) -> None:
-        # 100 damage -> 50 when partial (50% ratio)
-        assert apply_partial_action_modifier(damage=100, is_partial=True) == 50
-
-    def test_partial_action_no_modifier_when_not_partial(self) -> None:
-        assert apply_partial_action_modifier(damage=100, is_partial=False) == 100
 
 
 # ---------------------------------------------------- Enemy Stats
@@ -187,7 +199,7 @@ class TestEnemyStats:
         # SPD = int(210*0.07) = 14
         stat_dist = {"STR": 0.33, "MAG": 0.05, "DEF": 0.29, "RES": 0.05, "SPD": 0.07}
         stats = calculate_enemy_stats(
-            zone_level=15,
+            enemy_level=15,
             budget_multiplier=14.0,
             stat_distribution=stat_dist,
         )
@@ -202,7 +214,7 @@ class TestEnemyStats:
         # total_budget = int(15*14.0) = 210
         # hp = 40 + int(210*3.0) = 40 + 630 = 670
         hp = calculate_enemy_hp(
-            zone_level=15,
+            enemy_level=15,
             budget_multiplier=14.0,
             base_hp=40,
             hp_per_budget=3.0,

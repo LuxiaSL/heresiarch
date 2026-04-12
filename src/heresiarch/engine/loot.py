@@ -33,13 +33,17 @@ class LootResolver:
     def resolve_encounter_drops(
         self,
         defeated_enemies: list[EnemyInstance],
-        zone_level: int,
         party_cha: int = 0,
         overstay_battles: int = 0,
+        zone_level: int = 0,  # deprecated fallback — use enemy.level instead
     ) -> LootResult:
         """Roll drops for all defeated enemies in an encounter.
 
-        ``overstay_battles`` applies a flat -5 % penalty per battle to
+        Money drops now scale with each enemy's individual level rather than
+        a flat zone_level. The zone_level parameter is kept for backward
+        compatibility but is only used when enemy.level is 0.
+
+        ``overstay_battles`` applies a flat -5% penalty per battle to
         item drop chances, money, and XP (via the returned LootResult).
         """
         total_money = 0
@@ -52,10 +56,16 @@ class LootResolver:
         for enemy in defeated_enemies:
             dt = self.drop_tables.get(enemy.template_id)
 
+            # Use per-enemy level for money, fall back to zone_level
+            money_level = enemy.level if enemy.level > 0 else zone_level
+
             # Money: scaled by overstay penalty + per-enemy money_multiplier
             if dt is None or dt.guaranteed_money:
-                money = calculate_money_drop(zone_level, self.rng)
+                money = calculate_money_drop(money_level, self.rng)
                 money = int(money * (dt.money_multiplier if dt else 1.0))
+                # Apply per-enemy gold multiplier override if set
+                if enemy.gold_multiplier is not None:
+                    money = int(money * enemy.gold_multiplier / enemy.budget_multiplier) if enemy.budget_multiplier > 0 else money
                 total_money += int(money * overstay_multiplier)
 
             if dt is None:

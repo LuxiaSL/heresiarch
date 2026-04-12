@@ -1,6 +1,7 @@
 - id: iron_blade
   name: Iron Blade
   slot: WEAPON
+  tier: 1
   description: "Reliable. Gets you home."
   base_price: 100
   scaling:
@@ -12,8 +13,9 @@
 - id: runic_edge
   name: Runic Edge
   slot: WEAPON
+  tier: 2
   description: "Investment piece. Overtakes Iron Blade around Lv30."
-  base_price: 3500
+  base_price: 5000
   scaling:
     scaling_type: SUPERLINEAR
     stat: STR
@@ -24,6 +26,7 @@
 - id: void_fang
   name: Void Fang
   slot: WEAPON
+  tier: 3
   description: "Hurts you early. Kills god late. Overtakes Runic Edge around Lv60."
   base_price: 8000
   scaling:
@@ -35,6 +38,7 @@
 - id: spirit_lens
   name: Spirit Lens
   slot: WEAPON
+  tier: 1
   description: "Caster equivalent of Iron Blade."
   base_price: 100
   scaling:
@@ -46,8 +50,9 @@
 - id: resonance_orb
   name: Resonance Orb
   slot: WEAPON
+  tier: 2
   description: "Deep MAG commitment. Overtakes Spirit Lens around Lv30."
-  base_price: 4000
+  base_price: 5000
   scaling:
     scaling_type: QUADRATIC
     stat: MAG

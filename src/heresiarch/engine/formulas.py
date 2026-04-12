@@ -27,15 +27,14 @@ if TYPE_CHECKING:
 HP_COEFFICIENT: float = 1.5
 DEF_REDUCTION_RATIO: float = 0.5
 RES_THRESHOLD_RATIO: float = 0.7
-SPD_THRESHOLD: int = 100
+SPEED_BONUS_RATIO: float = 2.0  # 2x faster than slowest opponent → +1 bonus action
 SURVIVE_DAMAGE_REDUCTION: float = 0.5
-PARTIAL_ACTION_DAMAGE_RATIO: float = 0.5
 MAX_ACTION_POINT_BANK: int = 3
 CHEAT_DEBT_PER_ACTION: int = 1
 CHEAT_DEBT_RECOVERY_PER_TURN: int = 1
 
 # Combat modifier constants
-FRENZY_FLOOR: float = 2.0  # multiplier at chain 1 (immediate payoff)
+FRENZY_FLOOR: float = 2.1  # multiplier at chain 1 (immediate payoff)
 FRENZY_GROWTH: float = 4 / 3  # per-chain exponential growth after floor (~1.333)
 INSIGHT_MULTIPLIER_PER_STACK: float = 0.4
 THORNS_SCALING_PER_TIER: float = 0.2
@@ -130,15 +129,32 @@ def check_res_gate(
     return target_res >= caster_mag * threshold_ratio
 
 
-# --- SPD Bonus Actions ---
+# --- SPD Speed Bonus Actions ---
 
 
-def calculate_bonus_actions(
-    effective_spd: int,
-    spd_threshold: int = SPD_THRESHOLD,
+def calculate_speed_bonus(
+    combatant_spd: int,
+    slowest_opponent_spd: int,
+    ratio: float = SPEED_BONUS_RATIO,
 ) -> int:
-    """bonus_actions = floor(SPD / threshold)"""
-    return effective_spd // spd_threshold
+    """Bonus actions from outspeeding the slowest opponent.
+
+    bonus = floor(combatant_spd / (slowest_opponent_spd * ratio))
+    At 2x → +1, at 4x → +2, at 8x → +3 (exponential thresholds).
+    Returns 0 if opponent SPD is 0 or ratio not met.
+    """
+    if slowest_opponent_spd <= 0:
+        return 0
+    speed_ratio = combatant_spd / slowest_opponent_spd
+    if speed_ratio < ratio:
+        return 0
+    # Exponential thresholds: +1 at ratio, +2 at ratio^2, +3 at ratio^3
+    bonus = 0
+    threshold = ratio
+    while speed_ratio >= threshold:
+        bonus += 1
+        threshold *= ratio
+    return bonus
 
 
 # --- Item Scaling ---
@@ -255,34 +271,22 @@ def apply_survive_reduction(
     return damage
 
 
-# --- Partial Action Damage ---
-
-
-def apply_partial_action_modifier(
-    damage: int,
-    is_partial: bool,
-    ratio: float = PARTIAL_ACTION_DAMAGE_RATIO,
-) -> int:
-    """SPD bonus actions deal reduced damage."""
-    if is_partial:
-        return max(1, int(damage * ratio))
-    return damage
 
 
 # --- Enemy Stat Budget ---
 
 
 def calculate_enemy_stats(
-    zone_level: int,
+    enemy_level: int,
     budget_multiplier: float,
     stat_distribution: dict[str, float],
 ) -> StatBlock:
-    """Calculate enemy stats from zone level and archetype template.
+    """Calculate enemy stats from enemy level and archetype template.
 
-    Total budget = zone_level * budget_multiplier.
+    Total budget = enemy_level * budget_multiplier.
     Distribute across stats by ratios.
     """
-    total_budget = int(zone_level * budget_multiplier)
+    total_budget = int(enemy_level * budget_multiplier)
     return StatBlock(
         STR=int(total_budget * stat_distribution.get("STR", 0.0)),
         MAG=int(total_budget * stat_distribution.get("MAG", 0.0)),
@@ -293,13 +297,13 @@ def calculate_enemy_stats(
 
 
 def calculate_enemy_hp(
-    zone_level: int,
+    enemy_level: int,
     budget_multiplier: float,
     base_hp: int,
     hp_per_budget: float,
 ) -> int:
-    """Calculate enemy HP from zone level and template."""
-    total_budget = int(zone_level * budget_multiplier)
+    """Calculate enemy HP from enemy level and template."""
+    total_budget = int(enemy_level * budget_multiplier)
     return base_hp + int(total_budget * hp_per_budget)
 
 
@@ -370,21 +374,22 @@ XP_THRESHOLD_BASE: int = 10
 XP_THRESHOLD_EXPONENT: float = 2.0
 XP_OVERLEVEL_PENALTY_PER_LEVEL: float = 0.5
 XP_MINIMUM_RATIO: float = 0.1
+XP_MIN_PER_KILL: int = 8
 
 
 def calculate_xp_reward(
-    zone_level: int,
+    enemy_level: int,
     budget_multiplier: float,
     character_level: int,
     xp_cap_level: int = 0,
 ) -> int:
     """XP from one enemy kill.
 
-    base_xp = zone_level * budget_multiplier.
+    base_xp = max(XP_MIN_PER_KILL, enemy_level * budget_multiplier).
     If character_level > xp_cap_level (and cap > 0), apply diminishing returns:
     50% reduction per level over, floored at 10% of base.
     """
-    base_xp = int(zone_level * budget_multiplier)
+    base_xp = max(XP_MIN_PER_KILL, int(enemy_level * budget_multiplier))
     if xp_cap_level > 0 and character_level > xp_cap_level:
         levels_over = character_level - xp_cap_level
         ratio = max(
@@ -438,7 +443,7 @@ def calculate_stats_from_history(
 CHA_PRICE_MODIFIER_PER_POINT: float = 0.005
 CHA_PRICE_MIN_RATIO: float = 0.5
 CHA_PRICE_MAX_RATIO: float = 1.5
-SELL_RATIO: float = 0.4
+SELL_RATIO: float = 0.15
 
 
 def calculate_buy_price(base_price: int, cha: int) -> int:
@@ -459,8 +464,33 @@ def calculate_sell_price(base_price: int) -> int:
 
 MONEY_DROP_MIN_MULTIPLIER: int = 5
 MONEY_DROP_MAX_MULTIPLIER: int = 15
+GOLD_MIN_PER_KILL: int = 10
 
 
-def calculate_money_drop(zone_level: int, rng: random.Random) -> int:
-    """money = zone_level * rng.randint(5, 15)."""
-    return zone_level * rng.randint(MONEY_DROP_MIN_MULTIPLIER, MONEY_DROP_MAX_MULTIPLIER)
+def calculate_money_drop(enemy_level: int, rng: random.Random) -> int:
+    """money = max(GOLD_MIN_PER_KILL, enemy_level * rng.randint(5, 15))."""
+    return max(GOLD_MIN_PER_KILL, enemy_level * rng.randint(MONEY_DROP_MIN_MULTIPLIER, MONEY_DROP_MAX_MULTIPLIER))
+
+
+# --- Endless Zone Reward Tapering ---
+
+ENDLESS_REWARD_FLOOR: float = 0.1  # min reward = 10% (zone-1 equivalent)
+
+
+def calculate_endless_reward_multiplier(
+    player_level: int,
+    zone_max_level: int,
+    floor_multiplier: float = ENDLESS_REWARD_FLOOR,
+) -> float:
+    """Taper rewards as player approaches cap in an endless zone.
+
+    Full value when player_level is low relative to zone_max_level.
+    Drops to floor_multiplier at and above zone_max_level.
+    Smooth quadratic curve from 1.0 → floor_multiplier.
+    """
+    if zone_max_level <= 0:
+        return 1.0
+    if player_level >= zone_max_level:
+        return floor_multiplier
+    ratio = player_level / zone_max_level
+    return max(floor_multiplier, 1.0 - (1.0 - floor_multiplier) * ratio ** 2)

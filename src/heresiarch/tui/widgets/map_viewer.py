@@ -1,4 +1,4 @@
-"""Map viewer widget — pannable ASCII map with zone markers and selection."""
+"""Map viewer widget — pannable ASCII map with anchor markers and selection."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from rich.text import Text
-from textual import on
 from textual.containers import ScrollableContainer
 from textual.message import Message
 from textual.reactive import reactive
@@ -16,29 +15,86 @@ from textual.widgets import Static
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
-    from heresiarch.engine.models.region_map import RegionMap, ZoneAnchor
+    from heresiarch.engine.models.region_map import AsciiMap, MapAnchor
 
 
-class ZoneStatus(Enum):
-    """Visual state of a zone marker on the map."""
+class AnchorStatus(Enum):
+    """Visual state of an anchor marker on the map."""
 
     LOCKED = "locked"
     AVAILABLE = "available"
     CLEARED = "cleared"
 
 
-# --- Marker characters and colors ---
+# Backward-compat alias
+ZoneStatus = AnchorStatus
 
-_MARKER_CHARS: dict[ZoneStatus, str] = {
-    ZoneStatus.LOCKED: "?",
-    ZoneStatus.AVAILABLE: "o",
-    ZoneStatus.CLEARED: "*",
+
+# --- Marker characters and colors per anchor type ---
+
+_ZONE_MARKER_CHARS: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: "?",
+    AnchorStatus.AVAILABLE: "o",
+    AnchorStatus.CLEARED: "*",
 }
 
-_MARKER_STYLES: dict[ZoneStatus, str] = {
-    ZoneStatus.LOCKED: "#555555",
-    ZoneStatus.AVAILABLE: "bold #e6c566",
-    ZoneStatus.CLEARED: "bold #44aa44",
+_ZONE_MARKER_STYLES: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: "#555555",
+    AnchorStatus.AVAILABLE: "bold #e6c566",
+    AnchorStatus.CLEARED: "bold #44aa44",
+}
+
+# Town anchors use a distinct lavender color to stand out from zones
+_TOWN_MARKER_CHARS: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: "?",
+    AnchorStatus.AVAILABLE: "T",
+    AnchorStatus.CLEARED: "T",
+}
+
+_TOWN_MARKER_STYLES: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: "#555555",
+    AnchorStatus.AVAILABLE: "bold #c8a2c8",
+    AnchorStatus.CLEARED: "bold #c8a2c8",
+}
+
+# Building anchors (inside towns) use warm amber
+_BUILDING_MARKER_CHARS: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: "?",
+    AnchorStatus.AVAILABLE: "o",
+    AnchorStatus.CLEARED: "o",
+}
+
+_BUILDING_MARKER_STYLES: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: "#555555",
+    AnchorStatus.AVAILABLE: "bold #e6c566",
+    AnchorStatus.CLEARED: "bold #e6c566",
+}
+
+# Exit anchors (town gates / leave points) — warm rust, distinct from amber
+_EXIT_MARKER_CHARS: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: "?",
+    AnchorStatus.AVAILABLE: "V",
+    AnchorStatus.CLEARED: "V",
+}
+
+_EXIT_MARKER_STYLES: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: "#555555",
+    AnchorStatus.AVAILABLE: "bold #cc8866",
+    AnchorStatus.CLEARED: "bold #cc8866",
+}
+
+_MARKER_CHARS_BY_TYPE: dict[str, dict[AnchorStatus, str]] = {
+    "zone": _ZONE_MARKER_CHARS,
+    "town": _TOWN_MARKER_CHARS,
+    "building": _BUILDING_MARKER_CHARS,
+    "exit": _EXIT_MARKER_CHARS,
+}
+
+_MARKER_STYLES_BY_TYPE: dict[str, dict[AnchorStatus, str]] = {
+    "zone": _ZONE_MARKER_STYLES,
+    "town": _TOWN_MARKER_STYLES,
+    "building": _BUILDING_MARKER_STYLES,
+    "exit": _EXIT_MARKER_STYLES,
 }
 
 _SELECTED_MARKER = "X"
@@ -71,10 +127,11 @@ _DEFAULT_COLOR = "#555555"
 
 
 class MapViewer(Widget):
-    """Pannable ASCII map viewer with zone selection.
+    """Pannable ASCII map viewer with anchor selection.
 
-    Renders a RegionMap with colored zone markers. Handles zone cycling
-    via up/down keys and emits messages when a zone is selected.
+    Renders an AsciiMap with colored markers for zones, towns, and other
+    anchor types. Handles cycling via up/down keys and emits messages
+    when an anchor is highlighted or selected.
     """
 
     DEFAULT_CSS = """
@@ -96,18 +153,35 @@ class MapViewer(Widget):
     }
     """
 
-    # Reactive: index into navigable_zone_ids
+    # Reactive: index into navigable_ids
     selected_index: reactive[int] = reactive(0)
 
+    class AnchorHighlighted(Message):
+        """Fired when the highlighted anchor changes."""
+
+        def __init__(self, anchor_id: str, anchor_type: str) -> None:
+            super().__init__()
+            self.anchor_id = anchor_id
+            self.anchor_type = anchor_type
+
+    class AnchorSelected(Message):
+        """Fired when the user presses Enter on an anchor."""
+
+        def __init__(self, anchor_id: str, anchor_type: str) -> None:
+            super().__init__()
+            self.anchor_id = anchor_id
+            self.anchor_type = anchor_type
+
+    # Backward-compat message aliases
     class ZoneHighlighted(Message):
-        """Fired when the highlighted zone changes."""
+        """Fired when the highlighted zone changes (compat wrapper)."""
 
         def __init__(self, zone_id: str) -> None:
             super().__init__()
             self.zone_id = zone_id
 
     class ZoneSelected(Message):
-        """Fired when the user presses Enter on a zone."""
+        """Fired when the user presses Enter on a zone (compat wrapper)."""
 
         def __init__(self, zone_id: str) -> None:
             super().__init__()
@@ -115,28 +189,38 @@ class MapViewer(Widget):
 
     def __init__(
         self,
-        region_map: RegionMap,
-        zone_statuses: dict[str, ZoneStatus],
-        navigable_zone_ids: list[str],
-        initial_zone_id: str | None = None,
+        ascii_map: AsciiMap,
+        anchor_statuses: dict[str, AnchorStatus],
+        navigable_ids: list[str],
+        initial_id: str | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
-        self.region_map = region_map
-        self.zone_statuses = zone_statuses
-        self.navigable_zone_ids = navigable_zone_ids
+        self.ascii_map = ascii_map
+        self.anchor_statuses = anchor_statuses
+        self.navigable_ids = navigable_ids
         self.can_focus = True
 
-        if initial_zone_id and initial_zone_id in navigable_zone_ids:
-            self.selected_index = navigable_zone_ids.index(initial_zone_id)
+        # Build anchor type lookup
+        self._anchor_types: dict[str, str] = {
+            a.id: a.anchor_type for a in ascii_map.anchors
+        }
+
+        if initial_id and initial_id in navigable_ids:
+            self.selected_index = navigable_ids.index(initial_id)
 
     @property
-    def selected_zone_id(self) -> str | None:
-        """Currently selected zone ID, or None if no navigable zones."""
-        if not self.navigable_zone_ids:
+    def selected_anchor_id(self) -> str | None:
+        """Currently selected anchor ID, or None if no navigable anchors."""
+        if not self.navigable_ids:
             return None
-        idx = self.selected_index % len(self.navigable_zone_ids)
-        return self.navigable_zone_ids[idx]
+        idx = self.selected_index % len(self.navigable_ids)
+        return self.navigable_ids[idx]
+
+    # Backward-compat property
+    @property
+    def selected_zone_id(self) -> str | None:
+        return self.selected_anchor_id
 
     def compose(self) -> ComposeResult:
         with ScrollableContainer(id="map-scroll"):
@@ -144,35 +228,40 @@ class MapViewer(Widget):
 
     def on_mount(self) -> None:
         self._refresh_map()
-        # Initial pan to selected zone
         self.call_after_refresh(self._pan_to_selected)
 
     def watch_selected_index(self) -> None:
         self._refresh_map()
         self.call_after_refresh(self._pan_to_selected)
-        zone_id = self.selected_zone_id
-        if zone_id:
-            self.post_message(self.ZoneHighlighted(zone_id))
+        anchor_id = self.selected_anchor_id
+        if anchor_id:
+            atype = self._anchor_types.get(anchor_id, "zone")
+            self.post_message(self.AnchorHighlighted(anchor_id, atype))
+            # Also fire legacy message for existing handlers
+            self.post_message(self.ZoneHighlighted(anchor_id))
 
     # --- Key bindings ---
 
     def key_up(self) -> None:
-        """Cycle to previous zone."""
-        if not self.navigable_zone_ids:
+        """Cycle to previous anchor."""
+        if not self.navigable_ids:
             return
-        self.selected_index = (self.selected_index - 1) % len(self.navigable_zone_ids)
+        self.selected_index = (self.selected_index - 1) % len(self.navigable_ids)
 
     def key_down(self) -> None:
-        """Cycle to next zone."""
-        if not self.navigable_zone_ids:
+        """Cycle to next anchor."""
+        if not self.navigable_ids:
             return
-        self.selected_index = (self.selected_index + 1) % len(self.navigable_zone_ids)
+        self.selected_index = (self.selected_index + 1) % len(self.navigable_ids)
 
     def key_enter(self) -> None:
-        """Select the currently highlighted zone."""
-        zone_id = self.selected_zone_id
-        if zone_id:
-            self.post_message(self.ZoneSelected(zone_id))
+        """Select the currently highlighted anchor."""
+        anchor_id = self.selected_anchor_id
+        if anchor_id:
+            atype = self._anchor_types.get(anchor_id, "zone")
+            self.post_message(self.AnchorSelected(anchor_id, atype))
+            # Also fire legacy message
+            self.post_message(self.ZoneSelected(anchor_id))
 
     # --- Rendering ---
 
@@ -186,14 +275,13 @@ class MapViewer(Widget):
 
     def _render_map(self) -> Text:
         """Build the full map as a Rich Text object with styling."""
-        art = self.region_map.art
-        width = self.region_map.width
-        selected_id = self.selected_zone_id
+        art = self.ascii_map.art
+        width = self.ascii_map.width
+        selected_id = self.selected_anchor_id
 
         # Build a mutable grid from the art
         grid: list[list[str]] = []
         for line in art:
-            # Pad to full width so all rows are the same length
             padded = line.ljust(width)
             grid.append(list(padded))
 
@@ -202,10 +290,11 @@ class MapViewer(Widget):
             [None] * width for _ in range(len(grid))
         ]
 
-        # Composite zone markers
-        for anchor in self.region_map.anchors:
-            status = self.zone_statuses.get(anchor.zone_id, ZoneStatus.LOCKED)
-            is_selected = anchor.zone_id == selected_id
+        # Composite anchor markers
+        for anchor in self.ascii_map.anchors:
+            status = self.anchor_statuses.get(anchor.id, AnchorStatus.LOCKED)
+            is_selected = anchor.id == selected_id
+            atype = anchor.anchor_type
 
             r, c = anchor.row, anchor.col
             if r < 0 or r >= len(grid) or c < 0 or c >= width:
@@ -221,8 +310,10 @@ class MapViewer(Widget):
                     style_grid[r - 1][c] = _FLAG_STYLE
                     style_grid[r - 1][c + 1] = _FLAG_STYLE
             else:
-                grid[r][c] = _MARKER_CHARS.get(status, "?")
-                style_grid[r][c] = _MARKER_STYLES.get(status, _DEFAULT_COLOR)
+                chars = _MARKER_CHARS_BY_TYPE.get(atype, _ZONE_MARKER_CHARS)
+                styles = _MARKER_STYLES_BY_TYPE.get(atype, _ZONE_MARKER_STYLES)
+                grid[r][c] = chars.get(status, "?")
+                style_grid[r][c] = styles.get(status, _DEFAULT_COLOR)
 
         # Build Rich Text line by line
         text = Text()
@@ -239,7 +330,7 @@ class MapViewer(Widget):
         return text
 
     def _pan_to_selected(self) -> None:
-        """Scroll the map to center on the selected zone."""
+        """Scroll the map to center on the selected anchor."""
         anchor = self._selected_anchor()
         if anchor is None:
             return
@@ -249,8 +340,6 @@ class MapViewer(Widget):
         except Exception:
             return
 
-        # Calculate target scroll position to center the anchor in the viewport.
-        # Each character ≈ 1 cell wide, each line ≈ 1 cell tall.
         vw = scroller.size.width
         vh = scroller.size.height
 
@@ -259,12 +348,12 @@ class MapViewer(Widget):
 
         scroller.scroll_to(target_x, target_y, animate=True, duration=0.35)
 
-    def _selected_anchor(self) -> ZoneAnchor | None:
-        """Get the anchor for the currently selected zone."""
-        zone_id = self.selected_zone_id
-        if zone_id is None:
+    def _selected_anchor(self) -> MapAnchor | None:
+        """Get the anchor for the currently selected item."""
+        anchor_id = self.selected_anchor_id
+        if anchor_id is None:
             return None
-        return self.region_map.anchor_for_zone(zone_id)
+        return self.ascii_map.anchor_for_id(anchor_id)
 
 
 def _style_for_char(char: str) -> str:

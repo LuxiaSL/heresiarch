@@ -11,7 +11,7 @@ from collections import Counter
 
 from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.formulas import (
-    calculate_bonus_actions,
+    calculate_speed_bonus,
     calculate_buy_price,
     calculate_sell_price,
     evaluate_item_scaling,
@@ -108,12 +108,6 @@ def _ability_status(ability_id: str, combatant: CombatantState, game_data: GameD
     name = ability_id
     if ability.trigger != TriggerCondition.NONE:
         return f"{name} [passive]"
-    if ability.is_partial_action:
-        cd = combatant.cooldowns.get(ability_id, 0)
-        if cd > 0:
-            return f"{name} [partial, cd:{cd}]"
-        return f"{name} [partial]"
-
     cd = combatant.cooldowns.get(ability_id, 0)
     if cd > 0:
         return f"{name} (cd:{cd})"
@@ -205,15 +199,6 @@ def summarize_zone_select(
             details: list[str] = [f"{len(zone.encounters)} encounters"]
             if zone.recruitment_chance > 0:
                 details.append(f"Recruit: {zone.recruitment_chance:.0%}")
-            if zone.shop_item_pool:
-                shop_names = [
-                    (game_data.items[i].name if i in game_data.items else i)
-                    for i in zone.shop_item_pool[:5]
-                ]
-                shop_str = ", ".join(shop_names)
-                if len(zone.shop_item_pool) > 5:
-                    shop_str += ", ..."
-                details.append(f"Shop: {shop_str}")
             lines.append(f"      {' | '.join(details)}")
 
     return "\n".join(lines)
@@ -260,7 +245,12 @@ def summarize_combat(
             lines.append(f"  {c.id} -- DEAD")
             continue
 
-        bonus_actions = calculate_bonus_actions(c.effective_stats.SPD)
+        # Speed bonus: compare to slowest enemy
+        slowest_enemy_spd = min(
+            (e.effective_stats.SPD for e in combat.living_enemies),
+            default=0,
+        )
+        speed_bonus = calculate_speed_bonus(c.effective_stats.SPD, slowest_enemy_spd)
         # Build passive state indicators
         passive_tags = []
         if c.insight_stacks > 0:
@@ -297,8 +287,8 @@ def summarize_combat(
             ]
             lines.append(f"    Statuses: {', '.join(status_parts)}")
 
-        if bonus_actions > 0:
-            lines.append(f"    Bonus actions: {bonus_actions}")
+        if speed_bonus > 0:
+            lines.append(f"    Speed bonus: +{speed_bonus} action(s) (BA:{speed_bonus})")
 
     # Stash (consumables available mid-combat)
     if run.party.stash:
@@ -825,8 +815,6 @@ def lookup_ability_view(ability_id: str, game_data: GameData) -> str:
 
     if ability.trigger != TriggerCondition.NONE:
         lines.append(f"Trigger: {ability.trigger.value} (threshold: {ability.trigger_threshold})")
-    if ability.is_partial_action:
-        lines.append("Partial action: yes (can be used as bonus action from SPD)")
     lines.append("")
 
     for i, effect in enumerate(ability.effects):
@@ -1016,14 +1004,6 @@ def lookup_zone_view(zone_id: str, game_data: GameData) -> str:
             name = game_data.enemies[spawn.enemy_template_id].name if spawn.enemy_template_id in game_data.enemies else spawn.enemy_template_id
             lines.append(f"Random spawn: {name} ({spawn.chance:.0%} per encounter)")
 
-    if zone.shop_item_pool:
-        lines.append("")
-        shop_names = [
-            (game_data.items[i].name if i in game_data.items else i)
-            for i in zone.shop_item_pool
-        ]
-        lines.append(f"Shop: {', '.join(shop_names)}")
-
     if zone.recruitment_chance > 0:
         lines.append(f"Recruitment chance: {zone.recruitment_chance:.0%}")
 
@@ -1073,10 +1053,15 @@ def lookup_formula_view(topic: str) -> str:
             "Overstay penalty: -5% XP per extra battle, floored at 10%"
         ),
         "bonus_actions": (
-            "=== SPD Bonus Actions ===\n"
-            "bonus_actions = floor(effective_SPD / 100)\n"
-            "Partial actions deal 50% damage.\n"
-            "At SPD 100: 1 bonus, SPD 200: 2 bonuses."
+            "=== Speed Bonus Actions ===\n"
+            "Compare your SPD to the slowest enemy's SPD.\n"
+            "Bonus actions at exponential thresholds: +1 at 2x, +2 at 4x, +3 at 8x.\n"
+            "Bonus actions work like extra AP: you choose ability + target for each.\n"
+            "Pass 'bonus_actions' in your decision (same format as cheat_extras).\n"
+            "If omitted, the engine auto-repeats your primary action.\n"
+            "Speed bonus actions are full-power, trigger all passives (frenzy, thorns, etc.).\n"
+            "Survive suppresses speed bonus (hunkering down = no extra actions).\n"
+            "Enemies get the same bonus against slow players."
         ),
         "shop_pricing": (
             "=== Shop Pricing ===\n"
@@ -1240,6 +1225,14 @@ def _append_full_character(
         if ability:
             lines.append(f"      {aid} -- {_ability_summary(ability)}")
 
+    # Growth history (MC only — shows job lineage for mimic decisions)
+    if char.is_mc and char.growth_history:
+        history_parts = [
+            f"{_job_name(jid, game_data)}({lvls})"
+            for jid, lvls in char.growth_history
+        ]
+        lines.append(f"    Job history: {' -> '.join(history_parts)}")
+
     # Next unlock
     job = game_data.jobs.get(char.job_id)
     if job:
@@ -1313,6 +1306,11 @@ def _render_combat_event(
             if event.details.get("self_damage"):
                 return f"{_n(event.actor_id)} takes {event.value} recoil"
             return f"  {_n(event.target_id)} takes {event.value} dmg from {_n(event.actor_id)}"
+        case CombatEventType.ITEM_USED:
+            item_name = event.details.get("item_name", event.details.get("item_id", "item"))
+            if event.actor_id == event.target_id:
+                return f"{_n(event.actor_id)} uses {item_name}"
+            return f"{_n(event.actor_id)} uses {item_name} on {_n(event.target_id)}"
         case CombatEventType.HEALING:
             source = event.details.get("source", "")
             src_str = f" ({source})" if source else ""
@@ -1333,6 +1331,8 @@ def _render_combat_event(
             return f"  {_n(event.target_id)} FALLS!"
         case CombatEventType.RETALIATE_TRIGGERED:
             return f"  {_n(event.actor_id)} retaliates -> {_n(event.target_id)} for {event.value} dmg"
+        case CombatEventType.THORNS_TRIGGERED:
+            return f"  {_n(event.actor_id)} Thorns reflects {event.value} dmg to {_n(event.target_id)}"
         case CombatEventType.PASSIVE_TRIGGERED:
             return f"  {_n(event.actor_id)}'s {event.ability_id} triggers!"
         case CombatEventType.TAUNT_REDIRECT:

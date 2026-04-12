@@ -70,16 +70,23 @@ class ShopScreen(Screen):
 
     def _init_shop(self) -> None:
         run = self.app.run_state
-        if run is None or run.current_zone_id is None:
+        if run is None:
             return
 
-        zone = self.app.game_data.zones.get(run.current_zone_id)
-        if zone is None:
+        town_items = self.app.game_loop.resolve_town_shop(run)
+        if not town_items:
             return
+
+        # Use current zone level if in a zone, otherwise default to 1
+        zone_level = 1
+        if run.current_zone_id:
+            zone = self.app.game_data.zones.get(run.current_zone_id)
+            if zone is not None:
+                zone_level = zone.zone_level
 
         self._shop = ShopInventory(
-            available_items=list(zone.shop_item_pool),
-            zone_level=zone.zone_level,
+            available_items=town_items,
+            zone_level=zone_level,
         )
 
     def _refresh(self) -> None:

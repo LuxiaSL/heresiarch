@@ -68,7 +68,7 @@ from typing import TYPE_CHECKING
 
 from heresiarch.engine.data_loader import load_all
 from heresiarch.engine.formulas import (
-    calculate_bonus_actions,
+    calculate_speed_bonus,
     calculate_buy_price,
     calculate_effective_stats,
     calculate_enemy_hp,
@@ -292,7 +292,7 @@ def build_compare(
         items = [game_data.items[iid] for iid in item_ids if iid in game_data.items]
         eff = calculate_effective_stats(base_stats, items, [])
         hp = calculate_max_hp(job.base_hp, job.hp_growth, level, eff.DEF)
-        bonus = calculate_bonus_actions(eff.SPD)
+        bonus = calculate_speed_bonus(eff.SPD, 0)  # no enemy context in build compare
 
         row = [
             build_name,
@@ -1222,10 +1222,77 @@ class ZoneXPSnapshot:
     cumulative_xp_grind: int
 
 
+def _effective_xp_mult(tmpl: "EnemyTemplate") -> float:
+    """Return the XP multiplier for an enemy: xp_multiplier if set, else budget_multiplier."""
+    if tmpl.xp_multiplier is not None and tmpl.xp_multiplier > 0:
+        return tmpl.xp_multiplier
+    return tmpl.budget_multiplier
+
+
+def _resolve_encounter_enemy_level(
+    zone: "ZoneTemplate",
+    enc: "EncounterTemplate",
+    encounter_index: int | None = None,
+    total_encounters: int | None = None,
+) -> int:
+    """Resolve the enemy level for an encounter, matching encounter.py priority.
+
+    1. Boss enemy_level_override
+    2. Per-encounter enemy_level_range (average)
+    3. Auto-interpolation from zone range based on encounter position
+    4. Flat zone enemy_level_range (average)
+    5. zone_level fallback
+    """
+    # 1. Boss override
+    if enc.enemy_level_override is not None:
+        return enc.enemy_level_override
+
+    # 2. Per-encounter range
+    if enc.enemy_level_range is not None:
+        enc_min, enc_max = enc.enemy_level_range
+        if enc_min > 0 and enc_max >= enc_min:
+            return (enc_min + enc_max) // 2
+
+    # 3-4. Zone range (interpolated if position known, flat otherwise)
+    zone_min, zone_max = zone.enemy_level_range
+    if zone_min > 0 and zone_max >= zone_min:
+        if (
+            encounter_index is not None
+            and total_encounters is not None
+            and total_encounters > 1
+        ):
+            t = encounter_index / (total_encounters - 1)
+            center = zone_min + t * (zone_max - zone_min)
+            interp_min = max(zone_min, round(center - 1))
+            interp_max = min(zone_max, round(center + 1))
+            return (interp_min + interp_max) // 2
+        return (zone_min + zone_max) // 2
+
+    # 5. zone_level fallback
+    return zone.zone_level
+
+
+def _resolve_town_shop_items(game_data: GameData, region: str) -> list[str]:
+    """Resolve shop items from the town matching *region*.
+
+    For simulation purposes we assume all zones are cleared, so every
+    shop tier is unlocked.  Returns an empty list when no town exists
+    for the region.
+    """
+    for town in game_data.towns.values():
+        if town.region == region:
+            items: list[str] = []
+            for tier in town.shop_tiers:
+                items.extend(tier.items)
+            return items
+    return []
+
+
 def _compute_zone_economy(game_data: GameData) -> list[ZoneEconSnapshot]:
     """Build per-zone gold snapshots using avg money-drop formula.
 
-    Returns zones sorted by zone_level ascending.
+    Uses per-enemy levels (enemy_level_range average or boss override)
+    instead of flat zone_level. Returns zones sorted by zone_level ascending.
     """
     from heresiarch.engine.formulas import MONEY_DROP_MIN_MULTIPLIER, MONEY_DROP_MAX_MULTIPLIER
     from heresiarch.engine.loot import OVERSTAY_PENALTY_PER_BATTLE
@@ -1242,17 +1309,18 @@ def _compute_zone_economy(game_data: GameData) -> list[ZoneEconSnapshot]:
     cumulative_grind = 0.0
 
     for zone in sorted(game_data.zones.values(), key=lambda z: z.zone_level):
-        zlvl = zone.zone_level
         zone_gold = 0.0
         zone_enemies = 0
         non_boss_golds: list[float] = []
 
-        for enc in zone.encounters:
+        total_enc = len(zone.encounters)
+        for enc_idx, enc in enumerate(zone.encounters):
+            enemy_level = _resolve_encounter_enemy_level(zone, enc, enc_idx, total_enc)
             enc_gold = 0.0
             enc_enemies = 0
             for tmpl_id, cnt in zip(enc.enemy_templates, enc.enemy_counts, strict=True):
                 mult = money_mults.get(tmpl_id, 1.0)
-                enc_gold += zlvl * money_avg * mult * cnt
+                enc_gold += enemy_level * money_avg * mult * cnt
                 enc_enemies += cnt
             zone_gold += enc_gold
             zone_enemies += enc_enemies
@@ -1270,11 +1338,11 @@ def _compute_zone_economy(game_data: GameData) -> list[ZoneEconSnapshot]:
             overstay_max_gold += avg_enc_gold * mult
 
         # Gold for N overstay battles
-        def _overstay_gold(n_battles: int) -> float:
+        def _overstay_gold(n_battles: int, _avg=avg_enc_gold) -> float:
             total = 0.0
             for b in range(1, n_battles + 1):
                 mult = max(0.0, 1.0 - OVERSTAY_PENALTY_PER_BATTLE * b)
-                total += avg_enc_gold * mult
+                total += _avg * mult
             return total
 
         cumulative_rush += zone_gold
@@ -1284,7 +1352,7 @@ def _compute_zone_economy(game_data: GameData) -> list[ZoneEconSnapshot]:
         snapshots.append(ZoneEconSnapshot(
             zone_id=zone.id,
             zone_name=zone.name,
-            zone_level=zlvl,
+            zone_level=zone.zone_level,
             enemies_total=zone_enemies,
             encounters_total=len(zone.encounters),
             zone_gold=zone_gold,
@@ -1293,10 +1361,13 @@ def _compute_zone_economy(game_data: GameData) -> list[ZoneEconSnapshot]:
             cumulative_gold_moderate=cumulative_moderate,
             cumulative_gold_grind=cumulative_grind,
             avg_encounter_gold=avg_enc_gold,
-            shop_items=list(zone.shop_item_pool),
+            shop_items=_resolve_town_shop_items(game_data, zone.region),
         ))
 
     return snapshots
+
+
+_ENDLESS_GRIND_BATTLES: int = 40  # how many encounters to model in The Pit
 
 
 def _compute_xp_progression(game_data: GameData, job_id: str) -> list[ZoneXPSnapshot]:
@@ -1305,7 +1376,11 @@ def _compute_xp_progression(game_data: GameData, job_id: str) -> list[ZoneXPSnap
     Assumes a single character of the given job, starting at level 1 with 0 XP,
     clearing zones in order.  Rush = clear only; moderate = +5 overstay battles;
     grind = +20 overstay battles per zone.
+
+    Uses per-enemy levels (enemy_level_range average or boss override) instead
+    of flat zone_level.  Endless zones model dynamic encounters with reward tapering.
     """
+    from heresiarch.engine.formulas import calculate_endless_reward_multiplier
     from heresiarch.engine.loot import OVERSTAY_PENALTY_PER_BATTLE
 
     job = game_data.jobs[job_id]
@@ -1321,39 +1396,91 @@ def _compute_xp_progression(game_data: GameData, job_id: str) -> list[ZoneXPSnap
     snapshots: list[ZoneXPSnapshot] = []
 
     for zone in sorted(game_data.zones.values(), key=lambda z: z.zone_level):
-        zlvl = zone.zone_level
         xp_cap = zone.xp_cap_level
 
-        # XP from clearing all encounters in the zone
-        def _zone_clear_xp(char_level: int) -> int:
+        # --- Endless zones: model dynamic encounters with reward tapering ---
+        if zone.is_endless:
+            def _endless_xp(n_battles: int, char_level: int) -> int:
+                """Estimate XP from N endless encounters at current player level."""
+                # Average XP multiplier from pool
+                total_budget = 0.0
+                pool_count = 0
+                for tid in zone.endless_enemy_pool:
+                    tmpl = game_data.enemies.get(tid)
+                    if tmpl:
+                        total_budget += _effective_xp_mult(tmpl)
+                        pool_count += 1
+                avg_budget = total_budget / pool_count if pool_count > 0 else 1.0
+                avg_enemies_per_enc = 3.0  # (2+4)/2
+
+                total_xp = 0
+                lvl = char_level
+                for _b in range(n_battles):
+                    # Enemy level rubber-bands to player, clamped
+                    enemy_level = max(zone.endless_min_level, min(lvl, zone.endless_max_level))
+                    base_xp = calculate_xp_reward(enemy_level, avg_budget, lvl, xp_cap)
+                    endless_mult = calculate_endless_reward_multiplier(lvl, zone.endless_max_level)
+                    enc_xp = int(base_xp * avg_enemies_per_enc * endless_mult)
+                    total_xp += enc_xp
+                    # Re-check level after each encounter (level-ups reduce future XP)
+                    gained = calculate_levels_gained(total_xp + xp_rush, lvl)
+                    lvl = char_level + gained
+                return total_xp
+
+            # Rush: skip endless entirely
+            # Moderate: 10 battles in pit
+            xp_moderate += _endless_xp(10, level_moderate)
+            gained = calculate_levels_gained(xp_moderate, level_moderate)
+            level_moderate += gained
+
+            # Grind: 40 battles in pit
+            xp_grind += _endless_xp(_ENDLESS_GRIND_BATTLES, level_grind)
+            gained = calculate_levels_gained(xp_grind, level_grind)
+            level_grind += gained
+
+            snapshots.append(ZoneXPSnapshot(
+                zone_id=zone.id,
+                zone_level=zone.zone_level,
+                level_at_exit_rush=level_rush,
+                level_at_exit_moderate=level_moderate,
+                level_at_exit_grind=level_grind,
+                cumulative_xp_rush=xp_rush,
+                cumulative_xp_moderate=xp_moderate,
+                cumulative_xp_grind=xp_grind,
+            ))
+            continue
+
+        # --- Regular zones ---
+        def _zone_clear_xp(char_level: int, _zone=zone) -> int:
             total = 0
-            for enc in zone.encounters:
+            total_enc = len(_zone.encounters)
+            for enc_idx, enc in enumerate(_zone.encounters):
+                enemy_level = _resolve_encounter_enemy_level(_zone, enc, enc_idx, total_enc)
                 for tmpl_id, cnt in zip(enc.enemy_templates, enc.enemy_counts, strict=True):
                     tmpl = game_data.enemies.get(tmpl_id)
                     if tmpl is None:
                         continue
                     xp_per_kill = calculate_xp_reward(
-                        zlvl, tmpl.budget_multiplier, char_level, xp_cap,
+                        enemy_level, _effective_xp_mult(tmpl), char_level, xp_cap,
                     )
                     total += xp_per_kill * cnt
             return total
 
-        # Overstay XP: re-fight avg encounter, XP penalized by both overstay
-        # multiplier and level-cap diminishing returns
-        def _overstay_xp(n_battles: int, char_level: int) -> int:
-            if not zone.encounters:
+        def _overstay_xp(n_battles: int, char_level: int, _zone=zone) -> int:
+            if not _zone.encounters:
                 return 0
-            # Use avg enemy budget from non-boss encounters
-            non_boss = [e for e in zone.encounters if not e.is_boss]
+            non_boss = [e for e in _zone.encounters if not e.is_boss]
             if not non_boss:
-                non_boss = zone.encounters
+                non_boss = _zone.encounters
+            # Average enemy level for overstay (non-boss encounters)
+            avg_enemy_level = _resolve_encounter_enemy_level(_zone, non_boss[0])
             total_budget = 0.0
             total_enemies = 0
             for enc in non_boss:
                 for tmpl_id, cnt in zip(enc.enemy_templates, enc.enemy_counts, strict=True):
                     tmpl = game_data.enemies.get(tmpl_id)
                     if tmpl is not None:
-                        total_budget += tmpl.budget_multiplier * cnt
+                        total_budget += _effective_xp_mult(tmpl) * cnt
                         total_enemies += cnt
             avg_budget = total_budget / total_enemies if total_enemies > 0 else 1.0
             avg_count = sum(sum(e.enemy_counts) for e in non_boss) / len(non_boss) if non_boss else 1
@@ -1361,7 +1488,7 @@ def _compute_xp_progression(game_data: GameData, job_id: str) -> list[ZoneXPSnap
             total_xp = 0
             for b in range(1, n_battles + 1):
                 overstay_mult = max(0.0, 1.0 - OVERSTAY_PENALTY_PER_BATTLE * b)
-                base_xp = calculate_xp_reward(zlvl, avg_budget, char_level, xp_cap)
+                base_xp = calculate_xp_reward(avg_enemy_level, avg_budget, char_level, xp_cap)
                 total_xp += int(base_xp * overstay_mult * avg_count)
             return total_xp
 
@@ -1384,7 +1511,7 @@ def _compute_xp_progression(game_data: GameData, job_id: str) -> list[ZoneXPSnap
 
         snapshots.append(ZoneXPSnapshot(
             zone_id=zone.id,
-            zone_level=zlvl,
+            zone_level=zone.zone_level,
             level_at_exit_rush=level_rush,
             level_at_exit_moderate=level_moderate,
             level_at_exit_grind=level_grind,
@@ -1522,6 +1649,79 @@ def cmd_xp_curve(args: argparse.Namespace) -> None:
             if grind_zone == "---" and snap.level_at_exit_grind >= target_lv:
                 grind_zone = snap.zone_id
         print(f"  Lv{target_lv:>3} | {rush_zone:>10} | {mod_zone:>10} | {grind_zone:>10}")
+
+    # --- Endless zone analysis ---
+    endless_zones = [z for z in gd.zones.values() if z.is_endless]
+    if endless_zones:
+        from heresiarch.engine.formulas import (
+            MONEY_DROP_MAX_MULTIPLIER,
+            MONEY_DROP_MIN_MULTIPLIER,
+            calculate_endless_reward_multiplier,
+        )
+
+        money_avg = (MONEY_DROP_MIN_MULTIPLIER + MONEY_DROP_MAX_MULTIPLIER) / 2.0
+
+        for zone in endless_zones:
+            # Average XP and gold per enemy in the pool
+            pool_xp_mults: list[float] = []
+            pool_gold_budgets: list[float] = []
+            for tid in zone.endless_enemy_pool:
+                tmpl = gd.enemies.get(tid)
+                if tmpl:
+                    pool_xp_mults.append(_effective_xp_mult(tmpl))
+                    pool_gold_budgets.append(tmpl.budget_multiplier)
+            avg_xp_mult = sum(pool_xp_mults) / len(pool_xp_mults) if pool_xp_mults else 1.0
+            avg_gold_budget = sum(pool_gold_budgets) / len(pool_gold_budgets) if pool_gold_budgets else 1.0
+            avg_enemies = 3.0  # (2+4)/2
+
+            print(f"\n{'=' * 90}")
+            print(f"ENDLESS ZONE: {zone.name} (Lv{zone.endless_min_level}-{zone.endless_max_level})")
+            print(f"  Pool: {len(zone.endless_enemy_pool)} templates, avg xp_mult={avg_xp_mult:.1f}, avg gold_budget={avg_gold_budget:.1f}")
+            print(f"  Avg ~{avg_enemies:.0f} enemies/enc, XP cap at Lv{zone.xp_cap_level}")
+            print(f"{'=' * 90}")
+
+            print(f"\n  {'Entry Lv':>8} | {'Enc XP':>7} | {'Enc Gold':>8} | {'Reward%':>7} | {'XP→Lv+1':>8} | {'Enc to Lv+1':>11} | {'10 Enc →Lv':>10} | {'30 Enc →Lv':>10}")
+            print(f"  {'-'*8}-+-{'-'*7}-+-{'-'*8}-+-{'-'*7}-+-{'-'*8}-+-{'-'*11}-+-{'-'*10}-+-{'-'*10}")
+
+            for entry_lv in range(zone.endless_min_level, zone.endless_max_level + 3):
+                enemy_level = max(zone.endless_min_level, min(entry_lv, zone.endless_max_level))
+                reward_mult = calculate_endless_reward_multiplier(entry_lv, zone.endless_max_level)
+
+                enc_xp_raw = int(enemy_level * avg_xp_mult * avg_enemies)
+                enc_xp = int(enc_xp_raw * reward_mult)
+                # Apply XP cap penalty if over cap
+                if zone.xp_cap_level > 0 and entry_lv > zone.xp_cap_level:
+                    levels_over = entry_lv - zone.xp_cap_level
+                    cap_ratio = max(0.1, 0.5 ** levels_over)
+                    enc_xp = int(enc_xp * cap_ratio)
+
+                enc_gold_raw = int(enemy_level * money_avg * avg_enemies)
+                enc_gold = int(enc_gold_raw * reward_mult)
+
+                # XP needed for next level
+                xp_next = xp_for_level(entry_lv + 1) - xp_for_level(entry_lv)
+                enc_to_next = xp_next / enc_xp if enc_xp > 0 else float('inf')
+
+                # Simulate 10 and 30 encounters (level changes mid-grind)
+                def _sim_encounters(n: int, start_lv: int) -> int:
+                    lv = start_lv
+                    total_xp = xp_for_level(start_lv)
+                    for _ in range(n):
+                        elv = max(zone.endless_min_level, min(lv, zone.endless_max_level))
+                        rm = calculate_endless_reward_multiplier(lv, zone.endless_max_level)
+                        raw = int(elv * avg_xp_mult * avg_enemies * rm)
+                        if zone.xp_cap_level > 0 and lv > zone.xp_cap_level:
+                            lo = lv - zone.xp_cap_level
+                            raw = int(raw * max(0.1, 0.5 ** lo))
+                        total_xp += raw
+                        gained = calculate_levels_gained(total_xp, lv)
+                        lv += gained
+                    return lv
+
+                lv_10 = _sim_encounters(10, entry_lv)
+                lv_30 = _sim_encounters(30, entry_lv)
+
+                print(f"  Lv{entry_lv:>5} | {enc_xp:>5}xp | {enc_gold:>6}G | {reward_mult:>5.0%} | {xp_next:>6}xp | {enc_to_next:>9.1f} | Lv{lv_10:>7} | Lv{lv_30:>7}")
 
 
 # ---------------------------------------------------------------------------
@@ -1863,6 +2063,168 @@ def cmd_progression(args: argparse.Namespace) -> None:
     print(_fmt_table(headers, rows, col_align=["l", "r", "r", "r", "l", "l"]))
 
 
+def cmd_lodge_tuning(args: argparse.Namespace) -> None:
+    """Lodge cost analysis with dynamic HP-based pricing model.
+
+    Models: cost = floor + (missing_hp_total * gold_per_hp)
+    where floor = base + per_level * mc_level.
+
+    Simulates across multiple gold_per_hp values and injury levels
+    to find the sweet spot.
+    """
+    gd = _load_game_data()
+    job_id = args.job
+
+    if job_id not in gd.jobs:
+        print(f"Error: job '{job_id}' not found. Available: {', '.join(gd.jobs.keys())}")
+        return
+
+    job = gd.jobs[job_id]
+
+    econ_snaps = _compute_zone_economy(gd)
+    xp_snaps = _compute_xp_progression(gd, job_id)
+    xp_by_zone = {s.zone_id: s for s in xp_snaps}
+
+    # Potion data (for comparison)
+    best_potion: tuple[str, int, int] = ("---", 1, 1)
+    for item in gd.items.values():
+        if item.is_consumable and item.heal_amount > 0:
+            buy = calculate_buy_price(item.base_price, cha=0)
+            if item.heal_amount > best_potion[1]:
+                best_potion = (item.name, item.heal_amount, buy)
+    potion_gph = best_potion[2] / best_potion[1]  # gold per HP for best potion
+
+    # MC max HP at level (solo — party of 1 for simplicity, scale by party_size)
+    def _mc_max_hp(level: int) -> int:
+        effective_def = (job.growth.DEF + 1) * level
+        return calculate_max_hp(job.base_hp, job.hp_growth, level, effective_def)
+
+    # Estimate Pit avg encounter gold
+    from heresiarch.engine.formulas import MONEY_DROP_MIN_MULTIPLIER, MONEY_DROP_MAX_MULTIPLIER
+    money_avg = (MONEY_DROP_MIN_MULTIPLIER + MONEY_DROP_MAX_MULTIPLIER) / 2.0
+    money_mults: dict[str, float] = {}
+    for dt in gd.drop_tables.values():
+        money_mults[dt.enemy_template_id] = dt.money_multiplier
+
+    pit_avg_gold = 0.0
+    for zone in gd.zones.values():
+        if zone.is_endless and zone.endless_enemy_pool:
+            avg_level = (zone.endless_min_level + zone.endless_max_level) / 2.0
+            pool_mults = [money_mults.get(eid, 1.0) for eid in zone.endless_enemy_pool]
+            avg_mult = sum(pool_mults) / len(pool_mults) if pool_mults else 1.0
+            pit_avg_gold = avg_level * money_avg * avg_mult * 3.0
+            break
+
+    # --- Parameters to sweep ---
+    gold_per_hp_values = [0.5, 1.0, 1.5, 2.0, 3.0]
+    injury_levels = [0.25, 0.50, 0.75, 1.00]  # % HP missing
+    floor_base = 50   # minimum cost floor base
+    floor_per_lv = 5  # minimum cost floor per level
+
+    party_size = int(args.party_size) if hasattr(args, "party_size") else 1
+
+    print("=" * 120)
+    print(f"LODGE COST TUNING — Dynamic HP-based pricing")
+    print(f"  Job: {job.name}  |  Party size: {party_size}")
+    print(f"  Formula: max(floor, missing_hp_total * gold_per_hp)")
+    print(f"  Floor: {floor_base} + {floor_per_lv} * mc_level")
+    print(f"  Best potion: {best_potion[0]} ({best_potion[1]}HP, {best_potion[2]}G) = {potion_gph:.2f} G/HP")
+    if pit_avg_gold > 0:
+        print(f"  Pit avg encounter gold: {pit_avg_gold:.0f}G")
+    print(f"  Gold_per_hp values tested: {gold_per_hp_values}")
+    print(f"  Injury levels tested: {[f'{i:.0%}' for i in injury_levels]}")
+    print("=" * 120)
+
+    # For each gold_per_hp value, show the full table
+    for gph in gold_per_hp_values:
+        print(f"\n{'─' * 120}")
+        print(f"  gold_per_hp = {gph}  (potion = {potion_gph:.2f} G/HP, premium = {gph/potion_gph:.1f}x)")
+        print(f"{'─' * 120}")
+
+        rows: list[list[str]] = []
+        for econ in econ_snaps:
+            xp = xp_by_zone.get(econ.zone_id)
+            if xp is None:
+                continue
+
+            level = xp.level_at_exit_moderate
+            gold = econ.cumulative_gold_moderate
+            mc_hp = _mc_max_hp(level)
+            total_max_hp = mc_hp * party_size
+            floor = floor_base + floor_per_lv * level
+
+            cells: list[str] = [
+                econ.zone_id,
+                str(level),
+                str(total_max_hp),
+                f"{gold:.0f}G",
+            ]
+
+            for injury in injury_levels:
+                missing = int(total_max_hp * injury)
+                cost = max(floor, int(missing * gph))
+                pct = (cost / gold * 100) if gold > 0 else 999.0
+                pit_enc = cost / pit_avg_gold if pit_avg_gold > 0 else 0
+                cells.append(f"{cost}G ({pct:.0f}%) [{pit_enc:.1f}p]")
+
+            rows.append(cells)
+
+        headers = ["Zone", "Lv", "PartyHP", "Gold"] + [
+            f"{int(inj*100)}% hurt" for inj in injury_levels
+        ]
+        print(_fmt_table(
+            headers, rows,
+            col_align=["l", "r", "r", "r"] + ["r"] * len(injury_levels),
+        ))
+
+    # Summary: which gold_per_hp gives 20-40% at 75% injury across the run?
+    print(f"\n{'=' * 120}")
+    print("SUMMARY: %gold at 75% injury (target: 20-40% = 'painful')")
+    print(f"{'=' * 120}\n")
+
+    summary_headers = ["Zone", "Lv", "Gold"] + [f"gph={g}" for g in gold_per_hp_values]
+    summary_rows: list[list[str]] = []
+
+    for econ in econ_snaps:
+        xp = xp_by_zone.get(econ.zone_id)
+        if xp is None:
+            continue
+        level = xp.level_at_exit_moderate
+        gold = econ.cumulative_gold_moderate
+        mc_hp = _mc_max_hp(level)
+        total_max_hp = mc_hp * party_size
+        missing_75 = int(total_max_hp * 0.75)
+        floor = floor_base + floor_per_lv * level
+
+        cells = [econ.zone_id, str(level), f"{gold:.0f}G"]
+        for gph in gold_per_hp_values:
+            cost = max(floor, int(missing_75 * gph))
+            pct = (cost / gold * 100) if gold > 0 else 999.0
+            verdict = (
+                "FREE" if pct < 5
+                else "cheap" if pct < 15
+                else "fair" if pct < 30
+                else "painful" if pct < 50
+                else "brutal" if pct < 75
+                else "NOPE"
+            )
+            cells.append(f"{pct:>5.1f}% {verdict}")
+        summary_rows.append(cells)
+
+    print(_fmt_table(
+        summary_headers, summary_rows,
+        col_align=["l", "r", "r"] + ["r"] * len(gold_per_hp_values),
+    ))
+
+    print()
+    print("TUNING GUIDANCE:")
+    print("  Target: 20-40% at 75% injury = 'painful but possible'")
+    print("  Lodge should cost MORE per HP than potions (convenience premium)")
+    print(f"  Potion baseline: {potion_gph:.2f} G/HP — lodge gold_per_hp should be >{potion_gph:.1f}")
+    print("  Pit earn-back at 75% injury should be 3-5 encounters")
+    print("  Early zones (1-2) being 'brutal' is OK — you shouldn't rest early")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="heresiarch-sim",
@@ -1954,8 +2316,86 @@ def main() -> None:
     p.add_argument("--job", default="einherjar", help="Job ID")
     p.set_defaults(func=cmd_progression)
 
+    # lodge-tuning
+    p = sub.add_parser("lodge-tuning", help="Lodge cost analysis with dynamic HP-based pricing model")
+    p.add_argument("--job", default="einherjar", help="Job ID")
+    p.add_argument("--party-size", type=int, default=1, help="Party size for total HP calc (default: 1)")
+    p.set_defaults(func=cmd_lodge_tuning)
+
+    # combat — general-purpose combat simulator
+    p = sub.add_parser("combat", help="Simulate combat with scripted action cycles against encounters")
+    p.add_argument("--job", default="berserker", help="Job ID")
+    p.add_argument("--level", type=int, default=1, help="Player level")
+    p.add_argument("--cycle", default="S,S,S,C3", help="Action cycle DSL: S=survive, A=attack, A:id=ability, C3=cheat 3AP, I:id=item")
+    p.add_argument("--zone", default=None, help="Zone ID — simulates all encounters in order")
+    p.add_argument("--enemy", default=None, help="Enemy template ID (for single encounter)")
+    p.add_argument("--enemy-level", type=int, default=1, help="Enemy level")
+    p.add_argument("--enemy-count", type=int, default=1, help="Number of enemies")
+    p.add_argument("--equipment", default=None, help="Equipment: WEAPON=id,ARMOR=id or bare item_id for weapon")
+    p.add_argument("--between", default=None, help="Between-encounter items: 1:minor_potion,2:minor_potion")
+    p.add_argument("--seed", type=int, default=42, help="RNG seed")
+    p.add_argument("--quiet", action="store_true", help="Summary only, no per-round output")
+    p.set_defaults(func=cmd_combat)
+
     args = parser.parse_args()
     args.func(args)
+
+
+def cmd_combat(args: argparse.Namespace) -> None:
+    """General-purpose combat sim using the real CombatEngine."""
+    from heresiarch.tools.combat_sim import (
+        CombatSimulator,
+        EncounterConfig,
+        Scenario,
+        format_sim_result,
+        parse_between,
+        parse_cycle,
+    )
+
+    gd = _load_game_data()
+    if args.job not in gd.jobs:
+        print(f"Unknown job: {args.job}. Available: {', '.join(gd.jobs.keys())}")
+        return
+
+    cycle = parse_cycle(args.cycle)
+    between = parse_between(args.between or "")
+
+    # Parse equipment
+    equipment: dict[str, str | None] = {
+        "WEAPON": None, "ARMOR": None, "ACCESSORY_1": None, "ACCESSORY_2": None,
+    }
+    if args.equipment:
+        for token in args.equipment.split(","):
+            token = token.strip()
+            if "=" in token:
+                slot, item_id = token.split("=", 1)
+                equipment[slot.upper()] = item_id
+            else:
+                equipment["WEAPON"] = token
+
+    # Build encounters
+    encounters: list[EncounterConfig] = []
+    if not args.zone and args.enemy:
+        encounters = [EncounterConfig(
+            enemy_id=args.enemy,
+            enemy_level=args.enemy_level,
+            enemy_count=args.enemy_count,
+        )]
+
+    scenario = Scenario(
+        job_id=args.job,
+        level=args.level,
+        equipment=equipment,
+        cycle=cycle,
+        zone_id=args.zone,
+        encounters=encounters,
+        between_encounters=between,
+        seed=args.seed,
+    )
+
+    sim = CombatSimulator(gd, seed=args.seed)
+    result = sim.run(scenario)
+    print(format_sim_result(result, verbose=not args.quiet))
 
 
 if __name__ == "__main__":

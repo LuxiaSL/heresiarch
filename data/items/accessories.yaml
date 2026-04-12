@@ -1,8 +1,9 @@
 - id: fortress_ring
   name: Fortress Ring
   slot: ACCESSORY_1
+  tier: 2
   description: "Martyr becomes a caster? Off-label enabler."
-  base_price: 400
+  base_price: 5000
   conversion:
     source_stat: DEF
     target_stat: MAG
@@ -14,8 +15,9 @@
 - id: gale_brace
   name: Gale Brace
   slot: ACCESSORY_1
+  tier: 2
   description: "Berserker's speed feeds damage."
-  base_price: 300
+  base_price: 4000
   conversion:
     source_stat: SPD
     target_stat: STR
@@ -25,15 +27,17 @@
 - id: leech_fang
   name: Leech Fang
   slot: ACCESSORY_1
+  tier: 2
   description: "Sustain. Enables Retaliate loop."
-  base_price: 450
+  base_price: 5000
   leech_percent: 0.15
 
 - id: endurance_plate
   name: Endurance Plate
   slot: ACCESSORY_1
+  tier: 2
   description: "Defensive accessory. Flat DEF feeds into armor scaling."
-  base_price: 250
+  base_price: 3500
   flat_stat_bonus:
     DEF: 10
   extra_def_reduction: 0.5

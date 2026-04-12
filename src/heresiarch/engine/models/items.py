@@ -52,6 +52,7 @@ class Item(BaseModel):
     id: str
     name: str
     slot: EquipSlot
+    tier: int = 1  # Power tier for rarity weighting (1=common, 2=mid, 3=endgame)
     scaling: ItemScaling | None = None
     conversion: ConversionEffect | None = None
     granted_ability_id: str | None = None

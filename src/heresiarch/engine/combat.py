@@ -14,9 +14,8 @@ from heresiarch.engine.formulas import (
     MAX_ACTION_POINT_BANK,
     CHEAT_DEBT_PER_ACTION,
     CHEAT_DEBT_RECOVERY_PER_TURN,
-    apply_partial_action_modifier,
     apply_survive_reduction,
-    calculate_bonus_actions,
+    calculate_speed_bonus,
     calculate_effective_stats,
     calculate_enemy_hp,
     calculate_enemy_stats,
@@ -66,9 +65,9 @@ class EffectContext:
     target: CombatantState
     effect: AbilityEffect
     ability: Ability
-    is_partial: bool
     insight_multiplier: float
     damage: int = 0
+    pre_def_damage: int = 0  # damage before target DEF reduction (for thorns)
 
 
 class CombatEngine:
@@ -83,10 +82,12 @@ class CombatEngine:
         item_registry: dict[str, Item],
         job_registry: dict[str, JobTemplate],
         rng: random.Random | None = None,
+        enemy_registry: dict[str, EnemyTemplate] | None = None,
     ):
         self.abilities = ability_registry
         self.items = item_registry
         self.jobs = job_registry
+        self.enemy_registry: dict[str, EnemyTemplate] = enemy_registry or {}
         self.rng = rng or random.Random()
         self.ai = EnemyAI(rng=self.rng)
 
@@ -165,6 +166,7 @@ class CombatEngine:
         4. Check win/loss
         """
         state.round_number += 1
+        state.consumed_items.clear()
         state.log.append(
             CombatEvent(
                 event_type=CombatEventType.ROUND_START,
@@ -194,7 +196,21 @@ class CombatEngine:
                 )
             )
 
-            if combatant.is_player:
+            # Tick down invulnerability at turn start
+            if combatant.invulnerable_turns > 0:
+                combatant.invulnerable_turns -= 1
+
+            # Dispatch ON_TURN_START passives (regen, etc.)
+            turn_start_handler = PASSIVE_DISPATCH.get(TriggerCondition.ON_TURN_START)
+            if turn_start_handler:
+                for passive in self._get_all_passives(combatant, TriggerCondition.ON_TURN_START):
+                    pctx = PassiveContext(state=state, owner=combatant)
+                    turn_start_handler(passive, pctx)
+
+            # Handle charge-up: if charging, tick down and fire or continue
+            if combatant.charge_turns_remaining > 0:
+                state = self._process_charge_tick(state, combatant)
+            elif combatant.is_player:
                 decision = player_decisions.get(combatant_id)
                 if decision:
                     state = self._resolve_player_turn(state, combatant_id, decision)
@@ -211,16 +227,16 @@ class CombatEngine:
     def create_enemy_instance(
         self,
         template: EnemyTemplate,
-        zone_level: int,
+        enemy_level: int,
         instance_id: str | None = None,
     ) -> EnemyInstance:
-        """Create a concrete enemy from a template at a zone level.
+        """Create a concrete enemy from a template at a given level.
 
         Enemy stats come from budget allocation, then get amplified by
         equipment through the same Layer 3 scaling players use.
         """
         base_stats = calculate_enemy_stats(
-            zone_level, template.budget_multiplier, template.stat_distribution
+            enemy_level, template.budget_multiplier, template.stat_distribution
         )
 
         # Apply equipment scaling (same Layer 3 system as players)
@@ -230,13 +246,13 @@ class CombatEngine:
         effective_stats = calculate_effective_stats(base_stats, equipped_items, [])
 
         hp = calculate_enemy_hp(
-            zone_level, template.budget_multiplier, template.base_hp, template.hp_per_budget
+            enemy_level, template.budget_multiplier, template.base_hp, template.hp_per_budget
         )
 
         return EnemyInstance(
             template_id=template.id,
             name=instance_id if instance_id else template.name,
-            level=zone_level,
+            level=enemy_level,
             stats=effective_stats,
             max_hp=hp,
             current_hp=hp,
@@ -244,6 +260,9 @@ class CombatEngine:
             equipment=list(template.equipment),
             action_table=template.action_table,
             target_preference=template.target_preference,
+            budget_multiplier=template.budget_multiplier,
+            gold_multiplier=template.gold_multiplier,
+            xp_multiplier=template.xp_multiplier,
         )
 
     # --- In-Combat Item Use ---
@@ -255,11 +274,12 @@ class CombatEngine:
         target_id: str,
         item: Item,
     ) -> CombatState:
-        """Apply a consumable item during combat.
+        """Apply a consumable item's healing effect during combat.
 
-        Validates the item, applies healing to the target combatant,
-        and emits appropriate combat events. Does NOT handle stash
-        removal (caller's responsibility on RunState).
+        Low-level helper: validates the item, applies healing to the
+        target combatant, and emits a HEALING event.  Does NOT emit
+        ITEM_USED, track consumed_items, or touch the stash — callers
+        handle those concerns.
         """
         if not item.is_consumable:
             raise ValueError(f"Item '{item.id}' is not a consumable")
@@ -289,7 +309,85 @@ class CombatEngine:
 
         return state
 
+    def _resolve_item_action(
+        self,
+        state: CombatState,
+        actor_id: str,
+        action: CombatAction,
+    ) -> CombatState:
+        """Resolve a consumable item use as a proper combat action.
+
+        Called during turn order just like ability resolution.  Emits
+        ITEM_USED, applies the item's healing via use_combat_item(),
+        and records the item in consumed_items for stash removal.
+        """
+        actor = state.get_combatant(actor_id)
+        if actor is None or not actor.is_alive:
+            return state
+
+        item_id = action.item_id
+        if item_id is None:
+            return state
+
+        item = self.items.get(item_id)
+        if item is None or not item.is_consumable:
+            return state
+
+        target_id = action.target_ids[0] if action.target_ids else actor_id
+        target = state.get_combatant(target_id)
+        if target is None or not target.is_alive:
+            return state
+
+        # Emit the action declaration event
+        state.log.append(
+            CombatEvent(
+                event_type=CombatEventType.ITEM_USED,
+                round_number=state.round_number,
+                actor_id=actor_id,
+                target_id=target_id,
+                details={"item_id": item_id, "item_name": item.name},
+            )
+        )
+
+        # Apply healing
+        state = self.use_combat_item(state, actor_id, target_id, item)
+
+        # Track for stash removal by session
+        state.consumed_items.append(item_id)
+
+        return state
+
     # --- Turn Resolution ---
+
+    def _is_taunt_valid_ability(self, ability_id: str) -> bool:
+        """Check if an ability is usable while taunted (deals damage to enemies)."""
+        ability = self.abilities.get(ability_id)
+        if ability is None:
+            return False
+        has_damage = any(e.base_damage > 0 for e in ability.effects)
+        targets_enemy = ability.target in (TargetType.SINGLE_ENEMY, TargetType.ALL_ENEMIES)
+        return has_damage and targets_enemy
+
+    def _enforce_taunt_action(
+        self,
+        action: CombatAction,
+        combatant_id: str,
+        living_taunters: list[str],
+    ) -> CombatAction:
+        """Enforce taunt restrictions on a single action. Safety net for TUI/agent."""
+        if action.is_windup_push:
+            return action
+        if action.item_id is not None or not self._is_taunt_valid_ability(action.ability_id):
+            return CombatAction(
+                actor_id=combatant_id,
+                ability_id="basic_attack",
+                target_ids=[living_taunters[0]],
+            )
+        ability = self.abilities.get(action.ability_id)
+        if ability and ability.target == TargetType.SINGLE_ENEMY:
+            if not any(tid in living_taunters for tid in action.target_ids):
+                return action.model_copy(update={"target_ids": [living_taunters[0]]})
+        return action
 
     def _resolve_player_turn(
         self,
@@ -302,23 +400,66 @@ class CombatEngine:
         if combatant is None:
             return state
 
+        # Taunt enforcement: taunted players must attack a taunter
+        if combatant.taunted_by:
+            living_taunters = [
+                tid for tid in combatant.taunted_by
+                if (t := state.get_combatant(tid)) is not None and t.is_alive
+            ]
+            if living_taunters:
+                if decision.cheat_survive == CheatSurviveChoice.SURVIVE:
+                    decision = PlayerTurnDecision(
+                        combatant_id=combatant_id,
+                        cheat_survive=CheatSurviveChoice.NORMAL,
+                        primary_action=CombatAction(
+                            actor_id=combatant_id,
+                            ability_id="basic_attack",
+                            target_ids=[living_taunters[0]],
+                        ),
+                    )
+                else:
+                    if decision.primary_action:
+                        decision.primary_action = self._enforce_taunt_action(
+                            decision.primary_action, combatant_id, living_taunters,
+                        )
+                    decision.cheat_extra_actions = [
+                        self._enforce_taunt_action(a, combatant_id, living_taunters)
+                        for a in decision.cheat_extra_actions
+                    ]
+                    decision.bonus_actions = [
+                        self._enforce_taunt_action(a, combatant_id, living_taunters)
+                        for a in decision.bonus_actions
+                    ]
+
+        # Pre-calculate speed bonus before any actions resolve.
+        # This ensures cheat kills don't retroactively remove the bonus.
+        speed_bonus = 0
+        if decision.cheat_survive != CheatSurviveChoice.SURVIVE:
+            slowest_enemy_spd = min(
+                (e.effective_stats.SPD for e in state.living_enemies),
+                default=0,
+            )
+            speed_bonus = calculate_speed_bonus(
+                combatant.effective_stats.SPD, slowest_enemy_spd,
+            )
+
         # Cheat/Survive resolution
         match decision.cheat_survive:
             case CheatSurviveChoice.SURVIVE:
-                state.log.append(
-                    CombatEvent(
-                        event_type=CombatEventType.CHEAT_SURVIVE_DECISION,
-                        round_number=state.round_number,
-                        actor_id=combatant_id,
-                        details={"choice": "SURVIVE"},
-                    )
-                )
                 survive_action = CombatAction(
                     actor_id=combatant_id,
                     ability_id="survive",
                     target_ids=[combatant_id],
                 )
                 state = self._resolve_action(state, combatant_id, survive_action)
+                state.log.append(
+                    CombatEvent(
+                        event_type=CombatEventType.CHEAT_SURVIVE_DECISION,
+                        round_number=state.round_number,
+                        actor_id=combatant_id,
+                        details={"choice": "SURVIVE", "ap": combatant.action_points},
+                    )
+                )
                 return state
 
             case CheatSurviveChoice.CHEAT:
@@ -339,24 +480,29 @@ class CombatEngine:
                     )
                 )
 
-                # Primary action
+                # Primary action (windup → start charge, else resolve normally)
                 if decision.primary_action:
-                    state = self._resolve_action(
-                        state, combatant_id, decision.primary_action
+                    state = self._resolve_player_primary(
+                        state, combatant_id, decision.primary_action,
                     )
 
                 # Extra actions from Cheat — use individually chosen actions
                 for i in range(actions_to_spend):
                     if state.is_finished:
                         break
+                    combatant = state.get_combatant(combatant_id)
+                    if combatant is None or not combatant.is_alive:
+                        break
                     if i < len(decision.cheat_extra_actions):
-                        state = self._resolve_action(
-                            state, combatant_id, decision.cheat_extra_actions[i]
+                        action = decision.cheat_extra_actions[i]
+                        state = self._resolve_extra_action(
+                            state, combatant_id, action,
                         )
-                    elif decision.primary_action:
+                    elif decision.primary_action and decision.primary_action.item_id is None:
                         # Fallback: repeat primary if no extra actions specified
-                        state = self._resolve_action(
-                            state, combatant_id, decision.primary_action
+                        # (item actions are not repeatable — each use consumes a copy)
+                        state = self._resolve_extra_action_fallback(
+                            state, combatant_id, decision.primary_action,
                         )
 
             case CheatSurviveChoice.NORMAL:
@@ -367,18 +513,123 @@ class CombatEngine:
                     )
 
                 if decision.primary_action:
-                    state = self._resolve_action(
-                        state, combatant_id, decision.primary_action
+                    state = self._resolve_player_primary(
+                        state, combatant_id, decision.primary_action,
                     )
 
-        # Bonus partial actions from SPD
-        bonus = calculate_bonus_actions(combatant.effective_stats.SPD)
-        for partial in decision.partial_actions[:bonus]:
-            if state.is_finished:
-                break
-            state = self._resolve_action(state, combatant_id, partial, is_partial=True)
+        # Speed bonus actions (pre-calculated at turn start so cheat kills don't erase it)
+        if speed_bonus > 0:
+            for i in range(speed_bonus):
+                if state.is_finished:
+                    break
+                combatant = state.get_combatant(combatant_id)
+                if combatant is None or not combatant.is_alive:
+                    break
+                if i < len(decision.bonus_actions):
+                    action = decision.bonus_actions[i]
+                    state = self._resolve_extra_action(
+                        state, combatant_id, action, is_speed_bonus=True,
+                    )
+                elif decision.primary_action and decision.primary_action.item_id is None:
+                    # Fallback: repeat primary with auto-retargeting
+                    state = self._resolve_extra_action_fallback(
+                        state, combatant_id, decision.primary_action,
+                        is_speed_bonus=True,
+                    )
 
         return state
+
+    def _pick_living_targets(
+        self, ability_id: str, state: CombatState, actor_id: str,
+    ) -> list[str]:
+        """Auto-pick targets for speed bonus actions. Respects taunt."""
+        ability = self.abilities.get(ability_id)
+        actor = state.get_combatant(actor_id)
+        if not ability or not actor:
+            return []
+
+        if actor.is_player:
+            enemies = state.living_enemies
+            allies = state.living_players
+        else:
+            enemies = state.living_players
+            allies = state.living_enemies
+
+        if ability.target in (TargetType.SINGLE_ENEMY,):
+            # Taunted: force-target a taunter if possible
+            if actor.taunted_by:
+                taunters = [e for e in enemies if e.id in actor.taunted_by]
+                if taunters:
+                    return [taunters[0].id]
+            return [enemies[0].id] if enemies else []
+        elif ability.target == TargetType.ALL_ENEMIES:
+            return [e.id for e in enemies]
+        elif ability.target == TargetType.SELF:
+            return [actor_id]
+        elif ability.target == TargetType.SINGLE_ALLY:
+            return [allies[0].id] if allies else [actor_id]
+        elif ability.target == TargetType.ALL_ALLIES:
+            return [a.id for a in allies]
+        return [enemies[0].id] if enemies else []
+
+    def _resolve_player_primary(
+        self, state: CombatState, combatant_id: str, action: CombatAction,
+    ) -> CombatState:
+        """Resolve a player's primary action, routing windup abilities to charge."""
+        ability = self.abilities.get(action.ability_id)
+        if ability and ability.windup_turns > 0:
+            combatant = state.get_combatant(combatant_id)
+            if combatant is not None:
+                state = self._start_charge(
+                    state, combatant, action.ability_id,
+                    action.target_ids, ability.windup_turns,
+                )
+                if ability.cooldown > 0:
+                    combatant.cooldowns[action.ability_id] = ability.cooldown
+        else:
+            state = self._resolve_action(state, combatant_id, action)
+        return state
+
+    def _resolve_extra_action(
+        self, state: CombatState, combatant_id: str, action: CombatAction,
+        is_speed_bonus: bool = False,
+    ) -> CombatState:
+        """Resolve a cheat extra or bonus action, handling windup push."""
+        combatant = state.get_combatant(combatant_id)
+        if combatant is None or not combatant.is_alive:
+            return state
+
+        # Windup push: accelerate an active charge by 1 turn
+        if action.is_windup_push and combatant.charge_turns_remaining > 0:
+            return self._process_charge_tick(state, combatant)
+
+        # Normal action resolution
+        return self._resolve_action(
+            state, combatant_id, action, is_speed_bonus=is_speed_bonus,
+        )
+
+    def _resolve_extra_action_fallback(
+        self, state: CombatState, combatant_id: str, primary: CombatAction,
+        is_speed_bonus: bool = False,
+    ) -> CombatState:
+        """Fallback for extra/bonus actions: push windup if charging, else repeat primary."""
+        combatant = state.get_combatant(combatant_id)
+        if combatant is None or not combatant.is_alive:
+            return state
+
+        # If currently charging, auto-push the windup forward
+        if combatant.charge_turns_remaining > 0:
+            return self._process_charge_tick(state, combatant)
+
+        # Otherwise repeat primary with auto-retargeting
+        retargeted = primary.model_copy(update={
+            "target_ids": self._pick_living_targets(
+                primary.ability_id, state, combatant_id,
+            ),
+        })
+        return self._resolve_action(
+            state, combatant_id, retargeted, is_speed_bonus=is_speed_bonus,
+        )
 
     def _pre_roll_enemy_intents(
         self,
@@ -392,6 +643,9 @@ class CombatEngine:
         reveal enemy plans before player decisions matter.
         """
         for enemy in state.living_enemies:
+            # Skip pre-rolling for enemies that are charging or have a pre-set intent
+            if enemy.charge_turns_remaining > 0 or enemy.pending_action is not None:
+                continue
             template_id = enemy.id.rsplit("_", 1)[0]
             template = enemy_templates.get(template_id)
             if template is None:
@@ -435,13 +689,202 @@ class CombatEngine:
             )
         combatant.pending_action = None
 
-        state = self._resolve_action(state, combatant_id, action)
+        # Check if the selected ability has a windup — start charge instead
+        ability = self.abilities.get(action.ability_id)
+        if ability and ability.windup_turns > 0:
+            state = self._start_charge(
+                state, combatant, action.ability_id,
+                action.target_ids, ability.windup_turns,
+            )
+            # Set cooldown immediately so it can't be re-selected next turn
+            if ability.cooldown > 0:
+                combatant.cooldowns[action.ability_id] = ability.cooldown
+        else:
+            state = self._resolve_action(state, combatant_id, action)
+
+        # Speed bonus actions for enemies
+        # Suppress bonus on cooldown abilities (would silently fail) or surviving stance
+        suppress_bonus = ability is not None and (
+            ability.cooldown > 0
+            or any(eff.grants_surviving for eff in ability.effects)
+        )
+        if not suppress_bonus:
+            slowest_player_spd = min(
+                (p.effective_stats.SPD for p in state.living_players),
+                default=0,
+            )
+            bonus = calculate_speed_bonus(combatant.effective_stats.SPD, slowest_player_spd)
+            if bonus > 0:
+                for _ in range(bonus):
+                    if state.is_finished:
+                        break
+                    combatant = state.get_combatant(combatant_id)
+                    if combatant is None or not combatant.is_alive:
+                        break
+                    # If charging (windup primary), push the charge forward
+                    if combatant.charge_turns_remaining > 0:
+                        state = self._process_charge_tick(state, combatant)
+                        continue
+                    retargeted = action.model_copy(update={
+                        "target_ids": self._pick_living_targets(
+                            action.ability_id, state, combatant_id,
+                        ),
+                    })
+                    state = self._resolve_action(
+                        state, combatant_id, retargeted, is_speed_bonus=True,
+                    )
 
         # Decrement cooldowns
         for ability_key in list(combatant.cooldowns.keys()):
             if combatant.cooldowns[ability_key] > 0:
                 combatant.cooldowns[ability_key] -= 1
 
+        return state
+
+    # --- Mid-Combat Spawning ---
+
+    def _spawn_enemies(
+        self,
+        state: CombatState,
+        template_id: str,
+        count: int,
+        level: int,
+        event_type: CombatEventType = CombatEventType.ENEMY_SPAWNED,
+        summoner_id: str = "",
+    ) -> list[CombatantState]:
+        """Spawn new enemy combatants mid-combat.
+
+        Creates EnemyInstance(s) from the template, converts to CombatantState,
+        appends to state.enemy_combatants. Returns the new combatants.
+        """
+        if template_id not in self.enemy_registry:
+            return []
+
+        template = self.enemy_registry[template_id]
+        spawned: list[CombatantState] = []
+
+        # Count existing enemies with this template for unique IDs
+        existing_count = sum(
+            1 for c in state.enemy_combatants if c.id.startswith(f"{template_id}_")
+        )
+
+        for i in range(count):
+            instance = self.create_enemy_instance(
+                template, level, instance_id=f"{template_id}_{existing_count + i}"
+            )
+            combatant = CombatantState(
+                id=instance.name,
+                is_player=False,
+                level=instance.level,
+                current_hp=instance.current_hp,
+                max_hp=instance.max_hp,
+                base_stats=instance.stats,
+                equipment_stats=instance.stats,
+                effective_stats=instance.stats,
+                ability_ids=list(instance.abilities),
+            )
+            state.enemy_combatants.append(combatant)
+            spawned.append(combatant)
+
+            state.log.append(
+                CombatEvent(
+                    event_type=event_type,
+                    round_number=state.round_number,
+                    actor_id=summoner_id,
+                    target_id=combatant.id,
+                    details={"template_id": template_id, "level": level},
+                )
+            )
+
+        return spawned
+
+    # --- Charge-Up (Windup) Resolution ---
+
+    def _process_charge_tick(
+        self, state: CombatState, combatant: CombatantState
+    ) -> CombatState:
+        """Handle a charging combatant's turn: tick down, fire when ready."""
+        combatant.charge_turns_remaining -= 1
+
+        if combatant.charge_turns_remaining > 0:
+            # Still charging — log and skip turn
+            state.log.append(
+                CombatEvent(
+                    event_type=CombatEventType.CHARGE_CONTINUE,
+                    round_number=state.round_number,
+                    actor_id=combatant.id,
+                    ability_id=combatant.charging_ability_id or "",
+                    details={"turns_remaining": combatant.charge_turns_remaining},
+                )
+            )
+            return state
+
+        # Charge complete — fire the ability
+        ability_id = combatant.charging_ability_id or ""
+        target_ids = list(combatant.charging_target_ids)
+
+        # Clear charge state
+        combatant.charging_ability_id = None
+        combatant.charging_target_ids = []
+        combatant.charge_turns_remaining = 0
+
+        state.log.append(
+            CombatEvent(
+                event_type=CombatEventType.CHARGE_RELEASE,
+                round_number=state.round_number,
+                actor_id=combatant.id,
+                ability_id=ability_id,
+            )
+        )
+
+        # Taunt redirect: charged attack gets aimed at taunter(s)
+        ability = self.abilities.get(ability_id)
+        if ability and combatant.taunted_by:
+            living_taunters = [
+                tid for tid in combatant.taunted_by
+                if (t := state.get_combatant(tid)) is not None and t.is_alive
+            ]
+            if living_taunters and ability.target == TargetType.SINGLE_ENEMY:
+                target_ids = [living_taunters[0]]
+
+        # Retarget if original targets are dead
+        if ability:
+            living_targets = [tid for tid in target_ids if (t := state.get_combatant(tid)) and t.is_alive]
+            if not living_targets:
+                # Retarget to any living enemy (from charger's perspective)
+                if combatant.is_player:
+                    living_targets = [e.id for e in state.living_enemies]
+                else:
+                    living_targets = [p.id for p in state.living_players]
+
+            if living_targets:
+                action = CombatAction(
+                    actor_id=combatant.id,
+                    ability_id=ability_id,
+                    target_ids=living_targets,
+                )
+                state = self._resolve_action(state, combatant.id, action)
+
+        return state
+
+    def _start_charge(
+        self, state: CombatState, combatant: CombatantState,
+        ability_id: str, target_ids: list[str], windup_turns: int,
+    ) -> CombatState:
+        """Begin a charge-up: lock in ability and targets, set timer."""
+        combatant.charging_ability_id = ability_id
+        combatant.charging_target_ids = target_ids
+        combatant.charge_turns_remaining = windup_turns
+
+        state.log.append(
+            CombatEvent(
+                event_type=CombatEventType.CHARGE_START,
+                round_number=state.round_number,
+                actor_id=combatant.id,
+                ability_id=ability_id,
+                details={"windup_turns": windup_turns},
+            )
+        )
         return state
 
     # --- Action Resolution ---
@@ -451,9 +894,13 @@ class CombatEngine:
         state: CombatState,
         actor_id: str,
         action: CombatAction,
-        is_partial: bool = False,
+        is_speed_bonus: bool = False,
     ) -> CombatState:
         """Core action resolution. Routes to damage calc, applies effects."""
+        # Item use is a distinct action type — route to dedicated handler
+        if action.item_id is not None:
+            return self._resolve_item_action(state, actor_id, action)
+
         actor = state.get_combatant(actor_id)
         if actor is None or not actor.is_alive:
             return state
@@ -476,15 +923,15 @@ class CombatEngine:
 
         state.log.append(
             CombatEvent(
-                event_type=CombatEventType.BONUS_ACTION if is_partial else CombatEventType.ACTION_DECLARED,
+                event_type=CombatEventType.BONUS_ACTION if is_speed_bonus else CombatEventType.ACTION_DECLARED,
                 round_number=state.round_number,
                 actor_id=actor_id,
                 ability_id=action.ability_id,
-                details={"targets": action.target_ids, "is_partial": is_partial},
+                details={"targets": action.target_ids, "speed_bonus": is_speed_bonus},
             )
         )
 
-        # For SELF-targeting abilities (like Taunt), use actor as target
+        # For SELF-targeting abilities, use actor as target
         effective_target_ids = list(action.target_ids)
         if ability.target == TargetType.SELF and not effective_target_ids:
             effective_target_ids = [actor_id]
@@ -555,7 +1002,7 @@ class CombatEngine:
             if effect.applies_to_self:
                 if actor.is_alive:
                     state = self._apply_effect(
-                        state, actor, actor, effect, ability, is_partial,
+                        state, actor, actor, effect, ability,
                         insight_multiplier=insight_multiplier,
                     )
                 continue
@@ -569,7 +1016,7 @@ class CombatEngine:
                     continue
 
                 state = self._apply_effect(
-                    state, actor, target, effect, ability, is_partial,
+                    state, actor, target, effect, ability,
                     insight_multiplier=insight_multiplier,
                 )
 
@@ -624,7 +1071,6 @@ class CombatEngine:
         target: CombatantState,
         effect: AbilityEffect,
         ability: Ability,
-        is_partial: bool,
         insight_multiplier: float = 1.0,
     ) -> CombatState:
         """Apply a single ability effect to a target via phased pipeline."""
@@ -634,7 +1080,6 @@ class CombatEngine:
             target=target,
             effect=effect,
             ability=ability,
-            is_partial=is_partial,
             insight_multiplier=insight_multiplier,
         )
 
@@ -657,17 +1102,25 @@ class CombatEngine:
         """Phase 1: Calculate raw damage from ability effect."""
         if ctx.effect.base_damage > 0 or ctx.effect.scaling_coefficient > 0:
             ctx.damage = self._calculate_damage(
-                ctx.actor, ctx.target, ctx.effect, ctx.is_partial,
+                ctx.actor, ctx.target, ctx.effect,
+            )
+            ctx.pre_def_damage = self._calculate_pre_def_damage(
+                ctx.actor, ctx.effect,
             )
 
     def _phase_damage_modify(self, ctx: EffectContext) -> None:
-        """Phase 2: Apply damage multipliers (insight, frenzy, surge, chain, mark)."""
+        """Phase 2: Apply damage multipliers (insight, frenzy, surge, chain, mark).
+
+        Attacker-side multipliers are mirrored to pre_def_damage so thorns
+        can reflect the full pre-defense hit strength.
+        """
         if ctx.damage <= 0:
             return
 
         # Insight damage amplification
         if ctx.insight_multiplier > 1.0:
             ctx.damage = int(ctx.damage * ctx.insight_multiplier)
+            ctx.pre_def_damage = int(ctx.pre_def_damage * ctx.insight_multiplier)
 
         # Frenzy damage amplification (ratchet: max of level vs chain exponential)
         frenzy_ability = self._get_passive(
@@ -676,48 +1129,37 @@ class CombatEngine:
         if frenzy_ability:
             multiplier = max(ctx.actor.frenzy_level, calculate_frenzy_multiplier(ctx.actor.frenzy_chain))
             if multiplier > 1.0:
-                ctx.damage = int(ctx.damage * multiplier)
+                ctx.damage = round(ctx.damage * multiplier)
+                ctx.pre_def_damage = round(ctx.pre_def_damage * multiplier)
 
         # Surge stacking (Crescendo etc.)
         if ctx.effect.quality == DamageQuality.SURGE and ctx.effect.surge_stack_bonus > 0:
             stacks = ctx.actor.surge_stacks.get(ctx.ability.id, 0)
             multiplier = 1.0 + ctx.effect.surge_stack_bonus * stacks
             ctx.damage = int(ctx.damage * multiplier)
+            ctx.pre_def_damage = int(ctx.pre_def_damage * multiplier)
             ctx.actor.surge_stacks[ctx.ability.id] = stacks + 1
 
         # Chain damage reduction
         if ctx.effect.quality == DamageQuality.CHAIN:
             ctx.damage = int(ctx.damage * ctx.effect.chain_damage_ratio)
+            ctx.pre_def_damage = int(ctx.pre_def_damage * ctx.effect.chain_damage_ratio)
 
         # Mark bonus damage against marked targets
         if ctx.target.is_marked:
             ctx.damage = int(ctx.damage * MARK_DAMAGE_BONUS)
+            ctx.pre_def_damage = int(ctx.pre_def_damage * MARK_DAMAGE_BONUS)
 
     def _phase_damage_redirect(self, ctx: EffectContext) -> None:
-        """Phase 3: Taunt redirect for enemies attacking players."""
-        if ctx.damage <= 0:
-            return
-        if not ctx.actor.is_player and ctx.target.is_player:
-            taunting = [
-                p for p in ctx.state.living_players
-                if p.is_taunting and p.id != ctx.target.id
-            ]
-            if taunting:
-                original_target_id = ctx.target.id
-                ctx.target = taunting[0]
-                ctx.state.log.append(
-                    CombatEvent(
-                        event_type=CombatEventType.TAUNT_REDIRECT,
-                        round_number=ctx.state.round_number,
-                        actor_id=ctx.actor.id,
-                        target_id=ctx.target.id,
-                        details={"original_target": original_target_id},
-                    )
-                )
+        """Phase 3: Redirect effects (reserved for future use)."""
 
     def _phase_damage_reduce(self, ctx: EffectContext) -> None:
-        """Phase 4: Survive damage reduction."""
+        """Phase 4: Survive damage reduction + invulnerability."""
         if ctx.damage <= 0:
+            return
+        # Invulnerability: all damage reduced to 0
+        if ctx.target.invulnerable_turns > 0:
+            ctx.damage = 0
             return
         ctx.damage = apply_survive_reduction(ctx.damage, ctx.target.is_surviving)
 
@@ -791,6 +1233,7 @@ class CombatEngine:
                 owner=ctx.target,
                 trigger_source=ctx.actor,
                 damage_dealt=ctx.damage,
+                pre_def_damage=ctx.pre_def_damage,
                 item_leech_percent=self._get_item_leech(ctx.target, ctx.state),
             )
             handler(hit_passive, passive_ctx)
@@ -828,6 +1271,33 @@ class CombatEngine:
                 target_id=ctx.target.id,
             )
         )
+
+        # Death spawning: check if the dead enemy's template has death_spawn fields
+        if not ctx.target.is_player:
+            template_id = ctx.target.id.rsplit("_", 1)[0]
+            template = self.enemy_registry.get(template_id)
+            if template:
+                # Single-template spawn (Split Slime: N copies of one type)
+                if template.death_spawn_template_id and template.death_spawn_count > 0:
+                    self._spawn_enemies(
+                        ctx.state,
+                        template_id=template.death_spawn_template_id,
+                        count=template.death_spawn_count,
+                        level=ctx.target.level,
+                        event_type=CombatEventType.ENEMY_SPAWNED,
+                        summoner_id=ctx.target.id,
+                    )
+                # Multi-template spawn (Giga Slime: one of each different type)
+                if template.death_spawn_templates:
+                    for spawn_tmpl_id in template.death_spawn_templates:
+                        self._spawn_enemies(
+                            ctx.state,
+                            template_id=spawn_tmpl_id,
+                            count=1,
+                            level=ctx.target.level,
+                            event_type=CombatEventType.ENEMY_SPAWNED,
+                            summoner_id=ctx.target.id,
+                        )
 
         # ON_KILL passives (momentum AP refund, etc.)
         if ctx.actor.is_alive:
@@ -962,6 +1432,22 @@ class CombatEngine:
                 )
             )
 
+        # Invulnerability: grant turns of damage immunity (shell retreat etc.)
+        if ctx.effect.grants_invulnerable > 0:
+            ctx.actor.invulnerable_turns = ctx.effect.grants_invulnerable
+
+        # Summon: spawn enemies mid-combat (boss summon abilities)
+        if ctx.effect.summon_template_id and ctx.effect.summon_count > 0:
+            summon_level = max(1, ctx.actor.level + ctx.effect.summon_level_offset)
+            self._spawn_enemies(
+                ctx.state,
+                template_id=ctx.effect.summon_template_id,
+                count=ctx.effect.summon_count,
+                level=summon_level,
+                event_type=CombatEventType.ENEMY_SUMMONED,
+                summoner_id=ctx.actor.id,
+            )
+
         # Mark — apply status that flags target for bonus damage
         if ctx.effect.applies_mark and ctx.target.is_alive:
             ctx.target.is_marked = True
@@ -978,28 +1464,37 @@ class CombatEngine:
             ]
             ctx.target.active_statuses.append(mark_status)
 
-        # Taunt effect — add a status so it persists through the round
-        if ctx.effect.applies_taunt and ctx.actor.is_alive:
-            ctx.actor.is_taunting = True
+        # Taunt — apply taunted status to target, forcing them to attack actor
+        if ctx.effect.applies_taunt and ctx.actor.is_alive and ctx.target.is_alive:
             taunt_duration = ctx.effect.duration_rounds if ctx.effect.duration_rounds > 0 else 1
             taunt_status = StatusEffect(
-                id="taunt_active",
-                name="Taunt",
-                rounds_remaining=taunt_duration + 1,
+                id="taunted",
+                name="Taunted",
+                rounds_remaining=taunt_duration + 1,  # +1: tick at round start
                 source_id=ctx.actor.id,
-                grants_taunt=True,
+                grants_taunted=True,
             )
-            ctx.actor.active_statuses = [
-                s for s in ctx.actor.active_statuses if not s.grants_taunt
+            # Refresh from same source, keep others (stacking from different sources)
+            ctx.target.active_statuses = [
+                s for s in ctx.target.active_statuses
+                if not (s.grants_taunted and s.source_id == ctx.actor.id)
             ]
-            ctx.actor.active_statuses.append(taunt_status)
+            ctx.target.active_statuses.append(taunt_status)
+            ctx.state.log.append(
+                CombatEvent(
+                    event_type=CombatEventType.STATUS_APPLIED,
+                    round_number=ctx.state.round_number,
+                    actor_id=ctx.actor.id,
+                    target_id=ctx.target.id,
+                    details={"status": "Taunted"},
+                )
+            )
 
     def _calculate_damage(
         self,
         actor: CombatantState,
         target: CombatantState,
         effect: AbilityEffect,
-        is_partial: bool,
     ) -> int:
         """Calculate raw damage for an effect."""
         if effect.stat_scaling == StatType.STR or effect.stat_scaling is None:
@@ -1019,8 +1514,32 @@ class CombatEngine:
         else:
             damage = max(1, effect.base_damage)
 
-        if is_partial:
-            damage = apply_partial_action_modifier(damage, True)
+        return damage
+
+    def _calculate_pre_def_damage(
+        self,
+        actor: CombatantState,
+        effect: AbilityEffect,
+    ) -> int:
+        """Calculate damage ignoring target DEF (for thorns reflection).
+
+        Magical damage has no flat DEF reduction, so pre-DEF == normal.
+        """
+        if effect.stat_scaling == StatType.STR or effect.stat_scaling is None:
+            damage = calculate_physical_damage(
+                ability_base=effect.base_damage,
+                ability_coefficient=effect.scaling_coefficient,
+                attacker_str=actor.effective_stats.STR,
+                target_def=0,
+            )
+        elif effect.stat_scaling == StatType.MAG:
+            damage = calculate_magical_damage(
+                ability_base=effect.base_damage,
+                ability_coefficient=effect.scaling_coefficient,
+                attacker_mag=actor.effective_stats.MAG,
+            )
+        else:
+            damage = max(1, effect.base_damage)
 
         return damage
 
@@ -1062,7 +1581,14 @@ class CombatEngine:
 
         match effect.quality:
             case DamageQuality.DOT:
-                dot_damage = max(1, int(effect.base_damage * 0.5))
+                stat_value = (
+                    getattr(actor.effective_stats, effect.stat_scaling.value, 0)
+                    if effect.stat_scaling
+                    else 0
+                )
+                scaled_total = effect.base_damage + (effect.scaling_coefficient * stat_value)
+                duration = max(1, effect.duration_rounds)
+                dot_damage = max(1, int(scaled_total / duration))
                 status = StatusEffect(
                     id=f"{ability.id}_dot_{id(effect)}",
                     name=f"{ability.name} DOT",
@@ -1109,6 +1635,8 @@ class CombatEngine:
 
     def _tick_statuses(self, state: CombatState) -> CombatState:
         """Round start: tick DOTs, decrement durations, expire statuses."""
+        living_ids = {c.id for c in state.all_combatants if c.is_alive}
+
         for combatant in state.all_combatants:
             if not combatant.is_alive:
                 continue
@@ -1120,14 +1648,22 @@ class CombatEngine:
             combatant.frenzy_stacks = 0
             combatant.dealt_damage_this_round = False
             combatant.is_surviving = False
-            combatant.is_taunting = any(
-                s.grants_taunt for s in combatant.active_statuses
-            )
             combatant.is_marked = any(
                 s.grants_mark for s in combatant.active_statuses
             )
 
             self._tick_status_effects(state, combatant)
+
+            # Taunted: clean dead sources, derive taunted_by list
+            combatant.active_statuses = [
+                s for s in combatant.active_statuses
+                if not s.grants_taunted or s.source_id in living_ids
+            ]
+            combatant.taunted_by = [
+                s.source_id for s in combatant.active_statuses
+                if s.grants_taunted
+            ]
+
             self._evaluate_conditional_passives(state, combatant)
             self._recalculate_combat_stats(combatant)
 

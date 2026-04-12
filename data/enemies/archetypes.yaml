@@ -3,6 +3,7 @@
   name: Alpha Slime
   archetype: FODDER
   budget_multiplier: 12.0
+  xp_multiplier: 4.0
   stat_distribution:
     STR: 0.35
     MAG: 0.05
@@ -14,8 +15,7 @@
   abilities:
     - basic_attack
     - heavy_strike
-  equipment:
-    - iron_blade
+  equipment: []
   description: "Bigger, meaner slime. Has somehow absorbed a weapon."
   action_table:
     base_weights:
@@ -29,6 +29,7 @@
   name: Fodder Slime
   archetype: FODDER
   budget_multiplier: 8.0
+  xp_multiplier: 4.0
   stat_distribution:
     STR: 0.30
     MAG: 0.05
@@ -55,6 +56,7 @@
   name: Bandit Slime
   archetype: FODDER
   budget_multiplier: 7.0
+  xp_multiplier: 2.5
   stat_distribution:
     STR: 0.20
     MAG: 0.05
@@ -84,11 +86,373 @@
           - ability_id: basic_attack
             weight: 0.60
 
+# --- Zone 2 boss: Omega Slime ---
+# Full equipment, regen passive, charge-up that speeds up below 50% HP.
+- id: omega_slime
+  name: Omega Slime
+  archetype: BOSS
+  budget_multiplier: 14.0
+  xp_multiplier: 2.0
+  stat_distribution:
+    STR: 0.30
+    MAG: 0.05
+    DEF: 0.18
+    RES: 0.23
+    SPD: 0.25
+  base_hp: 50
+  hp_per_budget: 3.5
+  abilities:
+    - basic_attack
+    - heavy_strike
+    - charge_slam
+    - charge_slam_fast
+    - regen_weak
+  equipment:
+    - iron_blade
+    - iron_guard
+  description: "The apex slime. Regenerates health and charges devastating attacks that accelerate as it weakens."
+  action_table:
+    base_weights:
+      - ability_id: basic_attack
+        weight: 0.20
+      - ability_id: heavy_strike
+        weight: 0.40
+      - ability_id: charge_slam
+        weight: 0.40
+    conditions:
+      - condition_type: self_hp_below
+        threshold: 0.50
+        weight_overrides:
+          - ability_id: basic_attack
+            weight: 0.15
+          - ability_id: heavy_strike
+            weight: 0.45
+          - ability_id: charge_slam_fast
+            weight: 0.40
+
+# --- Zone 2 Slime Variants ---
+# Well-rounded upgrade to fodder. No equipment, decent base growth.
+- id: slime
+  name: Slime
+  archetype: FODDER
+  budget_multiplier: 9.0
+  xp_multiplier: 3.5
+  stat_distribution:
+    STR: 0.25
+    MAG: 0.10
+    DEF: 0.25
+    RES: 0.10
+    SPD: 0.30
+  base_hp: 25
+  hp_per_budget: 2.0
+  abilities:
+    - basic_attack
+    - brace_strike
+  description: "A proper slime. Tougher than fodder, reasonably well-rounded."
+  action_table:
+    base_weights:
+      - ability_id: basic_attack
+        weight: 0.60
+      - ability_id: brace_strike
+        weight: 0.40
+
+# STR specialist with a weapon. Hits hard.
+- id: swime
+  name: Swime
+  archetype: FODDER
+  budget_multiplier: 10.0
+  xp_multiplier: 3.0
+  stat_distribution:
+    STR: 0.40
+    MAG: 0.05
+    DEF: 0.20
+    RES: 0.05
+    SPD: 0.30
+  base_hp: 22
+  hp_per_budget: 2.0
+  abilities:
+    - basic_attack
+    - heavy_strike
+  equipment:
+    - iron_blade
+  description: "Sword slime. Has absorbed a blade and knows how to use it."
+  action_table:
+    base_weights:
+      - ability_id: basic_attack
+        weight: 0.35
+      - ability_id: heavy_strike
+        weight: 0.65
+
+# MAG specialist. First magic threat. Teaches that DEF doesn't solve everything.
+- id: mystic_slime
+  name: Mystic Slime
+  archetype: CASTER
+  budget_multiplier: 10.0
+  xp_multiplier: 3.0
+  stat_distribution:
+    STR: 0.05
+    MAG: 0.45
+    DEF: 0.10
+    RES: 0.15
+    SPD: 0.25
+  base_hp: 20
+  hp_per_budget: 1.5
+  abilities:
+    - bolt
+    - hex
+    - basic_attack
+  equipment:
+    - spirit_lens
+  target_preference: lowest_def
+  description: "Glowing slime. Casts bolts of magic that ignore armor."
+  action_table:
+    base_weights:
+      - ability_id: bolt
+        weight: 0.50
+      - ability_id: hex
+        weight: 0.30
+      - ability_id: basic_attack
+        weight: 0.20
+
+# DEF specialist with armor. Tanky, teaches burst/pierce value.
+- id: chunky_slime
+  name: Chunky Slime
+  archetype: FODDER
+  budget_multiplier: 10.0
+  xp_multiplier: 3.0
+  stat_distribution:
+    STR: 0.15
+    MAG: 0.05
+    DEF: 0.27
+    RES: 0.27
+    SPD: 0.25
+  base_hp: 30
+  hp_per_budget: 2.5
+  abilities:
+    - basic_attack
+    - brace_strike
+    - taunt
+  equipment:
+    - iron_guard
+  description: "Dense, armored slime. Taunts enemies to draw fire away from allies."
+  action_table:
+    base_weights:
+      - ability_id: basic_attack
+        weight: 0.50
+      - ability_id: brace_strike
+        weight: 0.50
+    conditions:
+      - condition_type: ally_present
+        threshold: 0
+        weight_overrides:
+          - ability_id: basic_attack
+            weight: 0.35
+          - ability_id: brace_strike
+            weight: 0.35
+          - ability_id: taunt
+            weight: 0.30
+
+# DOT specialist. Searing edge bypasses DEF over time.
+- id: toxic_slime
+  name: Toxic Slime
+  archetype: CASTER
+  budget_multiplier: 9.0
+  xp_multiplier: 3.0
+  stat_distribution:
+    STR: 0.10
+    MAG: 0.30
+    DEF: 0.15
+    RES: 0.15
+    SPD: 0.30
+  base_hp: 20
+  hp_per_budget: 1.5
+  abilities:
+    - searing_edge
+    - basic_attack
+  description: "Venomous slime. Its touch burns through armor over time."
+  action_table:
+    base_weights:
+      - ability_id: searing_edge
+        weight: 0.60
+      - ability_id: basic_attack
+        weight: 0.40
+
+# --- Zone 4+ Slime Variants ---
+
+# Splits into 2 mini-slimes on death. Teaches AoE value and kill priority.
+- id: split_slime
+  name: Split Slime
+  archetype: FODDER
+  budget_multiplier: 8.0
+  xp_multiplier: 4.0
+  stat_distribution:
+    STR: 0.20
+    MAG: 0.05
+    DEF: 0.25
+    RES: 0.10
+    SPD: 0.40
+  base_hp: 25
+  hp_per_budget: 2.0
+  abilities:
+    - basic_attack
+  death_spawn_template_id: mini_slime
+  death_spawn_count: 2
+  description: "Wobbles ominously. Splits into two smaller slimes on death."
+  action_table:
+    base_weights:
+      - ability_id: basic_attack
+        weight: 1.0
+
+# Tiny fragment spawned by Split Slime. Trivial alone.
+- id: mini_slime
+  name: Mini Slime
+  archetype: FODDER
+  budget_multiplier: 4.0
+  xp_multiplier: 1.5
+  stat_distribution:
+    STR: 0.25
+    MAG: 0.05
+    DEF: 0.20
+    RES: 0.10
+    SPD: 0.40
+  base_hp: 10
+  hp_per_budget: 1.0
+  abilities:
+    - basic_attack
+  description: "A fragment of a split slime. Trivial alone, annoying in swarms."
+  action_table:
+    base_weights:
+      - ability_id: basic_attack
+        weight: 1.0
+
+# Drains life with attacks. Teaches kill priority — outlasts you if ignored.
+- id: leech_slime
+  name: Leech Slime
+  archetype: CASTER
+  budget_multiplier: 10.0
+  xp_multiplier: 4.0
+  stat_distribution:
+    STR: 0.05
+    MAG: 0.40
+    DEF: 0.15
+    RES: 0.15
+    SPD: 0.25
+  base_hp: 22
+  hp_per_budget: 1.5
+  abilities:
+    - drain
+    - bolt
+    - basic_attack
+  equipment:
+    - spirit_lens
+  target_preference: lowest_def
+  description: "Parasitic slime. Drains life with every magical strike."
+  action_table:
+    base_weights:
+      - ability_id: drain
+        weight: 0.55
+      - ability_id: bolt
+        weight: 0.30
+      - ability_id: basic_attack
+        weight: 0.15
+
+# --- Zone 3 Boss: Kodama Elder + Kodama adds ---
+
+# Kodama: weak tree spirit, summoned by Kodama Elder
+- id: kodama
+  name: Kodama
+  archetype: SUPPORT
+  budget_multiplier: 6.0
+  xp_multiplier: 2.0
+  stat_distribution:
+    STR: 0.10
+    MAG: 0.25
+    DEF: 0.20
+    RES: 0.25
+    SPD: 0.20
+  base_hp: 15
+  hp_per_budget: 1.5
+  abilities:
+    - bolt
+    - basic_attack
+  equipment: []
+  description: "A tiny tree spirit. Weak alone, dangerous in numbers."
+  action_table:
+    base_weights:
+      - ability_id: bolt
+        weight: 0.60
+      - ability_id: basic_attack
+        weight: 0.40
+
+# Kodama Elder: zone 3 boss. Summons adds, heals, buffs.
+- id: kodama_elder
+  name: Kodama Elder
+  archetype: BOSS
+  budget_multiplier: 14.0
+  xp_multiplier: 3.0
+  stat_distribution:
+    STR: 0.10
+    MAG: 0.30
+    DEF: 0.20
+    RES: 0.25
+    SPD: 0.15
+  base_hp: 45
+  hp_per_budget: 3.0
+  abilities:
+    - bolt
+    - heal_ally
+    - rally
+    - summon_kodama
+    - regen
+    - basic_attack
+  equipment:
+    - spirit_lens
+    - spirit_mantle
+  description: "Ancient guardian of the bamboo grove. Calls lesser spirits to its aid."
+  action_table:
+    base_weights:
+      - ability_id: bolt
+        weight: 0.25
+      - ability_id: heal_ally
+        weight: 0.20
+      - ability_id: rally
+        weight: 0.15
+      - ability_id: summon_kodama
+        weight: 0.25
+      - ability_id: basic_attack
+        weight: 0.15
+    conditions:
+      - condition_type: no_damaged_allies
+        weight_overrides:
+          - ability_id: bolt
+            weight: 0.35
+          - ability_id: heal_ally
+            weight: 0.0
+          - ability_id: rally
+            weight: 0.20
+          - ability_id: summon_kodama
+            weight: 0.30
+          - ability_id: basic_attack
+            weight: 0.15
+      - condition_type: last_standing
+        weight_overrides:
+          - ability_id: bolt
+            weight: 0.35
+          - ability_id: heal_ally
+            weight: 0.0
+          - ability_id: rally
+            weight: 0.0
+          - ability_id: summon_kodama
+            weight: 0.45
+          - ability_id: basic_attack
+            weight: 0.20
+
 # --- Brute: STR weapon + DEF armor ---
 - id: brute_oni
   name: Brute Oni
   archetype: BRUTE
   budget_multiplier: 14.0
+  xp_multiplier: 3.5
   stat_distribution:
     STR: 0.33
     MAG: 0.05
@@ -146,6 +510,7 @@
   name: Caster Kitsune
   archetype: CASTER
   budget_multiplier: 12.0
+  xp_multiplier: 4.0
   stat_distribution:
     STR: 0.05
     MAG: 0.45
@@ -172,14 +537,15 @@
       - ability_id: basic_attack
         weight: 0.20
 
-# --- Speeder: STR weapon, no armor (glass cannon) ---
+# --- Speeder: fast debuffer + chip damage. DOT bypasses DEF. ---
 - id: speeder_tengu
   name: Speeder Tengu
   archetype: SPEEDER
-  budget_multiplier: 11.0
+  budget_multiplier: 13.0
+  xp_multiplier: 3.5
   stat_distribution:
-    STR: 0.30
-    MAG: 0.05
+    STR: 0.25
+    MAG: 0.10
     DEF: 0.10
     RES: 0.05
     SPD: 0.50
@@ -188,17 +554,20 @@
   abilities:
     - quick_strike
     - double_hit
+    - searing_edge
     - basic_attack
   equipment:
     - iron_blade
   target_preference: lowest_def
-  description: "Targets squishy party members. Acts early and often."
+  description: "Fast and relentless. Applies burning DOTs that bypass armor."
   action_table:
     base_weights:
       - ability_id: quick_strike
-        weight: 0.60
+        weight: 0.35
       - ability_id: double_hit
-        weight: 0.25
+        weight: 0.20
+      - ability_id: searing_edge
+        weight: 0.30
       - ability_id: basic_attack
         weight: 0.15
 
@@ -207,6 +576,7 @@
   name: Support Tanuki
   archetype: SUPPORT
   budget_multiplier: 10.0
+  xp_multiplier: 3.5
   stat_distribution:
     STR: 0.10
     MAG: 0.30
@@ -266,3 +636,367 @@
             weight: 0.60
           - ability_id: basic_attack
             weight: 0.40
+
+# ===================================================================
+# Zone 4-6 Bosses
+# ===================================================================
+
+# --- Zone 4 Boss: Kappa ---
+# Shell retreat → invulnerable 1 turn → tidal surge. Predictable cycle.
+# Player should Survive on tidal surge turn, attack on shell turn.
+- id: kappa
+  name: Kappa
+  archetype: BOSS
+  budget_multiplier: 16.0
+  xp_multiplier: 4.5
+  stat_distribution:
+    STR: 0.15
+    MAG: 0.30
+    DEF: 0.30
+    RES: 0.10
+    SPD: 0.15
+  base_hp: 55
+  hp_per_budget: 3.5
+  abilities:
+    - shell_retreat
+    - tidal_surge
+    - bolt
+    - basic_attack
+    - regen
+  equipment:
+    - spirit_lens
+    - iron_guard
+  description: "Armored river demon. Retreats into its shell before unleashing tidal fury."
+  action_table:
+    base_weights:
+      - ability_id: tidal_surge
+        weight: 0.40
+      - ability_id: shell_retreat
+        weight: 0.25
+      - ability_id: bolt
+        weight: 0.25
+      - ability_id: basic_attack
+        weight: 0.10
+    conditions:
+      - condition_type: self_hp_below
+        threshold: 0.40
+        weight_overrides:
+          - ability_id: tidal_surge
+            weight: 0.50
+          - ability_id: shell_retreat
+            weight: 0.30
+          - ability_id: bolt
+            weight: 0.15
+          - ability_id: basic_attack
+            weight: 0.05
+
+# --- Zone 5 Boss: Tanuki Trickster ---
+# Mimics player's last action type. Punishes patterns, rewards variety.
+- id: tanuki_boss
+  name: Tanuki Trickster
+  archetype: BOSS
+  budget_multiplier: 15.0
+  xp_multiplier: 4.0
+  stat_distribution:
+    STR: 0.25
+    MAG: 0.25
+    DEF: 0.20
+    RES: 0.10
+    SPD: 0.20
+  base_hp: 50
+  hp_per_budget: 3.0
+  abilities:
+    - heavy_strike
+    - bolt
+    - heal_ally
+    - basic_attack
+    - regen
+  equipment:
+    - iron_blade
+    - spirit_lens
+  description: "Shapeshifting trickster. Mirrors your strategy back at you."
+  action_table:
+    base_weights:
+      - ability_id: heavy_strike
+        weight: 0.30
+      - ability_id: bolt
+        weight: 0.30
+      - ability_id: heal_ally
+        weight: 0.15
+      - ability_id: basic_attack
+        weight: 0.25
+    conditions:
+      # Player attacked physically → Tanuki hits back harder
+      - condition_type: player_last_used_physical
+        weight_overrides:
+          - ability_id: heavy_strike
+            weight: 0.65
+          - ability_id: bolt
+            weight: 0.10
+          - ability_id: heal_ally
+            weight: 0.10
+          - ability_id: basic_attack
+            weight: 0.15
+      # Player used non-damage action → Tanuki uses magic
+      - condition_type: player_last_used_magical
+        weight_overrides:
+          - ability_id: bolt
+            weight: 0.65
+          - ability_id: heavy_strike
+            weight: 0.10
+          - ability_id: heal_ally
+            weight: 0.10
+          - ability_id: basic_attack
+            weight: 0.15
+      # Player Survived → Tanuki wastes turn healing (advantage to player)
+      - condition_type: player_last_used_survive
+        weight_overrides:
+          - ability_id: heal_ally
+            weight: 0.70
+          - ability_id: basic_attack
+            weight: 0.15
+          - ability_id: heavy_strike
+            weight: 0.10
+          - ability_id: bolt
+            weight: 0.05
+
+# --- Zone 6 Boss: Nue ---
+# Multi-type phases: physical → magical → mixed/desperate.
+# Pure action table conditionals, no special engine mechanics.
+- id: nue
+  name: Nue
+  archetype: BOSS
+  budget_multiplier: 18.0
+  xp_multiplier: 2.5
+  stat_distribution:
+    STR: 0.25
+    MAG: 0.25
+    DEF: 0.20
+    RES: 0.10
+    SPD: 0.20
+  base_hp: 60
+  hp_per_budget: 4.0
+  abilities:
+    - heavy_strike
+    - arc_slash
+    - bolt
+    - hex
+    - reckless_blow
+    - basic_attack
+    - regen
+  equipment:
+    - iron_blade
+    - spirit_lens
+  description: "Chimeric horror. Shifts between physical and magical attacks as it weakens."
+  action_table:
+    # Phase 1 (above 66%): physical
+    base_weights:
+      - ability_id: heavy_strike
+        weight: 0.45
+      - ability_id: arc_slash
+        weight: 0.30
+      - ability_id: basic_attack
+        weight: 0.25
+    conditions:
+      # Phase 2 (33-66%): magical
+      - condition_type: self_hp_below
+        threshold: 0.66
+        weight_overrides:
+          - ability_id: bolt
+            weight: 0.45
+          - ability_id: hex
+            weight: 0.30
+          - ability_id: basic_attack
+            weight: 0.25
+      # Phase 3 (below 33%): mixed/desperate
+      - condition_type: self_hp_below
+        threshold: 0.33
+        weight_overrides:
+          - ability_id: reckless_blow
+            weight: 0.40
+          - ability_id: bolt
+            weight: 0.25
+          - ability_id: heavy_strike
+            weight: 0.25
+          - ability_id: basic_attack
+            weight: 0.10
+
+# ===================================================================
+# Zone 7 Boss: Giga Slime + Mini-Boss Fragments
+# ===================================================================
+
+# Region final boss. Three stages:
+#   Phase 1 (>50%): Regen + attacks + summon adds
+#   Phase 2 (<50%): Self-buffs DEF (armored), harder hits, keeps summoning
+#   Phase 3: On death → splits into 3 archetypal mini-bosses
+- id: giga_slime
+  name: Giga Slime
+  archetype: BOSS
+  budget_multiplier: 20.0
+  xp_multiplier: 4.5
+  stat_distribution:
+    STR: 0.25
+    MAG: 0.10
+    DEF: 0.30
+    RES: 0.10
+    SPD: 0.25
+  base_hp: 80
+  hp_per_budget: 5.0
+  abilities:
+    - heavy_strike
+    - arc_slash
+    - summon_slimes
+    - stalwart
+    - basic_attack
+    - regen_enhanced
+  equipment:
+    - iron_blade
+    - iron_guard
+  death_spawn_templates:
+    - slime_brute_miniboss
+    - slime_caster_miniboss
+    - slime_tank_miniboss
+  description: "The lord of slimes. Regenerates, summons lesser slimes, and splits into three horrors on death."
+  action_table:
+    # Phase 1 (above 50%): aggressive + summon
+    base_weights:
+      - ability_id: heavy_strike
+        weight: 0.30
+      - ability_id: arc_slash
+        weight: 0.25
+      - ability_id: summon_slimes
+        weight: 0.20
+      - ability_id: basic_attack
+        weight: 0.25
+    conditions:
+      # Phase 2 (below 50%): armored — self-buffs DEF, harder single-target hits
+      - condition_type: self_hp_below
+        threshold: 0.50
+        weight_overrides:
+          - ability_id: heavy_strike
+            weight: 0.35
+          - ability_id: stalwart
+            weight: 0.25
+          - ability_id: summon_slimes
+            weight: 0.20
+          - ability_id: basic_attack
+            weight: 0.20
+
+# STR-focused fragment. Hits hard, fragile.
+- id: slime_brute_miniboss
+  name: Giga Fragment (Brute)
+  archetype: BRUTE
+  budget_multiplier: 12.0
+  xp_multiplier: 5.0
+  stat_distribution:
+    STR: 0.40
+    MAG: 0.05
+    DEF: 0.20
+    RES: 0.05
+    SPD: 0.30
+  base_hp: 35
+  hp_per_budget: 2.5
+  abilities:
+    - heavy_strike
+    - reckless_blow
+    - basic_attack
+  equipment:
+    - iron_blade
+  description: "The brute core of the Giga Slime. All strength, no finesse."
+  action_table:
+    base_weights:
+      - ability_id: heavy_strike
+        weight: 0.45
+      - ability_id: reckless_blow
+        weight: 0.30
+      - ability_id: basic_attack
+        weight: 0.25
+    conditions:
+      - condition_type: self_hp_below
+        threshold: 0.30
+        weight_overrides:
+          - ability_id: reckless_blow
+            weight: 0.60
+          - ability_id: heavy_strike
+            weight: 0.30
+          - ability_id: basic_attack
+            weight: 0.10
+
+# MAG-focused fragment. Drains, debuffs, annoying.
+- id: slime_caster_miniboss
+  name: Giga Fragment (Caster)
+  archetype: CASTER
+  budget_multiplier: 12.0
+  xp_multiplier: 5.0
+  stat_distribution:
+    STR: 0.05
+    MAG: 0.45
+    DEF: 0.10
+    RES: 0.15
+    SPD: 0.25
+  base_hp: 30
+  hp_per_budget: 2.0
+  abilities:
+    - bolt
+    - hex
+    - drain
+  equipment:
+    - spirit_lens
+  target_preference: lowest_def
+  description: "The arcane core of the Giga Slime. Drains life and saps willpower."
+  action_table:
+    base_weights:
+      - ability_id: bolt
+        weight: 0.35
+      - ability_id: hex
+        weight: 0.25
+      - ability_id: drain
+        weight: 0.40
+
+# DEF-focused fragment. Tanks and heals its siblings.
+- id: slime_tank_miniboss
+  name: Giga Fragment (Tank)
+  archetype: SUPPORT
+  budget_multiplier: 12.0
+  xp_multiplier: 5.0
+  stat_distribution:
+    STR: 0.10
+    MAG: 0.20
+    DEF: 0.40
+    RES: 0.15
+    SPD: 0.15
+  base_hp: 45
+  hp_per_budget: 3.0
+  abilities:
+    - brace_strike
+    - heal_ally
+    - basic_attack
+  equipment:
+    - iron_guard
+  description: "The resilient core of the Giga Slime. Shields its fragments and wears you down."
+  action_table:
+    base_weights:
+      - ability_id: brace_strike
+        weight: 0.35
+      - ability_id: heal_ally
+        weight: 0.35
+      - ability_id: basic_attack
+        weight: 0.30
+    conditions:
+      - condition_type: ally_hp_below
+        threshold: 0.40
+        weight_overrides:
+          - ability_id: heal_ally
+            weight: 0.65
+          - ability_id: brace_strike
+            weight: 0.20
+          - ability_id: basic_attack
+            weight: 0.15
+      - condition_type: last_standing
+        weight_overrides:
+          - ability_id: brace_strike
+            weight: 0.50
+          - ability_id: heal_ally
+            weight: 0.0
+          - ability_id: basic_attack
+            weight: 0.50

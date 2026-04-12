@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from heresiarch.engine.formulas import (
     _sigmoid,
-    calculate_bonus_actions,
+    calculate_speed_bonus,
     calculate_buy_price,
     calculate_effective_stats,
     calculate_enemy_hp,
@@ -229,7 +229,8 @@ def build_compare_data(
         items = [game_data.items[iid] for iid in item_ids if iid in game_data.items]
         eff = calculate_effective_stats(base_stats, items, [])
         hp = calculate_max_hp(job.base_hp, job.hp_growth, level, eff.DEF)
-        bonus = calculate_bonus_actions(eff.SPD)
+        # Speed bonus depends on enemy SPD; use 0 as placeholder for build comparisons
+        bonus = calculate_speed_bonus(eff.SPD, 0)
 
         snap = BuildSnapshot(
             name=build_name,
@@ -618,6 +619,22 @@ def job_ability_curve_data(
 # 9. Economy
 # ---------------------------------------------------------------------------
 
+def _resolve_town_shop_items(game_data: GameData, region: str) -> list[str]:
+    """Resolve shop items from the town matching *region*.
+
+    For simulation purposes we assume all zones are cleared, so every
+    shop tier is unlocked.  Returns an empty list when no town exists
+    for the region.
+    """
+    for town in game_data.towns.values():
+        if town.region == region:
+            items: list[str] = []
+            for tier in town.shop_tiers:
+                items.extend(tier.items)
+            return items
+    return []
+
+
 def economy_data(game_data: GameData) -> EconomyResult:
     from heresiarch.engine.formulas import MONEY_DROP_MIN_MULTIPLIER, MONEY_DROP_MAX_MULTIPLIER
     from heresiarch.engine.loot import OVERSTAY_PENALTY_PER_BATTLE
@@ -674,7 +691,7 @@ def economy_data(game_data: GameData) -> EconomyResult:
             cumulative_gold_rush=round(cum_rush, 1),
             cumulative_gold_moderate=round(cum_mod, 1),
             cumulative_gold_grind=round(cum_grind, 1),
-            shop_items=list(zone.shop_item_pool),
+            shop_items=_resolve_town_shop_items(game_data, zone.region),
         ))
 
     # Pilfer impact

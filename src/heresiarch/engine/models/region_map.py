@@ -1,25 +1,40 @@
-"""Region map models: ASCII art maps with zone anchor positions."""
+"""ASCII map models: generic maps with anchor positions for the map viewer.
+
+Used for region maps, town interiors, and eventually world maps.
+"""
 
 from __future__ import annotations
+
+from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field
 
 
-class ZoneAnchor(BaseModel):
-    """Position of a zone marker on the region map."""
+class MapAnchor(BaseModel):
+    """A named position on an ASCII map.
 
-    zone_id: str
+    Anchors mark interactive locations — zones, towns, buildings, etc.
+    The ``anchor_type`` field determines how the map viewer renders and
+    dispatches selection events for this anchor.
+    """
+
+    id: str
     row: int
     col: int
+    anchor_type: Literal["zone", "town", "building", "exit"] = "zone"
 
 
-class RegionMap(BaseModel):
-    """ASCII art map of a region with zone positions for the map viewer."""
+class AsciiMap(BaseModel):
+    """ASCII art map with interactive anchor positions.
 
-    region_id: str
+    Generic map model reused for region overviews, town interiors,
+    and other navigable map contexts.
+    """
+
+    map_id: str
     name: str
     art: list[str] = Field(default_factory=list)
-    anchors: list[ZoneAnchor] = Field(default_factory=list)
+    anchors: list[MapAnchor] = Field(default_factory=list)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -33,9 +48,14 @@ class RegionMap(BaseModel):
         """Number of lines in the art."""
         return len(self.art)
 
-    def anchor_for_zone(self, zone_id: str) -> ZoneAnchor | None:
-        """Look up the anchor for a zone by ID."""
+    def anchor_for_id(self, anchor_id: str) -> MapAnchor | None:
+        """Look up an anchor by its ID."""
         for anchor in self.anchors:
-            if anchor.zone_id == zone_id:
+            if anchor.id == anchor_id:
                 return anchor
         return None
+
+
+# Backward-compat aliases for existing imports
+ZoneAnchor = MapAnchor
+RegionMap = AsciiMap

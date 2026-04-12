@@ -5,7 +5,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "A simple physical attack."
+  description: "Physical attack. Deals 5 + 0.5x STR damage, reduced by target DEF."
   effects:
     - base_damage: 5
       stat_scaling: STR
@@ -16,7 +16,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "A powerful but slow strike."
+  description: "Hard-hitting physical strike. Deals 15 + 0.8x STR damage, reduced by target DEF."
   effects:
     - base_damage: 15
       stat_scaling: STR
@@ -27,7 +27,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "A bolt of magical energy."
+  description: "Magic damage. Deals 10 + 0.7x MAG damage, ignores DEF."
   effects:
     - base_damage: 10
       stat_scaling: MAG
@@ -38,7 +38,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "A fast physical strike that favours speed."
+  description: "Fast physical strike. Deals 3 + 0.4x STR damage, reduced by target DEF."
   effects:
     - base_damage: 3
       stat_scaling: STR
@@ -49,7 +49,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "Two rapid strikes in succession."
+  description: "Two hits of 2 + 0.3x STR each, both reduced by target DEF separately."
   effects:
     - base_damage: 2
       stat_scaling: STR
@@ -65,7 +65,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "Burn over N rounds, bypasses DEF. Bread and butter vs high-DEF."
+  description: "Applies a DOT dealing 4 + 0.4x STR over 3 rounds. Bypasses DEF entirely."
   effects:
     - quality: DOT
       base_damage: 4
@@ -78,7 +78,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "Reduces target DEF for N rounds. Enabler for STR allies."
+  description: "Deals 5 + 0.3x STR damage and reduces target DEF by 25% for 2 rounds."
   effects:
     - quality: SHATTER
       base_damage: 5
@@ -92,7 +92,7 @@
   category: OFFENSIVE
   target: ALL_ENEMIES
   insight_amplified: true
-  description: "Hits all enemies at reduced power. Mob clear."
+  description: "Hits all enemies for 60% of (4 + 0.3x STR) damage each, reduced by DEF."
   effects:
     - quality: CHAIN
       base_damage: 4
@@ -105,7 +105,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "Ignores a percentage of DEF. Direct, good vs armor."
+  description: "Piercing strike. Deals 8 + 0.5x STR damage, ignoring 40% of target DEF."
   effects:
     - quality: PIERCE
       base_damage: 8
@@ -118,7 +118,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "Shifts enemy action weights and delays. Tempo control, pairs with Foresight."
+  description: "Disrupts enemy for 2 rounds, shifting action weights. Deals 3 + 0.4x MAG damage. RES-gated."
   effects:
     - quality: DISRUPT
       base_damage: 3
@@ -131,7 +131,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "Heals for a percentage of damage dealt. Sustain, enables low-DEF builds."
+  description: "Deals 6 + 0.5x MAG damage and heals user for 30% of damage dealt."
   effects:
     - quality: LEECH
       base_damage: 6
@@ -144,7 +144,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "Scaling damage with consecutive uses. Extended boss fight ability."
+  description: "Deals 4 + 0.4x MAG damage. Each consecutive use adds +20% damage (stacks indefinitely)."
   effects:
     - quality: SURGE
       base_damage: 4
@@ -157,7 +157,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "Big damage plus self-damage. Risk/reward, pairs with Leech."
+  description: "Deals 20 + 0.9x STR damage but costs 25% of that damage as self-damage."
   effects:
     - base_damage: 20
       stat_scaling: STR
@@ -169,7 +169,7 @@
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "Degenerate scaling: weak early, monstrous late. Trust the curve."
+  description: "Deals -5 + 1.5x MAG damage. Weak at low MAG, scales extremely hard. Ignores DEF."
   effects:
     - base_damage: -5
       stat_scaling: MAG
@@ -182,12 +182,49 @@
   description: "Jiggles menacingly. Nothing happens."
   effects: []
 
+# --- Charge-up (windup) abilities ---
+
+- id: tidal_surge
+  name: Tidal Surge
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  insight_amplified: true
+  description: "Deals 20 + 0.9x MAG damage. Ignores DEF."
+  effects:
+    - base_damage: 20
+      stat_scaling: MAG
+      scaling_coefficient: 0.9
+
+- id: charge_slam
+  name: Devastating Slam
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  windup_turns: 2
+  insight_amplified: true
+  description: "Charges for 2 turns, then deals 30 + 1.2x STR damage. Reduced by DEF."
+  effects:
+    - base_damage: 30
+      stat_scaling: STR
+      scaling_coefficient: 1.2
+
+- id: charge_slam_fast
+  name: Desperate Slam
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  windup_turns: 1
+  insight_amplified: true
+  description: "Charges for 1 turn, then deals 25 + 1.0x STR damage. Reduced by DEF."
+  effects:
+    - base_damage: 25
+      stat_scaling: STR
+      scaling_coefficient: 1.0
+
 - id: pilfer
   name: Pilfer
   category: OFFENSIVE
   target: SINGLE_ENEMY
   insight_amplified: true
-  description: "A quick swipe that steals gold. Light damage, but your wallet hurts more."
+  description: "Deals 2 + 0.2x STR damage and steals 5 + 12x enemy level gold."
   effects:
     - base_damage: 2
       stat_scaling: STR

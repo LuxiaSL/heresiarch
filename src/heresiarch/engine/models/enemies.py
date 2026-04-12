@@ -50,7 +50,7 @@ class ActionTable(BaseModel):
 
 
 class EnemyTemplate(BaseModel):
-    """Static enemy definition. Scaled at runtime to zone level."""
+    """Static enemy definition. Scaled at runtime to enemy level."""
 
     id: str
     name: str
@@ -64,10 +64,15 @@ class EnemyTemplate(BaseModel):
     equipment: list[str] = Field(default_factory=list)
     target_preference: str = "random"
     description: str = ""
+    gold_multiplier: float | None = None  # override budget_multiplier for gold calc
+    xp_multiplier: float | None = None    # override budget_multiplier for XP calc
+    death_spawn_template_id: str = ""     # on death, spawn N copies of this template
+    death_spawn_count: int = 0            # how many to spawn on death
+    death_spawn_templates: list[str] = Field(default_factory=list)  # on death, spawn one of each
 
 
 class EnemyInstance(BaseModel):
-    """A concrete enemy in combat, scaled to a zone level."""
+    """A concrete enemy in combat, scaled to an enemy level."""
 
     template_id: str
     name: str
@@ -79,3 +84,6 @@ class EnemyInstance(BaseModel):
     equipment: list[str] = Field(default_factory=list)
     action_table: ActionTable
     target_preference: str = "random"
+    budget_multiplier: float = 0.0       # preserved for XP/gold calc
+    gold_multiplier: float | None = None  # override for gold calc
+    xp_multiplier: float | None = None    # override for XP calc

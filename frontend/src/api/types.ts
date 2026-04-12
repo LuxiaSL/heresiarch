@@ -4,9 +4,8 @@ export interface FormulaConfig {
   HP_COEFFICIENT: number;
   DEF_REDUCTION_RATIO: number;
   RES_THRESHOLD_RATIO: number;
-  SPD_THRESHOLD: number;
+  SPEED_BONUS_RATIO: number;
   SURVIVE_DAMAGE_REDUCTION: number;
-  PARTIAL_ACTION_DAMAGE_RATIO: number;
   MAX_ACTION_POINT_BANK: number;
   CHEAT_DEBT_PER_ACTION: number;
   CHEAT_DEBT_RECOVERY_PER_TURN: number;

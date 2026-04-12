@@ -7,7 +7,7 @@
   trigger: HP_BELOW_THRESHOLD
   trigger_threshold: 0.3
   is_innate: false
-  description: "Adrenaline kicks in when HP drops below 30%. Grants a massive SPD bonus."
+  description: "When HP drops below 30%, permanently gains +50 SPD for the rest of combat."
   effects:
     - stat_buff:
         SPD: 50
@@ -18,7 +18,7 @@
   target: SELF
   trigger: ON_ALLY_KO
   is_innate: false
-  description: "When an ally falls, fury surges. Massive STR and MAG buff for 3 rounds."
+  description: "When an ally is killed, gains +50 STR and +50 MAG for 3 rounds."
   effects:
     - stat_buff:
         STR: 50
@@ -31,7 +31,7 @@
   target: SELF
   trigger: ON_KILL
   is_innate: false
-  description: "Killing an enemy refunds 1 action point, allowing an additional action this turn."
+  description: "On kill, refunds 1 AP, allowing an extra action this turn."
   effects:
     - ap_refund: 1
 
@@ -41,7 +41,7 @@
   target: SINGLE_ENEMY
   trigger: RES_GATE_PASSED
   is_innate: false
-  description: "When a RES gate check is passed, reflects the debuff back to the caster."
+  description: "When this character passes a RES gate check, reflects a 2-round Disrupt back onto the attacker."
   effects:
     - quality: DISRUPT
       duration_rounds: 2
@@ -52,7 +52,39 @@
   target: SELF
   trigger: ON_HIT_RECEIVED
   is_innate: false
-  description: "Each hit received feeds a growing arcane hunger. Gain a small stacking MAG buff on every hit taken."
+  description: "Each time this character is hit, gains a permanent +5 MAG stack (lasts for the fight)."
   effects:
     - stat_buff:
         MAG: 5
+
+# --- ON_TURN_START passives ---
+
+- id: regen_weak
+  name: Weak Regeneration
+  category: PASSIVE
+  target: SELF
+  trigger: ON_TURN_START
+  is_innate: false
+  description: "Heals 2.5% of missing HP at the start of each turn."
+  effects:
+    - regen_missing_hp_percent: 0.025
+
+- id: regen
+  name: Regeneration
+  category: PASSIVE
+  target: SELF
+  trigger: ON_TURN_START
+  is_innate: false
+  description: "Heals 5% of missing HP at the start of each turn."
+  effects:
+    - regen_missing_hp_percent: 0.05
+
+- id: regen_enhanced
+  name: Enhanced Regeneration
+  category: PASSIVE
+  target: SELF
+  trigger: ON_TURN_START
+  is_innate: false
+  description: "Heals 8% of missing HP at the start of each turn."
+  effects:
+    - regen_missing_hp_percent: 0.08

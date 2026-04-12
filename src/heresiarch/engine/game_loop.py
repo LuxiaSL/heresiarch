@@ -15,6 +15,7 @@ from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.formulas import (
     calculate_effective_stats,
+    calculate_endless_reward_multiplier,
     calculate_levels_gained,
     calculate_max_hp,
     calculate_stats_at_level,
@@ -48,6 +49,7 @@ class GameLoop:
             item_registry=game_data.items,
             job_registry=game_data.jobs,
             rng=self.rng,
+            enemy_registry=game_data.enemies,
         )
         # Lazy imports to avoid circular deps at module level
         from heresiarch.engine.encounter import EncounterGenerator
@@ -302,6 +304,158 @@ class GameLoop:
             update={"current_zone_id": None, "zone_state": None}
         )
 
+    # --- Town Navigation ---
+
+    def get_region_for_run(self, run: RunState) -> str | None:
+        """Determine the player's current region from zone context."""
+        if run.current_zone_id:
+            zone = self.game_data.zones.get(run.current_zone_id)
+            return zone.region if zone else None
+        if run.current_town_id:
+            town = self.game_data.towns.get(run.current_town_id)
+            return town.region if town else None
+        if run.zones_completed:
+            last = self.game_data.zones.get(run.zones_completed[-1])
+            return last.region if last else None
+        # Default: first town's region (game starts in town)
+        if self.game_data.towns:
+            return next(iter(self.game_data.towns.values())).region
+        return None
+
+    def get_town_for_region(self, region: str | None) -> Any:
+        """Find the TownTemplate for a region, or None."""
+        if not region:
+            return None
+        for town in self.game_data.towns.values():
+            if town.region == region:
+                return town
+        return None
+
+    def is_town_unlocked(self, run: RunState, town_id: str) -> bool:
+        """Check whether a town's unlock requirements are met."""
+        town = self.game_data.towns.get(town_id)
+        if town is None:
+            return False
+        for req in town.unlock_requires:
+            if req.type == "zone_clear":
+                if req.zone_id not in run.zones_completed:
+                    return False
+        return True
+
+    def enter_town(self, run: RunState, town_id: str) -> RunState:
+        """Enter a town. Mutually exclusive with being in a zone."""
+        if town_id not in self.game_data.towns:
+            raise ValueError(f"Unknown town: {town_id}")
+        if run.current_zone_id:
+            raise ValueError("Cannot enter town while in a zone — leave zone first")
+        if not self.is_town_unlocked(run, town_id):
+            raise ValueError(f"Town '{town_id}' is not unlocked yet")
+        return run.model_copy(update={"current_town_id": town_id})
+
+    def leave_town(self, run: RunState) -> RunState:
+        """Leave the current town."""
+        return run.model_copy(update={"current_town_id": None})
+
+    def resolve_town_shop(self, run: RunState) -> list[str]:
+        """Compute available shop items from the current region's town progression."""
+        region = self.get_region_for_run(run)
+        town = self.get_town_for_region(region)
+        if not town:
+            return []
+        items: list[str] = []
+        for tier in town.shop_tiers:
+            if tier.zone_clear is None or tier.zone_clear in run.zones_completed:
+                items.extend(tier.items)
+        return items
+
+    def rest_at_lodge(self, run: RunState) -> RunState:
+        """Full party heal. Resets incomplete zone progress. Costs gold.
+
+        Must be in a town. Resets encounter progress for all incomplete
+        zones — re-cleared encounters give zero rewards until the player
+        reaches new encounters past their previous high-water mark.
+        """
+        if not run.current_town_id:
+            raise ValueError("Must be in a town to rest at the lodge")
+
+        town = self.game_data.towns.get(run.current_town_id)
+        if not town:
+            raise ValueError(f"Unknown town: {run.current_town_id}")
+
+        cost = self._compute_lodge_cost(run, town)
+
+        if run.party.money < cost:
+            raise ValueError(
+                f"Insufficient funds: have {run.party.money}, need {cost}"
+            )
+
+        # 1. Full heal all characters
+        new_characters = dict(run.party.characters)
+        for char_id in run.party.active + run.party.reserve:
+            char = new_characters.get(char_id)
+            if char and char.current_hp < char.max_hp:
+                new_characters[char_id] = char.model_copy(
+                    update={"current_hp": char.max_hp}
+                )
+
+        # 2. Reset zone progress for incomplete zones
+        new_lodge_resets = dict(run.lodge_reset_zones)
+        new_zone_progress = dict(run.zone_progress)
+
+        for zone_id, zstate in list(run.zone_progress.items()):
+            if not zstate.is_cleared:
+                # Track high-water mark for reward suppression
+                new_lodge_resets[zone_id] = max(
+                    zstate.current_encounter_index,
+                    new_lodge_resets.get(zone_id, 0),
+                )
+                del new_zone_progress[zone_id]
+
+        # 3. Deduct gold
+        new_party = run.party.model_copy(
+            update={
+                "characters": new_characters,
+                "money": run.party.money - cost,
+            }
+        )
+
+        return run.model_copy(
+            update={
+                "party": new_party,
+                "lodge_reset_zones": new_lodge_resets,
+                "zone_progress": new_zone_progress,
+                "current_zone_id": None,
+                "zone_state": None,
+            }
+        )
+
+    def _compute_lodge_cost(self, run: RunState, town: Any) -> int:
+        """Compute lodge cost based on party's missing HP.
+
+        cost = max(floor, missing_hp_total * gold_per_hp)
+        floor = floor_base + floor_per_level * mc_level
+        """
+        mc = self._get_mc(run)
+        mc_level = mc.level if mc else 1
+        floor = town.lodge_floor_base + town.lodge_floor_per_level * mc_level
+
+        missing_hp = 0
+        for char_id in run.party.active + run.party.reserve:
+            char = run.party.characters.get(char_id)
+            if char:
+                missing_hp += max(0, char.max_hp - char.current_hp)
+
+        return max(floor, int(missing_hp * town.lodge_gold_per_hp))
+
+    def get_lodge_cost(self, run: RunState) -> int | None:
+        """Return the lodge rest cost for the current town, or None."""
+        if not run.current_town_id:
+            return None
+        town = self.game_data.towns.get(run.current_town_id)
+        if not town:
+            return None
+        return self._compute_lodge_cost(run, town)
+
     def try_recruitment(self, run: RunState) -> tuple[RunState, Any]:
         """Roll for a recruitment encounter after a non-boss combat.
 
@@ -331,7 +485,8 @@ class GameLoop:
         candidate: RecruitCandidate = self.recruitment_engine.generate_candidate(
             zone_level=zone.zone_level,
             exclude_job_ids=exclude,
-            shop_pool=zone.shop_item_pool,
+            shop_pool=self.resolve_town_shop(run),
+            level_range=zone.enemy_level_range,
         )
 
         new_zone_state = run.zone_state.model_copy(
@@ -343,6 +498,7 @@ class GameLoop:
     def get_next_encounter(self, run: RunState) -> list[EnemyInstance]:
         """Generate the next encounter in current zone.
 
+        Endless zones always generate dynamic encounters from their enemy pool.
         In overstay mode (zone already cleared), generates a random
         non-boss encounter from the zone's template list.
         """
@@ -351,7 +507,19 @@ class GameLoop:
 
         zone = self.game_data.zones[run.current_zone_id]
 
+        # Endless zones: always dynamic encounters, never run out
+        if zone.is_endless:
+            mc = self._get_mc(run)
+            player_level = mc.level if mc else zone.endless_min_level
+            return self.encounter_generator.generate_endless_encounter(
+                enemy_pool=zone.endless_enemy_pool,
+                player_level=player_level,
+                min_level=zone.endless_min_level,
+                max_level=zone.endless_max_level,
+            )
+
         spawns = zone.random_spawns or None
+        level_range = zone.enemy_level_range
 
         if run.zone_state.is_cleared:
             # Overstay: pick a random non-boss encounter
@@ -360,7 +528,8 @@ class GameLoop:
                 non_boss = zone.encounters  # fallback: all encounters
             encounter_template = self.rng.choice(non_boss)
             return self.encounter_generator.generate_encounter(
-                encounter_template, zone.zone_level, random_spawns=spawns
+                encounter_template, zone.zone_level,
+                random_spawns=spawns, enemy_level_range=level_range,
             )
 
         idx = run.zone_state.current_encounter_index
@@ -369,7 +538,9 @@ class GameLoop:
 
         encounter_template = zone.encounters[idx]
         return self.encounter_generator.generate_encounter(
-            encounter_template, zone.zone_level, random_spawns=spawns
+            encounter_template, zone.zone_level,
+            random_spawns=spawns, enemy_level_range=level_range,
+            encounter_index=idx, total_encounters=len(zone.encounters),
         )
 
     def _get_mc(self, run: RunState) -> CharacterInstance | None:
@@ -392,10 +563,30 @@ class GameLoop:
         if not combat_result.player_won:
             return self.handle_death(run), LootResult()
 
+        # Lodge reset reward suppression: encounters the player already
+        # cleared before resting give zero XP, gold, and loot.
+        lodge_cap = run.lodge_reset_zones.get(run.current_zone_id or "")
+        suppress_rewards = (
+            lodge_cap is not None
+            and run.zone_state is not None
+            and not run.zone_state.is_cleared  # overstay always pays
+            and run.zone_state.current_encounter_index < lodge_cap
+        )
+
         # Overstay XP penalty (same curve as loot: -5% per battle, floor 10%)
         overstay = run.zone_state.overstay_battles if run.zone_state else 0
         from heresiarch.engine.loot import OVERSTAY_PENALTY_PER_BATTLE
         overstay_xp_mult = max(0.0, 1.0 - OVERSTAY_PENALTY_PER_BATTLE * overstay)
+
+        # Endless zone reward tapering: diminishing XP as player nears cap
+        endless_mult = 1.0
+        if zone and zone.is_endless:
+            mc = self._get_mc(run)
+            player_level = mc.level if mc else 0
+            endless_mult = calculate_endless_reward_multiplier(
+                player_level=player_level,
+                zone_max_level=zone.endless_max_level,
+            )
 
         # --- XP Distribution + HP Persistence ---
         new_characters = dict(party.characters)
@@ -404,14 +595,26 @@ class GameLoop:
                 continue
             char = new_characters[char_id]
             total_xp_gain = 0
-            for budget_mult in combat_result.defeated_enemy_budget_multipliers:
+
+            # Use per-enemy levels when available, fall back to zone_level
+            enemy_levels = combat_result.defeated_enemy_levels
+            xp_mults = combat_result.defeated_enemy_xp_multipliers
+            budget_mults = combat_result.defeated_enemy_budget_multipliers
+
+            for idx, budget_mult in enumerate(budget_mults):
+                # Per-enemy level (new) or zone_level (backward compat)
+                e_level = enemy_levels[idx] if idx < len(enemy_levels) else combat_result.zone_level
+                # Per-enemy XP multiplier override, or use budget_multiplier
+                xp_mult = xp_mults[idx] if idx < len(xp_mults) and xp_mults[idx] > 0 else budget_mult
                 total_xp_gain += calculate_xp_reward(
-                    zone_level=combat_result.zone_level,
-                    budget_multiplier=budget_mult,
+                    enemy_level=e_level,
+                    budget_multiplier=xp_mult,
                     character_level=char.level,
                     xp_cap_level=xp_cap,
                 )
-            total_xp_gain = int(total_xp_gain * overstay_xp_mult)
+            total_xp_gain = int(total_xp_gain * overstay_xp_mult * endless_mult)
+            if suppress_rewards:
+                total_xp_gain = 0
 
             new_xp = char.xp + total_xp_gain
             levels_gained = calculate_levels_gained(new_xp, char.level)
@@ -469,11 +672,17 @@ class GameLoop:
 
         # --- Loot ---
         defeated_instances: list[EnemyInstance] = []
-        for tmpl_id in combat_result.defeated_enemy_template_ids:
+        for idx, tmpl_id in enumerate(combat_result.defeated_enemy_template_ids):
             if tmpl_id in self.game_data.enemies:
                 template = self.game_data.enemies[tmpl_id]
+                # Use per-enemy level when available, fall back to zone_level
+                e_level = (
+                    enemy_levels[idx]
+                    if idx < len(enemy_levels)
+                    else combat_result.zone_level
+                )
                 instance = self.combat_engine.create_enemy_instance(
-                    template, combat_result.zone_level
+                    template, e_level
                 )
                 instance = instance.model_copy(update={"current_hp": 0})
                 defeated_instances.append(instance)
@@ -481,15 +690,22 @@ class GameLoop:
         overstay = run.zone_state.overstay_battles if run.zone_state else 0
         loot = self.loot_resolver.resolve_encounter_drops(
             defeated_enemies=defeated_instances,
-            zone_level=combat_result.zone_level,
             party_cha=party.cha,
             overstay_battles=overstay,
         )
 
+        # Apply endless zone gold tapering to loot money
+        loot_money = int(loot.money * endless_mult)
+
+        # Lodge reset: zero out gold and loot for re-cleared encounters
+        if suppress_rewards:
+            loot_money = 0
+            loot = LootResult()
+
         # Apply gold: loot gains, minus stolen by enemies, plus stolen by players
         net_gold = (
             party.money
-            + loot.money
+            + loot_money
             - combat_result.gold_stolen_by_enemies
             + combat_result.gold_stolen_by_players
         )
@@ -528,10 +744,27 @@ class GameLoop:
     def advance_zone(self, run: RunState) -> RunState:
         """Move to next encounter in zone. Mark zone cleared if done.
 
+        Endless zones never clear — always bumps the encounter counter.
         In overstay mode, increments the overstay counter instead.
         """
         if run.zone_state is None or run.current_zone_id is None:
             raise ValueError("Not in a zone")
+
+        zone = self.game_data.zones[run.current_zone_id]
+
+        # Endless zones never clear — just track battles for recruitment etc.
+        if zone.is_endless:
+            new_zone_state = run.zone_state.model_copy(
+                update={
+                    "overstay_battles": run.zone_state.overstay_battles + 1,
+                }
+            )
+            new_progress = dict(run.zone_progress)
+            new_progress[run.current_zone_id] = new_zone_state
+            return run.model_copy(update={
+                "zone_state": new_zone_state,
+                "zone_progress": new_progress,
+            })
 
         # Overstay mode — bump the counter and sync to zone_progress
         if run.zone_state.is_cleared:
@@ -564,6 +797,14 @@ class GameLoop:
         )
 
         updates: dict = {"zone_state": new_zone_state}
+
+        # Clear lodge reset suppression once player passes the high-water mark
+        lodge_cap = run.lodge_reset_zones.get(run.current_zone_id)
+        if lodge_cap is not None and new_idx >= lodge_cap:
+            new_resets = dict(run.lodge_reset_zones)
+            del new_resets[run.current_zone_id]
+            updates["lodge_reset_zones"] = new_resets
+
         if is_cleared:
             zones_completed = list(run.zones_completed)
             if run.current_zone_id not in zones_completed:
@@ -581,8 +822,58 @@ class GameLoop:
         """Mark run as dead."""
         return run.model_copy(update={"is_dead": True})
 
+    def dismiss_character(self, run: RunState, character_id: str) -> RunState:
+        """Dismiss a party member. They leave with all equipped gear.
+
+        Cannot dismiss the MC or the last active party member.
+        Returns updated RunState with character and their items removed.
+        """
+        party = run.party
+        if character_id not in party.characters:
+            raise ValueError(f"Character {character_id!r} not in party")
+
+        char = party.characters[character_id]
+        if char.is_mc:
+            raise ValueError("Cannot dismiss the MC")
+
+        if character_id in party.active and len(party.active) <= 1:
+            raise ValueError("Cannot dismiss the last active party member")
+
+        # Remove from active or reserve
+        new_active = [cid for cid in party.active if cid != character_id]
+        new_reserve = [cid for cid in party.reserve if cid != character_id]
+
+        # Remove character
+        new_characters = {
+            cid: c for cid, c in party.characters.items()
+            if cid != character_id
+        }
+
+        # Remove their equipped items from party inventory
+        dismissed_item_ids: set[str] = set()
+        for slot, item_id in char.equipment.items():
+            if item_id:
+                dismissed_item_ids.add(item_id)
+        new_items = {
+            iid: item for iid, item in party.items.items()
+            if iid not in dismissed_item_ids
+        }
+
+        new_party = party.model_copy(
+            update={
+                "active": new_active,
+                "reserve": new_reserve,
+                "characters": new_characters,
+                "items": new_items,
+            }
+        )
+        return run.model_copy(update={"party": new_party})
+
     def mc_swap_job(self, run: RunState, new_job_id: str) -> RunState:
-        """MC swaps job. Update growth_history, recalculate stats going forward."""
+        """MC swaps job. Update growth_history, recalculate stats going forward.
+
+        The target job must belong to a non-MC party member (mimic constraint).
+        """
         if new_job_id not in self.game_data.jobs:
             raise ValueError(f"Unknown job: {new_job_id}")
 
@@ -596,7 +887,21 @@ class GameLoop:
         if mc_id is None:
             raise ValueError("No MC in party")
 
+        # Mimic constraint: job must belong to a current non-MC party member
+        party_job_ids = {
+            char.job_id for cid, char in party.characters.items()
+            if not char.is_mc
+        }
+        if new_job_id not in party_job_ids:
+            raise ValueError(
+                f"Cannot mimic job {new_job_id!r} — no party member has it. "
+                f"Available: {sorted(party_job_ids)}"
+            )
+
         mc = party.characters[mc_id]
+        if mc.job_id == new_job_id:
+            raise ValueError(f"MC already has job {new_job_id!r}")
+
         new_job = self.game_data.jobs[new_job_id]
 
         # Update growth history: start new segment
@@ -866,24 +1171,3 @@ class GameLoop:
         )
         return run.model_copy(update={"party": new_party})
 
-    # --- Safe Zone Healing ---
-
-    def enter_safe_zone(self, run: RunState) -> RunState:
-        """Heal all party members to full HP upon entering a safe zone.
-
-        Called between zones — at shops, recruitment points, zone transitions.
-        """
-        party = run.party
-        new_characters = dict(party.characters)
-
-        for char_id in party.active + party.reserve:
-            if char_id not in new_characters:
-                continue
-            char = new_characters[char_id]
-            if char.current_hp < char.max_hp:
-                new_characters[char_id] = char.model_copy(
-                    update={"current_hp": char.max_hp}
-                )
-
-        new_party = party.model_copy(update={"characters": new_characters})
-        return run.model_copy(update={"party": new_party})

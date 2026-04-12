@@ -134,8 +134,26 @@ class RecruitmentScreen(Screen):
             action_list.add_option(Option("Recruit"))
             self._action_keys.append("recruit")
         else:
-            action_list.add_option(Option("[dim]Party Full[/dim]"))
+            action_list.add_option(Option("[dim]Party Full — dismiss a member first[/dim]"))
             self._action_keys.append("")
+            # Offer dismiss options for non-MC members
+            for cid in list(run.party.active) + list(run.party.reserve):
+                char = run.party.characters.get(cid)
+                if char and not char.is_mc:
+                    gear_warning = ""
+                    equipped = [
+                        item_id for item_id in char.equipment.values() if item_id
+                    ]
+                    if equipped:
+                        gear_names = []
+                        for eid in equipped:
+                            item = self.app.game_data.items.get(eid)
+                            gear_names.append(item.name if item else eid)
+                        gear_warning = f" [#cc4444](loses: {', '.join(gear_names)})[/#cc4444]"
+                    action_list.add_option(
+                        Option(f"Dismiss {char.name}{gear_warning}")
+                    )
+                    self._action_keys.append(f"dismiss:{cid}")
 
         action_list.add_option(Option("Pass"))
         self._action_keys.append("pass")
@@ -151,11 +169,73 @@ class RecruitmentScreen(Screen):
             return
 
         action = self._action_keys[idx]
+        if action.startswith("dismiss:"):
+            char_id = action.split(":", 1)[1]
+            self._confirm_dismiss(char_id)
+            return
+        if action.startswith("confirm_dismiss:"):
+            char_id = action.split(":", 1)[1]
+            self._execute_dismiss(char_id)
+            return
         match action:
+            case "cancel_dismiss":
+                self._render_candidate()
             case "recruit":
                 self._recruit()
             case "pass":
                 self._pass()
+
+    def _confirm_dismiss(self, character_id: str) -> None:
+        """Show a confirmation prompt before dismissing — gear loss warning."""
+        run = self.app.run_state
+        if run is None:
+            return
+
+        char = run.party.characters.get(character_id)
+        if char is None:
+            return
+
+        # Build gear loss warning
+        equipped = [item_id for item_id in char.equipment.values() if item_id]
+        gear_lines: list[str] = []
+        for eid in equipped:
+            item = self.app.game_data.items.get(eid)
+            gear_lines.append(f"  - {item.name if item else eid}")
+
+        action_list = self.query_one("#recruit-actions", OptionList)
+        action_list.clear_options()
+        self._action_keys = []
+
+        warning = f"[bold #cc4444]Dismiss {char.name}?[/bold #cc4444]\n"
+        if gear_lines:
+            warning += "[#cc4444]They will leave with ALL equipped gear:[/#cc4444]\n"
+            warning += "\n".join(gear_lines) + "\n"
+        else:
+            warning += "(No equipment to lose.)\n"
+        warning += "[bold]This cannot be undone.[/bold]"
+
+        self.query_one("#inspection-note", Static).update(warning)
+
+        action_list.add_option(Option(f"[bold #cc4444]Yes — dismiss {char.name}[/bold #cc4444]"))
+        self._action_keys.append(f"confirm_dismiss:{character_id}")
+        action_list.add_option(Option("No — cancel"))
+        self._action_keys.append("cancel_dismiss")
+        action_list.focus()
+        action_list.highlighted = 1  # Default to cancel for safety
+
+    def _execute_dismiss(self, character_id: str) -> None:
+        """Dismiss the character and re-render the recruitment screen."""
+        run = self.app.run_state
+        if run is None:
+            return
+
+        try:
+            self.app.run_state = self.app.game_loop.dismiss_character(run, character_id)
+        except ValueError:
+            pass
+
+        # Re-render with updated party (now has room to recruit)
+        self._render_candidate()
 
     def _recruit(self) -> None:
         run = self.app.run_state

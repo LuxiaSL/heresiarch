@@ -14,6 +14,7 @@ from heresiarch.engine.models.combat_state import (
     CombatEventType,
     CombatState,
     PlayerTurnDecision,
+    StatusEffect,
 )
 from heresiarch.engine.models.enemies import EnemyInstance
 from heresiarch.engine.models.jobs import CharacterInstance
@@ -262,10 +263,10 @@ class TestSurviveReducesDamage:
                     assert ratio < 0.8  # Should be ~0.5 but allow for enemy variance
 
 
-class TestTauntRedirects:
-    """Martyr uses Taunt. Enemy attacks redirect to Martyr."""
+class TestTauntApplied:
+    """Martyr uses Taunt on enemy. Enemy gets taunted status."""
 
-    def test_taunt_redirects_attacks(
+    def test_taunt_applies_taunted_status(
         self, combat_engine: CombatEngine,
         einherjar_lv15: CharacterInstance,
         martyr_lv15: CharacterInstance,
@@ -278,7 +279,7 @@ class TestTauntRedirects:
 
         enemy_id = state.enemy_combatants[0].id
 
-        # Martyr taunts, Einherjar attacks
+        # Martyr taunts enemy, Einherjar attacks
         decisions = {
             martyr_lv15.id: PlayerTurnDecision(
                 combatant_id=martyr_lv15.id,
@@ -286,7 +287,7 @@ class TestTauntRedirects:
                 primary_action=CombatAction(
                     actor_id=martyr_lv15.id,
                     ability_id="taunt",
-                    target_ids=[],
+                    target_ids=[enemy_id],
                 ),
             ),
             einherjar_lv15.id: PlayerTurnDecision(
@@ -302,16 +303,52 @@ class TestTauntRedirects:
 
         state = combat_engine.process_round(state, decisions, game_data.enemies)
 
-        # Check for taunt redirect events or that Martyr took the hit
-        redirect_events = _get_events(state, CombatEventType.TAUNT_REDIRECT)
-        damage_to_martyr = [
+        # Enemy should have a taunted status pointing to Martyr
+        enemy_state = state.get_combatant(enemy_id)
+        taunted_statuses = [s for s in enemy_state.active_statuses if s.grants_taunted]
+        assert len(taunted_statuses) >= 1
+        assert taunted_statuses[0].source_id == martyr_lv15.id
+
+    def test_taunted_player_cannot_survive(
+        self, combat_engine: CombatEngine,
+        einherjar_lv15: CharacterInstance,
+        game_data: GameData,
+    ):
+        """Engine enforces: taunted player trying to survive gets forced to attack."""
+        enemy = combat_engine.create_enemy_instance(
+            game_data.enemies["fodder_slime"], enemy_level=5,
+        )
+        state = combat_engine.initialize_combat([einherjar_lv15], [enemy])
+        player_id = state.living_players[0].id
+        enemy_id = state.living_enemies[0].id
+
+        # Manually apply taunted status to player
+        player = state.get_combatant(player_id)
+        player.taunted_by = [enemy_id]
+        player.active_statuses.append(StatusEffect(
+            id="taunted", name="Taunted",
+            rounds_remaining=2, grants_taunted=True, source_id=enemy_id,
+        ))
+
+        # Player tries to survive while taunted
+        decisions = {
+            player_id: PlayerTurnDecision(
+                combatant_id=player_id,
+                cheat_survive=CheatSurviveChoice.SURVIVE,
+            ),
+        }
+
+        state = combat_engine.process_round(
+            state, decisions, {"fodder_slime": game_data.enemies["fodder_slime"]},
+        )
+
+        # Engine should have forced an attack instead of survive
+        damage_events = [
             e for e in state.log
             if e.event_type == CombatEventType.DAMAGE_DEALT
-            and e.target_id == martyr_lv15.id
+            and e.actor_id == player_id
         ]
-
-        # Either taunt redirected or martyr was already the target
-        assert len(redirect_events) > 0 or len(damage_to_martyr) > 0
+        assert len(damage_events) > 0
 
 
 class TestRetaliateTriggersOnHit:
@@ -360,7 +397,7 @@ class TestFrenzyStacking:
     ):
         # Use a high-HP enemy so it survives multiple hits
         template = game_data.enemies["brute_oni"]
-        enemy = combat_engine.create_enemy_instance(template, zone_level=15)
+        enemy = combat_engine.create_enemy_instance(template, enemy_level=15)
 
         state = combat_engine.initialize_combat([berserker_lv15], [enemy])
         enemy_id = state.enemy_combatants[0].id
@@ -409,7 +446,7 @@ class TestFrenzyStacking:
     ):
         """Surviving resets chain but preserves frenzy level."""
         template = game_data.enemies["brute_oni"]
-        enemy = combat_engine.create_enemy_instance(template, zone_level=15)
+        enemy = combat_engine.create_enemy_instance(template, enemy_level=15)
 
         state = combat_engine.initialize_combat([berserker_lv15], [enemy])
         enemy_id = state.enemy_combatants[0].id
@@ -463,7 +500,7 @@ class TestDOTBypassesDEF:
     ):
         # Create a high-DEF enemy
         template = game_data.enemies["brute_oni"]
-        enemy = combat_engine.create_enemy_instance(template, zone_level=15)
+        enemy = combat_engine.create_enemy_instance(template, enemy_level=15)
 
         state = combat_engine.initialize_combat([einherjar_lv15], [enemy])
         enemy_id = state.enemy_combatants[0].id
@@ -520,7 +557,7 @@ class TestResGateCombat:
         """Onmyoji (RES 75) should resist magical debuffs from weak casters."""
         # Create a weak caster enemy (low MAG)
         template = game_data.enemies["fodder_slime"]
-        enemy = combat_engine.create_enemy_instance(template, zone_level=5)
+        enemy = combat_engine.create_enemy_instance(template, enemy_level=5)
 
         state = combat_engine.initialize_combat([onmyoji_lv15], [enemy])
 
@@ -537,7 +574,7 @@ class TestResGateCombat:
     ):
         """Berserker (RES 15) should NOT resist magical debuffs."""
         template = game_data.enemies["caster_kitsune"]
-        enemy = combat_engine.create_enemy_instance(template, zone_level=15)
+        enemy = combat_engine.create_enemy_instance(template, enemy_level=15)
 
         state = combat_engine.initialize_combat([berserker_lv15], [enemy])
 
@@ -549,45 +586,39 @@ class TestResGateCombat:
 
 
 class TestSpeedBonusAction:
-    """Berserker at SPD 105 gets 1 bonus partial action."""
+    """Speed differential bonus: get extra full-power actions when outspeeding enemies."""
 
-    def test_berserker_gets_partial_action(
+    def test_berserker_speed_bonus_vs_slow_enemy(
         self, combat_engine: CombatEngine,
         berserker_lv15: CharacterInstance,
-        brute_oni_zone15: EnemyInstance,
         game_data: GameData,
     ):
-        state = combat_engine.initialize_combat([berserker_lv15], [brute_oni_zone15])
+        """Berserker SPD 105 vs slow chunky_slime should get speed bonus."""
+        # Create a slow, beefy enemy that survives the primary hit
+        tmpl = game_data.enemies["chunky_slime"]
+        slow_enemy = combat_engine.create_enemy_instance(tmpl, 10, instance_id="chunky_0")
+
+        state = combat_engine.initialize_combat([berserker_lv15], [slow_enemy])
         enemy_id = state.enemy_combatants[0].id
+        enemy = state.get_combatant(enemy_id)
 
-        berserker = state.get_combatant(berserker_lv15.id)
-        assert berserker is not None
-        # SPD should be 105 -> 1 bonus action
-        assert berserker.effective_stats.SPD == 105
+        # Confirm speed differential is sufficient (berserker SPD 105 vs enemy SPD)
+        assert berserker_lv15.effective_stats.SPD >= enemy.effective_stats.SPD * 2
 
-        # Provide a partial action
         decisions = {
             berserker_lv15.id: PlayerTurnDecision(
                 combatant_id=berserker_lv15.id,
                 cheat_survive=CheatSurviveChoice.NORMAL,
                 primary_action=CombatAction(
                     actor_id=berserker_lv15.id,
-                    ability_id="heavy_strike",
+                    ability_id="basic_attack",
                     target_ids=[enemy_id],
                 ),
-                partial_actions=[
-                    CombatAction(
-                        actor_id=berserker_lv15.id,
-                        ability_id="quick_strike",
-                        target_ids=[enemy_id],
-                        is_partial=True,
-                    )
-                ],
             )
         }
         state = combat_engine.process_round(state, decisions, game_data.enemies)
 
-        # Should see both a normal action and a bonus action
+        # Should see primary + speed bonus actions
         action_events = _get_events(state, CombatEventType.ACTION_DECLARED)
         bonus_events = _get_events(state, CombatEventType.BONUS_ACTION)
 
@@ -596,6 +627,232 @@ class TestSpeedBonusAction:
 
         assert len(player_actions) >= 1
         assert len(player_bonus) >= 1
+
+    def test_survive_suppresses_speed_bonus(
+        self, combat_engine: CombatEngine,
+        berserker_lv15: CharacterInstance,
+        game_data: GameData,
+    ):
+        """Survive should suppress speed bonus actions."""
+        slime_tmpl = game_data.enemies["fodder_slime"]
+        slow_enemy = combat_engine.create_enemy_instance(slime_tmpl, 1, instance_id="slow_slime_0")
+
+        state = combat_engine.initialize_combat([berserker_lv15], [slow_enemy])
+
+        decisions = {
+            berserker_lv15.id: PlayerTurnDecision(
+                combatant_id=berserker_lv15.id,
+                cheat_survive=CheatSurviveChoice.SURVIVE,
+            )
+        }
+        state = combat_engine.process_round(state, decisions, game_data.enemies)
+
+        bonus_events = _get_events(state, CombatEventType.BONUS_ACTION)
+        player_bonus = [e for e in bonus_events if e.actor_id == berserker_lv15.id]
+        assert len(player_bonus) == 0
+
+    def test_explicit_bonus_actions_use_chosen_ability(
+        self, combat_engine: CombatEngine,
+        berserker_lv15: CharacterInstance,
+        game_data: GameData,
+    ):
+        """When bonus_actions are provided, the engine uses them instead of auto-repeat."""
+        tmpl = game_data.enemies["chunky_slime"]
+        slow_enemy = combat_engine.create_enemy_instance(tmpl, 10, instance_id="chunky_0")
+
+        state = combat_engine.initialize_combat([berserker_lv15], [slow_enemy])
+        enemy_id = state.enemy_combatants[0].id
+        enemy_combatant = state.get_combatant(enemy_id)
+
+        # Confirm speed bonus is at least 1 (use combatant effective_stats)
+        assert berserker_lv15.effective_stats.SPD >= enemy_combatant.effective_stats.SPD * 2
+
+        # Primary = basic_attack, bonus = heavy_strike (different ability)
+        decisions = {
+            berserker_lv15.id: PlayerTurnDecision(
+                combatant_id=berserker_lv15.id,
+                cheat_survive=CheatSurviveChoice.NORMAL,
+                primary_action=CombatAction(
+                    actor_id=berserker_lv15.id,
+                    ability_id="basic_attack",
+                    target_ids=[enemy_id],
+                ),
+                bonus_actions=[
+                    CombatAction(
+                        actor_id=berserker_lv15.id,
+                        ability_id="heavy_strike",
+                        target_ids=[enemy_id],
+                    ),
+                ],
+            )
+        }
+        state = combat_engine.process_round(state, decisions, game_data.enemies)
+
+        bonus_events = _get_events(state, CombatEventType.BONUS_ACTION)
+        player_bonus = [e for e in bonus_events if e.actor_id == berserker_lv15.id]
+
+        assert len(player_bonus) >= 1
+        # The first bonus action should use the explicitly chosen ability
+        assert player_bonus[0].ability_id == "heavy_strike"
+
+    def test_enemy_windup_pushed_by_bonus(
+        self, combat_engine: CombatEngine,
+        game_data: GameData,
+    ):
+        """Enemy speed bonus actions push a windup charge forward, then fire normally."""
+        from tests.conftest import _make_character
+        from heresiarch.engine.formulas import calculate_speed_bonus
+
+        # Slow player so enemy gets speed bonus
+        player = _make_character(game_data, "einherjar", 1, "iron_blade")
+
+        # Fast enemy with charge_slam (windup=2) in repertoire
+        tmpl = game_data.enemies["giga_slime"]
+        enemy = combat_engine.create_enemy_instance(tmpl, 30, instance_id="giga_slime_0")
+
+        state = combat_engine.initialize_combat([player], [enemy])
+        player_id = state.player_combatants[0].id
+        enemy_id = state.enemy_combatants[0].id
+
+        # Confirm speed differential grants bonus (use combatant stats)
+        enemy_combatant = state.get_combatant(enemy_id)
+        player_combatant = state.get_combatant(player_id)
+        bonus = calculate_speed_bonus(
+            enemy_combatant.effective_stats.SPD,
+            player_combatant.effective_stats.SPD,
+        )
+        assert bonus >= 1
+
+        # Force the enemy to use charge_slam (windup=2)
+        enemy_combatant.pending_action = CombatAction(
+            actor_id=enemy_id,
+            ability_id="charge_slam",
+            target_ids=[player_id],
+        )
+
+        decisions = {
+            player.id: PlayerTurnDecision(
+                combatant_id=player.id,
+                cheat_survive=CheatSurviveChoice.SURVIVE,
+            )
+        }
+        state = combat_engine.process_round(state, decisions, game_data.enemies)
+
+        # Charge should have started, been pushed by bonus actions, and fired
+        charge_starts = _get_events(state, CombatEventType.CHARGE_START)
+        charge_releases = _get_events(state, CombatEventType.CHARGE_RELEASE)
+        enemy_starts = [e for e in charge_starts if e.actor_id == enemy_id]
+        enemy_releases = [e for e in charge_releases if e.actor_id == enemy_id]
+
+        assert len(enemy_starts) == 1
+        # Windup=2, bonus pushes it: should release in the same round
+        assert len(enemy_releases) == 1
+
+    def test_enemy_cooldown_suppresses_bonus(
+        self, combat_engine: CombatEngine,
+        game_data: GameData,
+    ):
+        """Enemy bonus actions should not fire when the primary ability has a cooldown."""
+        from tests.conftest import _make_character
+        from heresiarch.engine.formulas import calculate_speed_bonus
+
+        player = _make_character(game_data, "einherjar", 1, "iron_blade")
+
+        # Use brute_oni which has abilities with cooldowns (heavy_guard, etc.)
+        tmpl = game_data.enemies["brute_oni"]
+        enemy = combat_engine.create_enemy_instance(tmpl, 30, instance_id="brute_oni_0")
+
+        state = combat_engine.initialize_combat([player], [enemy])
+        player_id = state.player_combatants[0].id
+        enemy_id = state.enemy_combatants[0].id
+
+        enemy_combatant = state.get_combatant(enemy_id)
+        player_combatant = state.get_combatant(player_id)
+
+        # Only proceed if this enemy actually gets bonus (SPD check)
+        bonus_count = calculate_speed_bonus(
+            enemy_combatant.effective_stats.SPD,
+            player_combatant.effective_stats.SPD,
+        )
+        if bonus_count == 0:
+            # Enemy not fast enough; just verify no crash
+            return
+
+        # Force the enemy to use a cooldown ability (heavy_guard has cooldown: 3)
+        enemy_combatant.pending_action = CombatAction(
+            actor_id=enemy_id,
+            ability_id="heavy_guard",
+            target_ids=[enemy_id],
+        )
+
+        decisions = {
+            player.id: PlayerTurnDecision(
+                combatant_id=player.id,
+                cheat_survive=CheatSurviveChoice.SURVIVE,
+            )
+        }
+        state = combat_engine.process_round(state, decisions, game_data.enemies)
+
+        # No bonus actions for a cooldown ability
+        bonus_events = _get_events(state, CombatEventType.BONUS_ACTION)
+        enemy_bonus = [e for e in bonus_events if e.actor_id == enemy_id]
+        assert len(enemy_bonus) == 0
+
+    def test_player_cheat_extra_pushes_windup(
+        self, combat_engine: CombatEngine,
+        game_data: GameData,
+    ):
+        """Player cheat extra actions with is_windup_push push their active charge."""
+        from tests.conftest import _make_character
+
+        player = _make_character(game_data, "berserker", 15, "iron_blade")
+        tmpl = game_data.enemies["chunky_slime"]
+        enemy = combat_engine.create_enemy_instance(tmpl, 10, instance_id="chunky_0")
+
+        state = combat_engine.initialize_combat([player], [enemy])
+        enemy_id = state.enemy_combatants[0].id
+
+        # Bank some AP first
+        for _ in range(3):
+            state = combat_engine.process_round(
+                state,
+                {player.id: PlayerTurnDecision(
+                    combatant_id=player.id,
+                    cheat_survive=CheatSurviveChoice.SURVIVE,
+                )},
+                game_data.enemies,
+            )
+
+        player_combatant = state.get_combatant(player.id)
+        assert player_combatant.action_points >= 2
+
+        # Cheat with charge_slam as primary + 2 windup pushes
+        decisions = {
+            player.id: PlayerTurnDecision(
+                combatant_id=player.id,
+                cheat_survive=CheatSurviveChoice.CHEAT,
+                cheat_actions=2,
+                primary_action=CombatAction(
+                    actor_id=player.id,
+                    ability_id="charge_slam",
+                    target_ids=[enemy_id],
+                ),
+                cheat_extra_actions=[
+                    CombatAction(actor_id=player.id, is_windup_push=True),
+                    CombatAction(actor_id=player.id, is_windup_push=True),
+                ],
+            )
+        }
+        state = combat_engine.process_round(state, decisions, game_data.enemies)
+
+        # charge_slam windup=2 + 2 pushes = fires same round
+        charge_starts = _get_events(state, CombatEventType.CHARGE_START)
+        charge_releases = _get_events(state, CombatEventType.CHARGE_RELEASE)
+        player_starts = [e for e in charge_starts if e.actor_id == player.id]
+        player_releases = [e for e in charge_releases if e.actor_id == player.id]
+
+        assert len(player_starts) == 1
+        assert len(player_releases) == 1
 
 
 class TestLeechHealing:
@@ -618,7 +875,7 @@ class TestLeechHealing:
         })
 
         template = game_data.enemies["brute_oni"]
-        enemy = combat_engine.create_enemy_instance(template, zone_level=15)
+        enemy = combat_engine.create_enemy_instance(template, enemy_level=15)
 
         state = combat_engine.initialize_combat([char], [enemy])
 

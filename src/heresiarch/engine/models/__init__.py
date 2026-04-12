@@ -31,7 +31,7 @@ from .jobs import CharacterInstance, JobTemplate
 from .loot import DropTable, LootResult
 from .party import Party
 from .battle_record import BattleRecord, EncounterRecord, RoundRecord
-from .region_map import RegionMap, ZoneAnchor
+from .region_map import AsciiMap, MapAnchor, RegionMap, ZoneAnchor
 from .run_state import CombatResult, RunState
 from .stats import GrowthVector, StatBlock, StatType
 from .zone import EncounterTemplate, ZoneState, ZoneTemplate
@@ -68,6 +68,8 @@ __all__ = [
     "LootResult",
     "Party",
     "PlayerTurnDecision",
+    "AsciiMap",
+    "MapAnchor",
     "RegionMap",
     "RoundRecord",
     "RunState",

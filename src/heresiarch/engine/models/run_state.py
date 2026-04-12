@@ -15,8 +15,11 @@ class CombatResult(BaseModel):
     surviving_character_hp: dict[str, int] = Field(default_factory=dict)
     defeated_enemy_template_ids: list[str] = Field(default_factory=list)
     defeated_enemy_budget_multipliers: list[float] = Field(default_factory=list)
+    defeated_enemy_levels: list[int] = Field(default_factory=list)  # per-enemy level for XP/gold
+    defeated_enemy_xp_multipliers: list[float] = Field(default_factory=list)  # per-enemy XP override
+    defeated_enemy_gold_multipliers: list[float] = Field(default_factory=list)  # per-enemy gold override
     rounds_taken: int = 0
-    zone_level: int = 0
+    zone_level: int = 0  # kept for backward compat (shop pricing, display, etc.)
     gold_stolen_by_enemies: int = 0
     gold_stolen_by_players: int = 0
 
@@ -27,9 +30,11 @@ class RunState(BaseModel):
     run_id: str
     party: Party = Field(default_factory=Party)
     current_zone_id: str | None = None
+    current_town_id: str | None = None
     zone_state: ZoneState | None = None
     zones_completed: list[str] = Field(default_factory=list)
     zone_progress: dict[str, ZoneState] = Field(default_factory=dict)
+    lodge_reset_zones: dict[str, int] = Field(default_factory=dict)
     battle_record: BattleRecord = Field(default_factory=BattleRecord)
     is_dead: bool = False
     created_at: str = ""
