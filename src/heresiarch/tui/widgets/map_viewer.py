@@ -176,6 +176,7 @@ class MapViewer(Widget):
         overflow-x: scroll;
         scrollbar-size-vertical: 1;
         scrollbar-size-horizontal: 1;
+        align: center middle;
     }
     MapViewer > ScrollableContainer > #map-canvas {
         width: auto;
@@ -367,7 +368,11 @@ class MapViewer(Widget):
         return text
 
     def _pan_to_selected(self) -> None:
-        """Scroll the map to center on the selected anchor."""
+        """Scroll the map to center on the selected anchor.
+
+        Skips panning when the map fits entirely within the viewport —
+        CSS ``align: center middle`` handles centering in that case.
+        """
         anchor = self._selected_anchor()
         if anchor is None:
             return
@@ -379,9 +384,15 @@ class MapViewer(Widget):
 
         vw = scroller.size.width
         vh = scroller.size.height
+        map_w = self.ascii_map.width
+        map_h = self.ascii_map.height
 
-        target_x = max(0, anchor.col - vw // 2)
-        target_y = max(0, anchor.row - vh // 2)
+        # If the map fits entirely, let CSS centering handle it
+        if map_w <= vw and map_h <= vh:
+            return
+
+        target_x = max(0, anchor.col - vw // 2) if map_w > vw else 0
+        target_y = max(0, anchor.row - vh // 2) if map_h > vh else 0
 
         scroller.scroll_to(target_x, target_y, animate=True, duration=0.35)
 
