@@ -154,6 +154,54 @@ class TestLootApplication:
         new_run = game_loop.apply_loot(run, loot, selected_items=["iron_blade"])
         assert len(new_run.party.stash) == STASH_LIMIT  # didn't add more
 
+    def test_discard_frees_space_for_loot(self, game_loop: GameLoop) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        # Fill stash with iron_blades
+        run = run.model_copy(
+            update={
+                "party": run.party.model_copy(
+                    update={"stash": ["iron_blade"] * STASH_LIMIT}
+                )
+            }
+        )
+        loot = LootResult(money=0, item_ids=["minor_potion"])
+        new_run = game_loop.apply_loot(
+            run, loot, selected_items=["minor_potion"], discard_items=["iron_blade"]
+        )
+        assert len(new_run.party.stash) == STASH_LIMIT  # net size unchanged
+        assert "minor_potion" in new_run.party.stash
+        # One iron_blade was removed
+        assert new_run.party.stash.count("iron_blade") == STASH_LIMIT - 1
+
+    def test_discard_multiple_then_pick_multiple(self, game_loop: GameLoop) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        run = run.model_copy(
+            update={
+                "party": run.party.model_copy(
+                    update={"stash": ["iron_blade"] * STASH_LIMIT}
+                )
+            }
+        )
+        loot = LootResult(money=0, item_ids=["minor_potion", "minor_potion"])
+        new_run = game_loop.apply_loot(
+            run,
+            loot,
+            selected_items=["minor_potion", "minor_potion"],
+            discard_items=["iron_blade", "iron_blade"],
+        )
+        assert len(new_run.party.stash) == STASH_LIMIT
+        assert new_run.party.stash.count("minor_potion") == 2
+        assert new_run.party.stash.count("iron_blade") == STASH_LIMIT - 2
+
+    def test_discard_nonexistent_item_is_safe(self, game_loop: GameLoop) -> None:
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        loot = LootResult(money=0, item_ids=["iron_blade"])
+        # Discarding something not in stash should not error
+        new_run = game_loop.apply_loot(
+            run, loot, selected_items=["iron_blade"], discard_items=["nonexistent"]
+        )
+        assert "iron_blade" in new_run.party.stash
+
 
 class TestZoneProgression:
     def test_advance_increments_index(self, game_loop: GameLoop) -> None:

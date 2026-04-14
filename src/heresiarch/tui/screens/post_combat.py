@@ -1,4 +1,4 @@
-"""Post-combat screen — XP summary, loot selection."""
+"""Post-combat screen — XP summary, loot selection, stash management."""
 
 from __future__ import annotations
 
@@ -14,7 +14,11 @@ from heresiarch.engine.models.run_state import CombatResult
 
 
 class PostCombatScreen(Screen):
-    """Victory! Show XP gains, level-ups, and loot selection."""
+    """Victory! Show XP gains, level-ups, and loot selection.
+
+    When the stash is too full for all dropped items, a second list shows
+    current stash contents so the player can discard items to make room.
+    """
 
     CSS = """
     PostCombatScreen {
@@ -31,6 +35,11 @@ class PostCombatScreen(Screen):
         max-height: 8;
         margin: 1 0;
     }
+    #stash-options {
+        height: auto;
+        max-height: 8;
+        margin: 1 0;
+    }
     """
 
     BINDINGS = [
@@ -41,8 +50,19 @@ class PostCombatScreen(Screen):
         super().__init__()
         self._result = combat_result
         self._loot = loot
-        self._selected_items: set[str] = set()
+        # Index-based tracking (handles duplicate item IDs correctly)
+        self._selected_loot: set[int] = set()
         self._loot_keys: list[str] = []
+        self._discarded_stash: set[int] = set()
+        self._stash_keys: list[str] = []
+
+    @property
+    def _effective_space(self) -> int:
+        """Available stash slots, accounting for items marked for discard."""
+        run = self.app.run_state
+        if run is None:
+            return 0
+        return STASH_LIMIT - len(run.party.stash) + len(self._discarded_stash)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="post-combat-container"):
@@ -53,18 +73,21 @@ class PostCombatScreen(Screen):
             yield Label("")
             yield Static("", id="loot-summary")
             yield OptionList(id="loot-options")
+            yield Static("", id="stash-label")
+            yield OptionList(id="stash-options")
             yield Label("")
             yield Button("Continue", variant="primary", id="btn-continue")
 
     def on_mount(self) -> None:
         self._render_xp_summary()
         self._render_loot()
-        # Focus loot list if items available, otherwise continue button
         loot_list = self.query_one("#loot-options", OptionList)
         if self._loot_keys:
             loot_list.focus()
         else:
             loot_list.display = False
+            self.query_one("#stash-label", Static).display = False
+            self.query_one("#stash-options", OptionList).display = False
             self.query_one("#btn-continue", Button).focus()
 
     def _render_xp_summary(self) -> None:
@@ -93,12 +116,12 @@ class PostCombatScreen(Screen):
         if run is None:
             return
 
-        stash_space = STASH_LIMIT - len(run.party.stash)
+        space = self._effective_space
         lines: list[str] = [
             f"  Money: [bold #e6c566]+{loot.money}G[/bold #e6c566]",
         ]
         if loot.item_ids:
-            lines.append(f"  Items: {len(loot.item_ids)} found (stash space: {stash_space})")
+            lines.append(f"  Items: {len(loot.item_ids)} found (stash space: {space})")
 
         self.query_one("#loot-summary", Static).update(
             "[bold]Loot[/bold]\n" + "\n".join(lines)
@@ -108,57 +131,147 @@ class PostCombatScreen(Screen):
         loot_list = self.query_one("#loot-options", OptionList)
         loot_list.clear_options()
         self._loot_keys = []
+        self._selected_loot.clear()
 
-        for item_id in loot.item_ids:
+        for i, item_id in enumerate(loot.item_ids):
             item = self.app.game_data.items.get(item_id)
             name = item.name if item else item_id
             desc = f" — {item.description}" if item and item.description else ""
-            # Auto-select if stash has room
-            if stash_space > 0:
-                self._selected_items.add(item_id)
-                stash_space -= 1
+            if len(self._selected_loot) < space:
+                self._selected_loot.add(i)
                 marker = "[bold #44aa44]+[/bold #44aa44]"
             else:
                 marker = "[dim]-[/dim]"
             loot_list.add_option(Option(f"{marker} {name}{desc}"))
             self._loot_keys.append(item_id)
 
+        # Show stash for discard if loot exceeds available space
+        self._render_stash()
+
+    def _render_stash(self) -> None:
+        """Show stash items for discard when drops exceed available space."""
+        run = self.app.run_state
+        stash_label = self.query_one("#stash-label", Static)
+        stash_list = self.query_one("#stash-options", OptionList)
+
+        if run is None or not self._loot.item_ids:
+            stash_label.display = False
+            stash_list.display = False
+            return
+
+        base_space = STASH_LIMIT - len(run.party.stash)
+        if base_space >= len(self._loot.item_ids) or not run.party.stash:
+            # Enough room for all loot, or nothing to discard
+            stash_label.display = False
+            stash_list.display = False
+            return
+
+        stash_label.update("[bold]Stash[/bold] [dim](select to discard)[/dim]")
+        stash_label.display = True
+        stash_list.display = True
+
+        stash_list.clear_options()
+        self._stash_keys = list(run.party.stash)
+
+        for i, item_id in enumerate(self._stash_keys):
+            item = run.party.items.get(item_id) or self.app.game_data.items.get(item_id)
+            name = item.name if item else item_id
+            desc = f" — {item.description}" if item and item.description else ""
+            if i in self._discarded_stash:
+                marker = "[bold #cc4444]x[/bold #cc4444]"
+            else:
+                marker = "[dim]-[/dim]"
+            stash_list.add_option(Option(f"{marker} {name}{desc}"))
+
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         """Toggle item selection on Enter."""
-        if event.option_list.id != "loot-options":
-            return
-        idx = event.option_index
+        if event.option_list.id == "loot-options":
+            self._toggle_loot(event.option_index)
+        elif event.option_list.id == "stash-options":
+            self._toggle_stash(event.option_index)
+
+    def _toggle_loot(self, idx: int) -> None:
+        """Toggle loot item selection."""
         if idx < 0 or idx >= len(self._loot_keys):
             return
 
-        item_id = self._loot_keys[idx]
-        run = self.app.run_state
-        if run is None:
+        if idx in self._selected_loot:
+            self._selected_loot.discard(idx)
+        elif len(self._selected_loot) < self._effective_space:
+            self._selected_loot.add(idx)
+
+        self._refresh_loot_markers()
+
+    def _toggle_stash(self, idx: int) -> None:
+        """Toggle stash item for discard, updating available loot space."""
+        if idx < 0 or idx >= len(self._stash_keys):
             return
 
-        stash_space = STASH_LIMIT - len(run.party.stash)
-        currently_selected = len(self._selected_items)
+        if idx in self._discarded_stash:
+            self._discarded_stash.discard(idx)
+            # Space shrunk — deselect excess loot from the bottom up
+            self._reconcile_selections()
+        else:
+            self._discarded_stash.add(idx)
 
-        if item_id in self._selected_items:
-            self._selected_items.discard(item_id)
-        elif currently_selected < stash_space:
-            self._selected_items.add(item_id)
-        # Refresh the display markers
         self._refresh_loot_markers()
+        self._refresh_stash_markers()
+        self._update_loot_header()
+
+    def _reconcile_selections(self) -> None:
+        """Deselect excess loot items when effective space shrinks."""
+        space = self._effective_space
+        while len(self._selected_loot) > space:
+            last = max(self._selected_loot)
+            self._selected_loot.discard(last)
 
     def _refresh_loot_markers(self) -> None:
         """Update the +/- markers in the loot list."""
         loot_list = self.query_one("#loot-options", OptionList)
         loot_list.clear_options()
-        for item_id in self._loot_keys:
+        for i, item_id in enumerate(self._loot_keys):
             item = self.app.game_data.items.get(item_id)
             name = item.name if item else item_id
             desc = f" — {item.description}" if item and item.description else ""
-            if item_id in self._selected_items:
+            if i in self._selected_loot:
                 marker = "[bold #44aa44]+[/bold #44aa44]"
             else:
                 marker = "[dim]-[/dim]"
             loot_list.add_option(Option(f"{marker} {name}{desc}"))
+
+    def _refresh_stash_markers(self) -> None:
+        """Update the x/- markers in the stash list."""
+        stash_list = self.query_one("#stash-options", OptionList)
+        stash_list.clear_options()
+        run = self.app.run_state
+        for i, item_id in enumerate(self._stash_keys):
+            item = (
+                (run.party.items.get(item_id) if run else None)
+                or self.app.game_data.items.get(item_id)
+            )
+            name = item.name if item else item_id
+            desc = f" — {item.description}" if item and item.description else ""
+            if i in self._discarded_stash:
+                marker = "[bold #cc4444]x[/bold #cc4444]"
+            else:
+                marker = "[dim]-[/dim]"
+            stash_list.add_option(Option(f"{marker} {name}{desc}"))
+
+    def _update_loot_header(self) -> None:
+        """Refresh the stash space counter in the loot summary."""
+        run = self.app.run_state
+        if run is None:
+            return
+        loot = self._loot
+        space = self._effective_space
+        lines: list[str] = [
+            f"  Money: [bold #e6c566]+{loot.money}G[/bold #e6c566]",
+        ]
+        if loot.item_ids:
+            lines.append(f"  Items: {len(loot.item_ids)} found (stash space: {space})")
+        self.query_one("#loot-summary", Static).update(
+            "[bold]Loot[/bold]\n" + "\n".join(lines)
+        )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-continue":
@@ -173,8 +286,14 @@ class PostCombatScreen(Screen):
         if run is None:
             return
 
-        # Apply selected loot items
-        run = self.app.game_loop.apply_loot(run, self._loot, list(self._selected_items))
+        # Build selected loot and discarded stash item lists
+        selected = [self._loot_keys[i] for i in sorted(self._selected_loot)]
+        discarded = [self._stash_keys[i] for i in sorted(self._discarded_stash)]
+
+        # Apply loot (discards stash items first, then adds selected loot)
+        run = self.app.game_loop.apply_loot(
+            run, self._loot, selected, discarded or None
+        )
 
         # Advance zone
         run = self.app.game_loop.advance_zone(run)

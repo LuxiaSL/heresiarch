@@ -768,11 +768,23 @@ class GameLoop:
         run: RunState,
         loot: LootResult,
         selected_items: list[str],
+        discard_items: list[str] | None = None,
     ) -> RunState:
-        """Add selected items to party stash. Enforce stash limit."""
+        """Add selected items to party stash. Enforce stash limit.
+
+        Optionally discard existing stash items first to free space.
+        """
         party = run.party
         new_stash = list(party.stash)
         new_items = dict(party.items)
+
+        # Remove discarded stash items first to free space
+        if discard_items:
+            for item_id in discard_items:
+                try:
+                    new_stash.remove(item_id)
+                except ValueError:
+                    pass  # Already removed or not in stash
 
         for item_id in selected_items:
             if len(new_stash) >= STASH_LIMIT:

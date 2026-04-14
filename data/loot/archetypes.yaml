@@ -8,7 +8,8 @@
 #   - NO weapon/armor/accessory drops from regular mobs
 #   - Exception: swime has 5% iron_blade
 #   - Summoned/split enemies (kodama, split_slime): no drops
-#   - Bosses Z1-3: guaranteed potion + scroll set + utility accessory
+#   - Alpha Slime: guaranteed potion + equipment (50/50 weapon/armor T1) + scroll set
+#   - Bosses Z2-3: guaranteed potion + scroll set + utility accessory
 #   - Bosses Z4-6: guaranteed potion + scroll set + converter
 #   - Giga Slime: splits into fragments; only brute fragment drops items
 
@@ -36,6 +37,19 @@
       items:
         - category: potion
           tier: 1
+    # Guaranteed equipment: 50% weapon, 50% armor (tier 1)
+    - chance: 1.0
+      branches:
+        - weight: 1
+          count: 1
+          items:
+            - category: weapon
+              tier: 1
+        - weight: 1
+          count: 1
+          items:
+            - category: armor
+              tier: 1
     # Scroll set: 66% → 2x cast scroll, 33% → 1x teach scroll
     - chance: 1.0
       branches:

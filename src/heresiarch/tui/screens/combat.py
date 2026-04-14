@@ -31,6 +31,7 @@ from heresiarch.tui.event_renderer import (
     render_event,
     render_events_summary,
 )
+from heresiarch.tui.screens.auto_battle import AutoBattleMixin
 
 
 class CombatPhase(Enum):
@@ -49,7 +50,7 @@ class CombatPhase(Enum):
     COMBAT_OVER = auto()
 
 
-class CombatScreen(Screen):
+class CombatScreen(AutoBattleMixin, Screen):
     """Full combat encounter: planning + execution."""
 
     CSS = """
@@ -92,6 +93,7 @@ class CombatScreen(Screen):
 
     BINDINGS = [
         ("v", "toggle_verbose", "Toggle Log"),
+        ("a", "auto_battle", "Auto"),
         ("escape", "go_back", "Back"),
         ("backspace", "go_back", "Back"),
     ]
@@ -126,6 +128,11 @@ class CombatScreen(Screen):
         self._encounter_record: EncounterRecord | None = None
         self._round_events_start: int = 0
         self._choice_keys: list[str] = []
+        # Auto-battle state
+        self._auto_record: EncounterRecord | None = None
+        self._auto_active: bool = False
+        self._auto_round_index: int = 0
+        self._pre_auto_verbose: bool = True
 
     def compose(self) -> ComposeResult:
         with Vertical(id="combat-layout"):
@@ -142,6 +149,11 @@ class CombatScreen(Screen):
 
             yield RichLog(id="combat-log", wrap=True, markup=True)
         yield Footer()
+
+    def check_action(self, action: str, parameters: tuple) -> bool:
+        if action == "auto_battle":
+            return self._auto_record is not None
+        return True
 
     def on_mount(self) -> None:
         self._initialize_combat()
@@ -191,11 +203,18 @@ class CombatScreen(Screen):
 
         self._round_events_start = 0
 
+        # Check for a matching past encounter to enable auto-battle
+        self._auto_record = self._find_matching_record(run)
+        self._auto_active = False
+        self._auto_round_index = 0
+
         # Set panel titles
         self.query_one("#party-panel").border_title = "Party"
         self.query_one("#enemy-panel").border_title = "Enemies"
 
         self._start_planning()
+
+    # Auto-battle methods live in AutoBattleMixin (auto_battle.py)
 
     # --- Planning State Machine ---
 
@@ -970,7 +989,8 @@ class CombatScreen(Screen):
         if combat is None or run is None:
             return
 
-        self.query_one("#round-indicator", Label).update(f"[bold]Round {combat.round_number + 1}[/bold]")
+        auto_tag = " [bold #88ccbb][AUTO][/bold #88ccbb]" if self._auto_active else ""
+        self.query_one("#round-indicator", Label).update(f"[bold]Round {combat.round_number + 1}[/bold]{auto_tag}")
 
         # Phase prompt
         prompt = self.query_one("#phase-prompt", Label)
@@ -1015,7 +1035,10 @@ class CombatScreen(Screen):
             case CombatPhase.PLANNING_CONFIRM:
                 prompt.update("[bold]All characters ready. Execute round?[/bold]")
             case CombatPhase.EXECUTING:
-                prompt.update("[dim]Executing...[/dim]")
+                if self._auto_active:
+                    prompt.update(f"[bold #88ccbb]AUTO[/bold #88ccbb] — Round {combat.round_number + 1}")
+                else:
+                    prompt.update("[dim]Executing...[/dim]")
             case CombatPhase.COMBAT_OVER:
                 prompt.update("")
 
@@ -1252,6 +1275,9 @@ class CombatScreen(Screen):
             return
 
         if combat.is_finished:
+            if self._auto_active:
+                self._auto_active = False
+                self._verbose = self._pre_auto_verbose
             self._phase = CombatPhase.COMBAT_OVER
 
             if self._encounter_record is not None:
@@ -1269,6 +1295,19 @@ class CombatScreen(Screen):
                 self._handle_victory()
             else:
                 self._handle_defeat()
+        elif self._auto_active:
+            hp_critical = any(
+                p.current_hp <= p.max_hp // 2
+                for p in combat.living_players
+            )
+            if hp_critical:
+                self._disable_auto("Auto-battle disabled — HP below 50%")
+                self._start_planning()
+            elif self._auto_round_index >= len(self._auto_record.rounds):
+                self._disable_auto("Auto-battle disabled — strategy exhausted")
+                self._start_planning()
+            else:
+                self._auto_execute_next_round()
         else:
             self._start_planning()
 
@@ -1335,6 +1374,8 @@ class CombatScreen(Screen):
         self.app.switch_screen(DeathScreen())
 
     def action_toggle_verbose(self) -> None:
+        if self._auto_active:
+            return  # summary mode is forced during auto-battle
         self._verbose = not self._verbose
         mode = "verbose" if self._verbose else "summary"
         log = self.query_one("#combat-log", RichLog)

@@ -41,6 +41,7 @@ from heresiarch.engine.recruitment import (
 )
 from heresiarch.engine.shop import ShopInventory
 
+from . import lookups as L
 from . import summarizer as S
 
 
@@ -1285,27 +1286,27 @@ class GameSession:
 
     def lookup_job(self, job_id: str) -> str:
         self._require_phase("lookup_job")
-        return S.lookup_job_view(job_id, self.game_data)
+        return L.lookup_job_view(job_id, self.game_data)
 
     def lookup_ability(self, ability_id: str) -> str:
         self._require_phase("lookup_ability")
-        return S.lookup_ability_view(ability_id, self.game_data)
+        return L.lookup_ability_view(ability_id, self.game_data)
 
     def lookup_item(self, item_id: str) -> str:
         self._require_phase("lookup_item")
-        return S.lookup_item_view(item_id, self.game_data)
+        return L.lookup_item_view(item_id, self.game_data)
 
     def lookup_enemy(self, enemy_id: str) -> str:
         self._require_phase("lookup_enemy")
-        return S.lookup_enemy_view(enemy_id, self.game_data)
+        return L.lookup_enemy_view(enemy_id, self.game_data)
 
     def lookup_zone(self, zone_id: str) -> str:
         self._require_phase("lookup_zone")
-        return S.lookup_zone_view(zone_id, self.game_data)
+        return L.lookup_zone_view(zone_id, self.game_data)
 
     def lookup_formula(self, topic: str) -> str:
         self._require_phase("lookup_formula")
-        return S.lookup_formula_view(topic)
+        return L.lookup_formula_view(topic)
 
     # ------------------------------------------------------------------
     # Analytics
