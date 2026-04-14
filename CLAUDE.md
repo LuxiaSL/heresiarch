@@ -8,7 +8,7 @@ Roguelike JRPG engine + TUI + MCP agent player + balance dashboard. Text-based, 
 
 ```bash
 uv run heresiarch           # TUI
-uv run pytest tests/ -v     # Tests (~300, deterministic, seeded RNG)
+uv run pytest tests/ -v     # Tests (~450, deterministic, seeded RNG)
 uv run python -m heresiarch.tools.sim <subcommand>  # Balance sim tool
 uv run python -m heresiarch.agent    # MCP agent player server
 uv run python -m heresiarch.dashboard  # FastAPI balance dashboard
@@ -23,6 +23,7 @@ src/heresiarch/
   engine/              # PURE LOGIC — no I/O, no UI, no network
     models/            # Pydantic models (state + data). Source of truth for types.
     formulas.py        # ALL game math as pure functions + named constants
+    scaling.py         # Level-scaling helpers (stat curves, enemy scaling)
     combat.py          # CombatEngine: phased effect pipeline, turn loop
     passive_handlers.py # Data-driven passive dispatch table (ON_HIT_RECEIVED, etc.)
     game_loop.py       # GameLoop: stateless orchestrator (combat→XP→loot→zones)
@@ -36,12 +37,12 @@ src/heresiarch/
 
   tui/                 # Textual TUI — renders engine state, collects player input
     app.py             # App shell: holds RunState, GameLoop, screen routing
-    screens/           # 14 screens (title through death)
+    screens/           # 16 screens (title through death)
     event_renderer.py  # CombatEvent → display text (verbose/summary)
     widgets/           # Map viewer
 
   agent/               # MCP server for LLM-as-player
-    server.py          # 30 MCP tools, pure pass-through to session
+    server.py          # 39 MCP tools, pure pass-through to session
     session.py         # Game session state management, phase gating
     summarizer.py      # Engine state → text for LLM consumption
 
@@ -50,19 +51,26 @@ src/heresiarch/
     combat_sim.py      # General-purpose combat simulator (drives real CombatEngine)
     shared.py          # Shared damage computation helpers (sim + dashboard)
     map_tool.py        # Map authoring/visualization
+    map_preview.py     # Map preview rendering
 
   dashboard/           # FastAPI balance dashboard
+    app.py             # FastAPI app shell
     core/sim_service.py  # Structured sim functions (returns pydantic models)
     core/config_manager.py  # Runtime formula overrides for balance testing
-    api/               # HTTP endpoints
+    core/config_model.py    # Config pydantic models
+    core/response_models.py # API response models
+    api/               # HTTP endpoints (sim_routes, config_routes, data_routes)
 
-data/                  # YAML game data
+data/                  # YAML game data (shared + per-region)
   jobs/                # 4 starter jobs
   abilities/           # Offensive, defensive, support, passive, innate
   items/               # Weapons, armor, accessories, consumables, scrolls
   enemies/             # Archetypes with action tables
   loot/                # Drop tables
-  zones/               # Zone templates with encounters + shops
+  region_shinto/       # Shinto region content
+    zones/             # Zone templates with encounters
+    maps/              # ASCII maps (region map, town interior, per-zone)
+    towns/             # Town templates (shop tiers, lodge cost params)
 ```
 
 ## Key Invariants
@@ -77,14 +85,14 @@ data/                  # YAML game data
 
 5. **Abilities are data-driven.** AbilityEffect is a flat model with zero-default fields. New effects = new fields, not new subclasses. Passive triggers dispatch through `passive_handlers.py` based on AbilityEffect fields, not ability IDs.
 
-6. **Never check ability IDs in game logic.** Use behavioral flags on AbilityEffect (`survive_lethal`, `applies_taunt`, `applies_mark`, `ap_refund`) and on StatusEffect (`grants_taunted`, `grants_mark`). The YAML data sets these flags.
+6. **Never check ability IDs in game logic.** Use behavioral flags on AbilityEffect (`survive_lethal`, `applies_taunt`, `applies_mark`, `ap_refund`, `ap_gain`, `grants_surviving`, `grants_invulnerable`, `split_into_templates`, `summon_template_id`) and on StatusEffect (`grants_taunted`, `grants_mark`). The YAML data sets these flags.
 
 7. **Ability sources are tracked.** `CharacterInstance.ability_sources` maps source names (core/innate/breakpoints/equipment/learned) to ability ID lists. When modifying abilities, update the relevant source — don't reconstruct from scratch.
 
 ## How To: Add a New Passive Ability
 
 1. Add YAML entry in `data/abilities/` with the right `trigger:` and `category: PASSIVE`
-2. If it uses existing effect fields (`stat_buff`, `reflect_percent`, `base_damage`, `ap_refund`, `survive_lethal`, `applies_taunt`, `applies_mark`): **done, zero code changes**
+2. If it uses existing effect fields (`stat_buff`, `reflect_percent`, `base_damage`, `ap_refund`, `ap_gain`, `survive_lethal`, `applies_taunt`, `applies_mark`, `grants_surviving`, `grants_invulnerable`, `regen_missing_hp_percent`, `split_into_templates`, `summon_template_id`): **done, zero code changes**
 3. If it needs a new behavior: add a field to `AbilityEffect` (in `models/abilities.py`), add handling in the relevant handler function in `passive_handlers.py`
 4. If it needs a new trigger condition: add to `TriggerCondition` enum, write a handler function, add to `PASSIVE_DISPATCH` table
 
@@ -99,7 +107,7 @@ data/                  # YAML game data
 
 ## Combat Effect Pipeline
 
-`_apply_effect()` runs 10 phases in order. Each is a focused 20-50 line method:
+`_apply_effect()` runs 11 phases in order. Each is a focused 20-50 line method:
 
 ```
 _phase_damage_calc      → Raw damage from formula
@@ -107,6 +115,7 @@ _phase_damage_modify    → Insight, frenzy, surge, chain, mark bonus
 _phase_damage_redirect  → Taunt redirect
 _phase_damage_reduce    → Survive reduction
 _phase_damage_apply     → HP loss, DAMAGE_DEALT event, leech
+_phase_split_check      → Mitosis/split on lethal (spawns new enemies)
 _phase_post_damage      → ON_HIT_RECEIVED dispatch (retaliate, siphon, thorns)
 _phase_death_check      → survive_lethal, death, ON_KILL/ON_ALLY_KO dispatch
 _phase_secondary        → DOT/shatter/disrupt (RES-gated)
@@ -156,10 +165,16 @@ uv run python -m heresiarch.tools.sim combat --job einherjar --level 10 --zone z
 
 ### Other sim subcommands
 
+- `sweep` — Parameter sweep across level/stat ranges
+- `crossover` — Find crossover points between two ability curves
+- `build` — Full build analysis (job + equipment + abilities)
+- `converter` — Unit conversion helpers for balance math
+- `sigmoid` — Sigmoid curve visualization for scaling tuning
 - `xp-curve` — XP/level at each zone exit (rush/moderate/grind)
 - `progression` — Full run: level, gold, weapons, abilities per zone
 - `ability-dpr` — DPR tables for offensive abilities across levels
 - `ability-compare` — Side-by-side ability comparison with crossover
+- `job-curve` — Per-job stat progression curves
 - `economy` — Gold drops, overstay decay, pilfer analysis
 - `enemy-stats` — Enemy stat tables at each zone level
 - `shop-pricing` — Shop affordability check
