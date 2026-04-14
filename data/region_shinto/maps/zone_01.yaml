@@ -1,0 +1,49 @@
+# Zone path map: Shrine Entrance
+# 5 encounters (4 regular + 1 boss). Simple stone path through torii gates.
+#
+# Anchors: exit (start), enc_0..enc_3 (encounters), enc_4 (boss)
+# Path row: 8
+
+map_id: zone_01
+name: "Shrine Entrance"
+
+art:
+  - "                                                                                  "
+  - "                                                                                  "
+  - "        .  *  .          .  *  .          .  *  .          .  *  .                 "
+  - "       _||__||_         _||__||_         _||__||_         _||__||_       ___      "
+  - "      |   ||   |       |   ||   |       |   ||   |       |   ||   |     / _ \\    "
+  - "      |   ||   |  [_]  |   ||   |  [_]  |   ||   |  [_]  |   ||   |    | |=| |   "
+  - "      |___||___|       |___||___|       |___||___|       |___||___|    | |=| |    "
+  - "                                                                        \\_-_/     "
+  - "------o-----------o-----------o-----------o-----------o-------------------o------"
+  - "   .    .      .    .      .    .      .    .      .    .      .    .              "
+  - "     .    .      .    .      .    .      .    .      .    .      .    .            "
+  - "  .    .    .  .    .    .  .    .    .  .    .    .  .    .    .  .    .    .      "
+  - "                                                                                  "
+
+anchors:
+  - id: exit
+    row: 8
+    col: 6
+    anchor_type: exit
+  - id: enc_0
+    row: 8
+    col: 18
+    anchor_type: encounter
+  - id: enc_1
+    row: 8
+    col: 30
+    anchor_type: encounter
+  - id: enc_2
+    row: 8
+    col: 42
+    anchor_type: encounter
+  - id: enc_3
+    row: 8
+    col: 54
+    anchor_type: encounter
+  - id: enc_4
+    row: 8
+    col: 74
+    anchor_type: boss

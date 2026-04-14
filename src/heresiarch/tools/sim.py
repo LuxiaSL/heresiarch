@@ -107,7 +107,7 @@ from heresiarch.engine.models.abilities import (
 )
 from heresiarch.engine.models.items import (
     ConversionEffect,
-    EquipSlot,
+    EquipType,
     Item,
     ItemScaling,
     ScalingType,
@@ -302,7 +302,7 @@ def build_compare(
 
         if enemy_stats:
             heavy = calculate_physical_damage(15, 0.8, eff.STR, enemy_stats.DEF)
-            bolt = calculate_magical_damage(10, 0.7, eff.MAG)
+            bolt = calculate_magical_damage(10, 0.7, eff.MAG, target_res=enemy_stats.RES)
             partial = max(1, int(calculate_physical_damage(5, 0.5, eff.STR, enemy_stats.DEF) * 0.5))
             dpt = heavy + bonus * partial
             row.extend([str(heavy), str(bolt), str(dpt)])
@@ -392,8 +392,9 @@ def sigmoid_explorer(
 # Ability balance analysis (importable for REPL use)
 # ---------------------------------------------------------------------------
 
-# Default enemy DEF for DPR comparisons (moderate armor target)
+# Default enemy DEF/RES for DPR comparisons (moderate armor target)
 _DEFAULT_ENEMY_DEF: int = 50
+_DEFAULT_ENEMY_RES: int = 50
 
 
 @dataclass
@@ -427,6 +428,7 @@ def ability_dpr(
     ability_ids: list[str] | None = None,
     levels: list[int] | None = None,
     enemy_def: int = _DEFAULT_ENEMY_DEF,
+    enemy_res: int = _DEFAULT_ENEMY_RES,
 ) -> str:
     """Calculate Damage Per Round for offensive abilities at various levels.
 
@@ -477,7 +479,7 @@ def ability_dpr(
         for lv in levels:
             stats = calculate_stats_at_level(job.growth, lv)
             ba_damages[lv] = _compute_ability_total_damage(
-                basic_attack, stats.STR, stats.MAG, enemy_def,
+                basic_attack, stats.STR, stats.MAG, enemy_def, enemy_res,
             )
 
     rows: list[list[str]] = []
@@ -501,7 +503,7 @@ def ability_dpr(
         ratio_values: list[str] = []
         for lv in levels:
             stats = calculate_stats_at_level(job.growth, lv)
-            dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
+            dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
             dmg_values.append(str(dmg))
 
             ba_dmg = ba_damages.get(lv, 0)
@@ -528,7 +530,7 @@ def ability_dpr(
     ]
     if surge_abilities:
         detail_sections.append(_format_surge_details(
-            game_data, job, surge_abilities, levels, enemy_def,
+            game_data, job, surge_abilities, levels, enemy_def, enemy_res,
         ))
 
     # DOT total-damage details
@@ -538,7 +540,7 @@ def ability_dpr(
     ]
     if dot_abilities:
         detail_sections.append(_format_dot_details(
-            game_data, job, dot_abilities, levels, enemy_def,
+            game_data, job, dot_abilities, levels, enemy_def, enemy_res,
         ))
 
     # PIERCE comparison (with/without armor)
@@ -548,7 +550,7 @@ def ability_dpr(
     ]
     if pierce_abilities:
         detail_sections.append(_format_pierce_details(
-            game_data, job, pierce_abilities, levels, enemy_def,
+            game_data, job, pierce_abilities, levels, enemy_def, enemy_res,
         ))
 
     # CHAIN AoE efficiency
@@ -558,7 +560,7 @@ def ability_dpr(
     ]
     if chain_abilities:
         detail_sections.append(_format_chain_details(
-            game_data, job, chain_abilities, levels, enemy_def,
+            game_data, job, chain_abilities, levels, enemy_def, enemy_res,
         ))
 
     if detail_sections:
@@ -573,6 +575,7 @@ def _format_surge_details(
     abilities: list[Ability],
     levels: list[int],
     enemy_def: int,
+    enemy_res: int,
 ) -> str:
     """Format SURGE stacking breakdown: damage at stacks 1-5."""
     lines = ["--- SURGE Stacking ---"]
@@ -591,7 +594,7 @@ def _format_surge_details(
         rows: list[list[str]] = []
         for lv in levels:
             stats = calculate_stats_at_level(job.growth, lv)
-            base_dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
+            base_dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
             row = [str(lv), str(base_dmg)]
             for stacks in stacks_range:
                 multiplier = 1.0 + bonus * stacks
@@ -608,6 +611,7 @@ def _format_dot_details(
     abilities: list[Ability],
     levels: list[int],
     enemy_def: int,
+    enemy_res: int,
 ) -> str:
     """Format DOT total-damage breakdown: initial + ticks."""
     lines = ["--- DOT Total Damage ---"]
@@ -626,7 +630,7 @@ def _format_dot_details(
         rows: list[list[str]] = []
         for lv in levels:
             stats = calculate_stats_at_level(job.growth, lv)
-            hit_dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
+            hit_dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
             # DOT bypasses DEF (from combat engine logic), tick = base_damage * 0.5
             total_dot = tick_base * duration
             total = hit_dmg + total_dot
@@ -642,6 +646,7 @@ def _format_pierce_details(
     abilities: list[Ability],
     levels: list[int],
     enemy_def: int,
+    enemy_res: int,
 ) -> str:
     """Format PIERCE comparison: damage with and without pierce vs varying DEF."""
     lines = ["--- PIERCE vs Armor ---"]
@@ -688,6 +693,7 @@ def _format_chain_details(
     abilities: list[Ability],
     levels: list[int],
     enemy_def: int,
+    enemy_res: int,
 ) -> str:
     """Format CHAIN AoE efficiency: per-target vs total for N targets."""
     lines = ["--- CHAIN AoE Efficiency ---"]
@@ -706,7 +712,7 @@ def _format_chain_details(
         for lv in levels:
             stats = calculate_stats_at_level(job.growth, lv)
             # Per-hit already includes chain_damage_ratio via _compute_ability_total_damage
-            per_hit = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
+            per_hit = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
             row = [str(lv), str(per_hit)]
             for n in target_counts:
                 row.append(str(per_hit * n))
@@ -722,6 +728,7 @@ def ability_compare(
     ability_ids: list[str],
     levels: list[int] | None = None,
     enemy_def: int = _DEFAULT_ENEMY_DEF,
+    enemy_res: int = _DEFAULT_ENEMY_RES,
 ) -> str:
     """Side-by-side comparison of 2-3 abilities with crossover analysis.
 
@@ -754,7 +761,7 @@ def ability_compare(
         damages = {}
         for ability in abilities:
             damages[ability.name] = _compute_ability_total_damage(
-                ability, stats.STR, stats.MAG, enemy_def,
+                ability, stats.STR, stats.MAG, enemy_def, enemy_res,
             )
 
         best = max(damages, key=lambda n: damages[n])
@@ -774,10 +781,10 @@ def ability_compare(
             for lv in range(1, 100):
                 stats = calculate_stats_at_level(job.growth, lv)
                 dmg_a = _compute_ability_total_damage(
-                    ability_a, stats.STR, stats.MAG, enemy_def,
+                    ability_a, stats.STR, stats.MAG, enemy_def, enemy_res,
                 )
                 dmg_b = _compute_ability_total_damage(
-                    ability_b, stats.STR, stats.MAG, enemy_def,
+                    ability_b, stats.STR, stats.MAG, enemy_def, enemy_res,
                 )
                 a_better = dmg_a >= dmg_b
                 if a_was_better is not None and a_better != a_was_better:
@@ -794,10 +801,10 @@ def ability_compare(
             ):
                 final_stats = calculate_stats_at_level(job.growth, 99)
                 dmg_a = _compute_ability_total_damage(
-                    ability_a, final_stats.STR, final_stats.MAG, enemy_def,
+                    ability_a, final_stats.STR, final_stats.MAG, enemy_def, enemy_res,
                 )
                 dmg_b = _compute_ability_total_damage(
-                    ability_b, final_stats.STR, final_stats.MAG, enemy_def,
+                    ability_b, final_stats.STR, final_stats.MAG, enemy_def, enemy_res,
                 )
                 leader = ability_a.name if dmg_a >= dmg_b else ability_b.name
                 trailer = ability_b.name if dmg_a >= dmg_b else ability_a.name
@@ -828,6 +835,7 @@ def job_ability_curve(
     game_data: GameData,
     job_id: str,
     enemy_def: int = _DEFAULT_ENEMY_DEF,
+    enemy_res: int = _DEFAULT_ENEMY_RES,
 ) -> str:
     """Show the full ability progression for a job.
 
@@ -842,9 +850,9 @@ def job_ability_curve(
     innate = game_data.abilities.get(job.innate_ability_id)
     if innate:
         stats = calculate_stats_at_level(job.growth, 1)
-        innate_dmg = _compute_ability_total_damage(innate, stats.STR, stats.MAG, enemy_def)
+        innate_dmg = _compute_ability_total_damage(innate, stats.STR, stats.MAG, enemy_def, enemy_res)
         ba = game_data.abilities.get("basic_attack")
-        ba_dmg = _compute_ability_total_damage(ba, stats.STR, stats.MAG, enemy_def) if ba else 0
+        ba_dmg = _compute_ability_total_damage(ba, stats.STR, stats.MAG, enemy_def, enemy_res) if ba else 0
         quality = "---"
         scaling = "---"
         for eff in innate.effects:
@@ -873,9 +881,9 @@ def job_ability_curve(
 
         lv = unlock.level
         stats = calculate_stats_at_level(job.growth, lv)
-        dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
+        dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
         ba = game_data.abilities.get("basic_attack")
-        ba_dmg = _compute_ability_total_damage(ba, stats.STR, stats.MAG, enemy_def) if ba else 0
+        ba_dmg = _compute_ability_total_damage(ba, stats.STR, stats.MAG, enemy_def, enemy_res) if ba else 0
 
         quality = "---"
         scaling = "---"
@@ -916,7 +924,7 @@ def job_ability_curve(
             f"{info.ratio_vs_basic:.2f}x",
         ])
 
-    result = f"Job: {job.name} — Ability Progression (vs DEF={enemy_def})\n"
+    result = f"Job: {job.name} — Ability Progression (vs DEF={enemy_def} RES={enemy_res})\n"
     result += _fmt_table(
         headers, rows,
         col_align=["r", "l", "l", "l", "l", "r", "r", "r"],
@@ -1057,7 +1065,7 @@ def cmd_build(args: argparse.Namespace) -> None:
             build_items = [item.id]
             # Add all accessories
             for acc in gd.items.values():
-                if acc.conversion and acc.slot in (EquipSlot.ACCESSORY_1, EquipSlot.ACCESSORY_2):
+                if acc.conversion and acc.equip_type == EquipType.ACCESSORY:
                     builds[f"{item.name} + {acc.name}"] = [item.id, acc.id]
             builds[item.name] = build_items
 
@@ -1111,7 +1119,7 @@ def cmd_converter(args: argparse.Namespace) -> None:
         weapon = gd.items[args.weapon]
         for conv_name, conv_effect in converters.items():
             test_item = Item(
-                id="test_conv", name=conv_name, slot=EquipSlot.ACCESSORY_1,
+                id="test_conv", name=conv_name, equip_type=EquipType.ACCESSORY,
                 conversion=conv_effect,
             )
             levels = [15, 30, 50, 70, 99]
@@ -1149,8 +1157,8 @@ def cmd_ability_dpr(args: argparse.Namespace) -> None:
                         print(f"  {a.id}: {a.name}")
                 return
 
-    print(f"Job: {gd.jobs[job_id].name} (enemy DEF={args.def_value})\n")
-    print(ability_dpr(gd, job_id, ability_ids=ability_ids, enemy_def=args.def_value))
+    print(f"Job: {gd.jobs[job_id].name} (enemy DEF={args.def_value} RES={args.res_value})\n")
+    print(ability_dpr(gd, job_id, ability_ids=ability_ids, enemy_def=args.def_value, enemy_res=args.res_value))
 
 
 def cmd_ability_compare(args: argparse.Namespace) -> None:
@@ -1166,8 +1174,8 @@ def cmd_ability_compare(args: argparse.Namespace) -> None:
         print("Error: --abilities requires at least 2 ability IDs.")
         return
 
-    print(f"Job: {gd.jobs[job_id].name} (enemy DEF={args.def_value})\n")
-    print(ability_compare(gd, job_id, args.abilities, enemy_def=args.def_value))
+    print(f"Job: {gd.jobs[job_id].name} (enemy DEF={args.def_value} RES={args.res_value})\n")
+    print(ability_compare(gd, job_id, args.abilities, enemy_def=args.def_value, enemy_res=args.res_value))
 
 
 def cmd_job_curve(args: argparse.Namespace) -> None:
@@ -1179,7 +1187,7 @@ def cmd_job_curve(args: argparse.Namespace) -> None:
         print(f"Error: job '{job_id}' not found. Available: {', '.join(gd.jobs.keys())}")
         return
 
-    print(job_ability_curve(gd, job_id, enemy_def=args.def_value))
+    print(job_ability_curve(gd, job_id, enemy_def=args.def_value, enemy_res=args.res_value))
 
 
 # ---------------------------------------------------------------------------
@@ -2276,6 +2284,7 @@ def main() -> None:
     p.add_argument("--job", default="einherjar", help="Job ID")
     p.add_argument("--abilities", nargs="*", default=None, help="Specific ability IDs (default: all offensive)")
     p.add_argument("--def", dest="def_value", type=int, default=_DEFAULT_ENEMY_DEF, help="Enemy DEF for physical calcs")
+    p.add_argument("--res", dest="res_value", type=int, default=_DEFAULT_ENEMY_RES, help="Enemy RES for magical calcs")
     p.set_defaults(func=cmd_ability_dpr)
 
     # ability-compare
@@ -2283,12 +2292,14 @@ def main() -> None:
     p.add_argument("--job", default="einherjar", help="Job ID")
     p.add_argument("--abilities", nargs="+", required=True, help="2-3 ability IDs to compare")
     p.add_argument("--def", dest="def_value", type=int, default=_DEFAULT_ENEMY_DEF, help="Enemy DEF for physical calcs")
+    p.add_argument("--res", dest="res_value", type=int, default=_DEFAULT_ENEMY_RES, help="Enemy RES for magical calcs")
     p.set_defaults(func=cmd_ability_compare)
 
     # job-curve
     p = sub.add_parser("job-curve", help="Full ability progression curve for a job")
     p.add_argument("--job", default="einherjar", help="Job ID")
     p.add_argument("--def", dest="def_value", type=int, default=_DEFAULT_ENEMY_DEF, help="Enemy DEF for physical calcs")
+    p.add_argument("--res", dest="res_value", type=int, default=_DEFAULT_ENEMY_RES, help="Enemy RES for magical calcs")
     p.set_defaults(func=cmd_job_curve)
 
     # economy

@@ -83,11 +83,39 @@ _EXIT_MARKER_STYLES: dict[AnchorStatus, str] = {
     AnchorStatus.CLEARED: "bold #cc8866",
 }
 
+# Encounter anchors — zone path nodes
+_ENCOUNTER_MARKER_CHARS: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: ".",
+    AnchorStatus.AVAILABLE: "o",
+    AnchorStatus.CLEARED: "*",
+}
+
+_ENCOUNTER_MARKER_STYLES: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: "#333333",
+    AnchorStatus.AVAILABLE: "bold #e6c566",
+    AnchorStatus.CLEARED: "bold #44aa44",
+}
+
+# Boss encounter anchors — red when upcoming
+_BOSS_MARKER_CHARS: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: ".",
+    AnchorStatus.AVAILABLE: "#",
+    AnchorStatus.CLEARED: "*",
+}
+
+_BOSS_MARKER_STYLES: dict[AnchorStatus, str] = {
+    AnchorStatus.LOCKED: "#333333",
+    AnchorStatus.AVAILABLE: "bold #cc4444",
+    AnchorStatus.CLEARED: "bold #44aa44",
+}
+
 _MARKER_CHARS_BY_TYPE: dict[str, dict[AnchorStatus, str]] = {
     "zone": _ZONE_MARKER_CHARS,
     "town": _TOWN_MARKER_CHARS,
     "building": _BUILDING_MARKER_CHARS,
     "exit": _EXIT_MARKER_CHARS,
+    "encounter": _ENCOUNTER_MARKER_CHARS,
+    "boss": _BOSS_MARKER_CHARS,
 }
 
 _MARKER_STYLES_BY_TYPE: dict[str, dict[AnchorStatus, str]] = {
@@ -95,6 +123,8 @@ _MARKER_STYLES_BY_TYPE: dict[str, dict[AnchorStatus, str]] = {
     "town": _TOWN_MARKER_STYLES,
     "building": _BUILDING_MARKER_STYLES,
     "exit": _EXIT_MARKER_STYLES,
+    "encounter": _ENCOUNTER_MARKER_STYLES,
+    "boss": _BOSS_MARKER_STYLES,
 }
 
 _SELECTED_MARKER = "X"
@@ -193,12 +223,14 @@ class MapViewer(Widget):
         anchor_statuses: dict[str, AnchorStatus],
         navigable_ids: list[str],
         initial_id: str | None = None,
+        style_overrides: dict[tuple[int, int], str] | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.ascii_map = ascii_map
         self.anchor_statuses = anchor_statuses
         self.navigable_ids = navigable_ids
+        self.style_overrides = style_overrides or {}
         self.can_focus = True
 
         # Build anchor type lookup
@@ -289,6 +321,11 @@ class MapViewer(Widget):
         style_grid: list[list[str | None]] = [
             [None] * width for _ in range(len(grid))
         ]
+
+        # Apply caller-provided style overrides (e.g. path coloring)
+        for (r, c), style in self.style_overrides.items():
+            if 0 <= r < len(style_grid) and 0 <= c < len(style_grid[r]):
+                style_grid[r][c] = style
 
         # Composite anchor markers
         for anchor in self.ascii_map.anchors:

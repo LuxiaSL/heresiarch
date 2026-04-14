@@ -77,7 +77,12 @@ class EnemyAI:
                 enemy_template, combat_state, None
             )
 
-        ability_id = self._weighted_select(active_weights)
+        # use_first: deterministic pick before weighted roll
+        use_first = [w for w in active_weights if w.use_first]
+        if use_first:
+            ability_id = use_first[0].ability_id
+        else:
+            ability_id = self._weighted_select(active_weights)
 
         ability = ability_registry.get(ability_id)
         targets = self.select_target(enemy_template, combat_state, ability)

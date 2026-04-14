@@ -245,7 +245,7 @@ class CombatScreen(Screen):
                 self._choice_keys.append("cs:normal")
 
                 if ap > 0:
-                    choices.add_option(Option(f"Cheat — spend AP for extra actions ({ap} AP banked)"))
+                    choices.add_option(Option(f"[#e6c566]Cheat[/#e6c566] — spend AP for extra actions ({ap} AP banked)"))
                     self._choice_keys.append("cs:cheat")
 
                 if is_taunted:
@@ -254,7 +254,7 @@ class CombatScreen(Screen):
                 else:
                     next_ap = min(ap + 1, MAX_ACTION_POINT_BANK)
                     cap_note = " MAX" if next_ap == ap else ""
-                    choices.add_option(Option(f"Survive — bank AP, reduce damage (AP: {next_ap}{cap_note})"))
+                    choices.add_option(Option(f"[#4488cc]Survive[/#4488cc] — bank AP, reduce damage (AP: {next_ap}{cap_note})"))
                     self._choice_keys.append("cs:survive")
 
             case CombatPhase.PLANNING_CHEAT_AP:
@@ -289,12 +289,15 @@ class CombatScreen(Screen):
             case CombatPhase.EXECUTING | CombatPhase.COMBAT_OVER:
                 return
 
-        # Rebuild options with number hotkey prefixes
+        # Rebuild options with number hotkey prefixes and action-type tint
+        tint = self._current_action_tint()
         if self._choice_keys:
             old_prompts = [choices.get_option_at_index(i).prompt for i in range(len(self._choice_keys))]
             choices.clear_options()
             for i, prompt in enumerate(old_prompts):
                 prefix = f"[bold #888888]{i + 1}.[/bold #888888] " if i < 9 else "   "
+                if tint and self._choice_keys[i] not in ("disabled", "cooldown"):
+                    prompt = f"[{tint}]{prompt}[/{tint}]"
                 choices.add_option(Option(f"{prefix}{prompt}"))
 
         # Focus and highlight first option for all planning phases
@@ -814,14 +817,6 @@ class CombatScreen(Screen):
             self._finalize_character()
             return
 
-        # Item primary suppresses speed bonus (no free item repeats)
-        if (
-            self._current_decision.primary_action
-            and self._current_decision.primary_action.item_id is not None
-        ):
-            self._finalize_character()
-            return
-
         cid = self._current_decision.combatant_id
         combatant = combat.get_combatant(cid)
         if combatant is None:
@@ -937,6 +932,37 @@ class CombatScreen(Screen):
             self._update_display()
 
     # --- Display ---
+
+    # Action-type tint colors (subtle distinction in menus)
+    _CHEAT_TINT = "#e6c566"   # gold — cheat actions
+    _BONUS_TINT = "#88ccbb"   # teal — bonus actions
+
+    def _current_action_tint(self) -> str | None:
+        """Return a Rich color for the current action context, or None for normal."""
+        # Phases that are explicitly cheat context
+        if self._phase in (
+            CombatPhase.PLANNING_CHEAT_AP,
+            CombatPhase.PLANNING_CHEAT_ACTION,
+            CombatPhase.PLANNING_CHEAT_TARGET,
+        ):
+            return self._CHEAT_TINT
+        # Phase that is explicitly bonus context
+        if self._phase == CombatPhase.PLANNING_PARTIAL:
+            return self._BONUS_TINT
+        # Ambiguous phases — check whether primary action is already set
+        if self._phase in (
+            CombatPhase.PLANNING_ACTION_MENU,
+            CombatPhase.PLANNING_ABILITY,
+            CombatPhase.PLANNING_TARGET,
+            CombatPhase.PLANNING_ITEM,
+            CombatPhase.PLANNING_ITEM_TARGET,
+        ):
+            if self._current_decision and self._current_decision.primary_action is not None:
+                if self._cheat_actions_remaining > 0:
+                    return self._CHEAT_TINT
+                if self._partial_actions_remaining > 0:
+                    return self._BONUS_TINT
+        return None
 
     def _update_display(self) -> None:
         combat = self.app.combat_state

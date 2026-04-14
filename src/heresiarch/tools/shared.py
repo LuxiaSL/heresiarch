@@ -22,6 +22,7 @@ def compute_effect_damage(
     attacker_str: int,
     attacker_mag: int,
     enemy_def: int,
+    enemy_res: int = 0,
 ) -> int:
     """Compute raw damage for a single effect using game formulas.
 
@@ -35,6 +36,8 @@ def compute_effect_damage(
             ability_base=effect.base_damage,
             ability_coefficient=effect.scaling_coefficient,
             attacker_mag=attacker_mag,
+            target_res=enemy_res,
+            pierce_percent=effect.pierce_percent,
         )
     else:
         # STR scaling (also the default for None stat_scaling)
@@ -52,11 +55,12 @@ def compute_ability_total_damage(
     attacker_str: int,
     attacker_mag: int,
     enemy_def: int,
+    enemy_res: int = 0,
 ) -> int:
     """Compute total raw damage for all effects of an ability (single use, no stacks)."""
     total = 0
     for effect in ability.effects:
-        dmg = compute_effect_damage(effect, attacker_str, attacker_mag, enemy_def)
+        dmg = compute_effect_damage(effect, attacker_str, attacker_mag, enemy_def, enemy_res)
         # Apply chain damage ratio inline (CHAIN reduces per-hit)
         if effect.quality == DamageQuality.CHAIN and dmg > 0:
             dmg = max(1, int(dmg * effect.chain_damage_ratio))

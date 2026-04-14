@@ -99,9 +99,9 @@ class TestInvulnerability:
         assert ability.effects[0].scaling_coefficient == 0.9
 
 
-class TestSplitSlimeDeathSpawn:
-    def test_split_slime_spawns_on_death(self, game_data: GameData) -> None:
-        """Killing a split slime should spawn 2 mini slimes."""
+class TestSplitSlimeMitosis:
+    def test_split_slime_spawns_on_lethal(self, game_data: GameData) -> None:
+        """Killing a split slime should trigger mitosis passive, spawning 2 mini slimes."""
         rng = random.Random(42)
         engine = CombatEngine(
             ability_registry=game_data.abilities,
@@ -132,10 +132,26 @@ class TestSplitSlimeDeathSpawn:
         }
         state = engine.process_round(state, decisions, game_data.enemies)
 
-        # Split slime should be dead
+        # Split slime should be dead (removed by mitosis, not death pipeline)
         split = state.get_combatant("split_slime_0")
         assert split is not None
         assert not split.is_alive
+
+        # Mitosis passive should have triggered (not a DEATH event)
+        passive_events = [
+            e for e in state.log
+            if e.event_type == CombatEventType.PASSIVE_TRIGGERED
+            and e.ability_id == "mitosis"
+        ]
+        assert len(passive_events) == 1
+
+        # No DEATH event for the split slime — mitosis bypasses death
+        death_events = [
+            e for e in state.log
+            if e.event_type == CombatEventType.DEATH
+            and e.target_id == "split_slime_0"
+        ]
+        assert len(death_events) == 0
 
         # 2 mini slimes should have spawned
         spawn_events = [e for e in state.log if e.event_type == CombatEventType.ENEMY_SPAWNED]
@@ -144,14 +160,56 @@ class TestSplitSlimeDeathSpawn:
             assert event.details["template_id"] == "mini_slime"
 
         # Mini slimes should be in the combatant list
-        # (they may have been killed by speed bonus actions from the high-level player)
         minis = [c for c in state.enemy_combatants if c.id.startswith("mini_slime_")]
         assert len(minis) == 2
 
-    def test_split_slime_template_config(self, game_data: GameData) -> None:
+    def test_split_slime_has_mitosis_passive(self, game_data: GameData) -> None:
+        """Split slime should have the mitosis passive ability."""
         template = game_data.enemies["split_slime"]
-        assert template.death_spawn_template_id == "mini_slime"
-        assert template.death_spawn_count == 2
+        assert "mitosis" in template.abilities
+        ability = game_data.abilities["mitosis"]
+        assert ability.effects[0].split_into_templates == ["mini_slime", "mini_slime"]
+
+    def test_mitosis_prevents_on_kill(self, game_data: GameData) -> None:
+        """Mitosis should bypass the death pipeline — no ON_KILL credit."""
+        rng = random.Random(42)
+        engine = CombatEngine(
+            ability_registry=game_data.abilities,
+            item_registry=game_data.items,
+            job_registry=game_data.jobs,
+            rng=rng,
+            enemy_registry=game_data.enemies,
+        )
+
+        template = game_data.enemies["split_slime"]
+        enemy = engine.create_enemy_instance(template, enemy_level=3, instance_id="split_slime_0")
+        enemy = enemy.model_copy(update={"current_hp": 1})
+
+        # Use onmyoji who has momentum (ON_KILL) at higher levels — but for simplicity
+        # just check no DEATH event fires, which is the gate for ON_KILL
+        player = _make_character(game_data, "einherjar", 20, "iron_blade")
+        state = engine.initialize_combat([player], [enemy])
+
+        decisions = {
+            player.id: PlayerTurnDecision(
+                combatant_id=player.id,
+                cheat_survive=CheatSurviveChoice.NORMAL,
+                primary_action=CombatAction(
+                    actor_id=player.id,
+                    ability_id="basic_attack",
+                    target_ids=["split_slime_0"],
+                ),
+            )
+        }
+        state = engine.process_round(state, decisions, game_data.enemies)
+
+        # No death event means ON_KILL never had a chance to fire
+        death_events = [
+            e for e in state.log
+            if e.event_type == CombatEventType.DEATH
+            and e.target_id == "split_slime_0"
+        ]
+        assert len(death_events) == 0
 
 
 class TestBossData:

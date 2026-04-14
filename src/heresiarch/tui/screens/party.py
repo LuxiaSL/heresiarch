@@ -8,6 +8,42 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
+from heresiarch.engine.models.stats import StatBlock
+
+# Stat comparison colors
+_CLR_BETTER = "#44aa44"  # Green — preview stat is higher than current
+_CLR_WORSE = "#cc4444"   # Red — preview stat is lower than current
+_CLR_SAME = "#4488cc"    # Blue — preview stat matches current
+_CLR_DEBUFF = "#cc4444"  # Red — equipment debuff in default mode
+
+
+def _stat_line(
+    name: str,
+    base_val: int,
+    display_val: int,
+    *,
+    compare_to: int | None = None,
+) -> str:
+    """Render a single stat value.
+
+    Default mode (compare_to=None): bold for equipment buffs, red for debuffs.
+    Preview mode (compare_to set): green/red/blue vs current effective.
+    """
+    if compare_to is not None:
+        # Preview mode — color relative to current effective stats
+        if display_val > compare_to:
+            color = _CLR_BETTER
+        elif display_val < compare_to:
+            color = _CLR_WORSE
+        else:
+            color = _CLR_SAME
+        return f"  {name} [bold]{base_val:>3}[/bold] → [bold {color}]{display_val:>3}[/bold {color}]"
+    # Default mode — no color for buffs, red for debuffs
+    if display_val > base_val:
+        return f"  {name} [bold]{base_val:>3}[/bold] → [bold]{display_val:>3}[/bold]"
+    if display_val < base_val:
+        return f"  {name} [bold]{base_val:>3}[/bold] → [bold {_CLR_DEBUFF}]{display_val:>3}[/bold {_CLR_DEBUFF}]"
+    return f"  {name} [bold]{base_val:>3}[/bold]"
 
 
 class PartyScreen(Screen):
@@ -47,6 +83,7 @@ class PartyScreen(Screen):
         super().__init__()
         self._char_ids: list[str] = []
         self._action_keys: list[str] = []  # maps action option index → action key
+        self._current_char_id: str | None = None  # currently displayed character
 
     def compose(self) -> ComposeResult:
         with Vertical(id="char-list-panel"):
@@ -99,7 +136,11 @@ class PartyScreen(Screen):
         if event.option_list.id == "char-option-list":
             idx = event.option_index
             if 0 <= idx < len(self._char_ids):
+                self._current_char_id = self._char_ids[idx]
                 self._show_char_detail(self._char_ids[idx])
+
+        elif event.option_list.id == "action-option-list":
+            self._on_action_highlighted(event.option_index)
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         if event.option_list.id == "char-option-list":
@@ -112,8 +153,18 @@ class PartyScreen(Screen):
             if 0 <= idx < len(self._action_keys):
                 self._handle_action(self._action_keys[idx])
 
-    def _show_char_detail(self, char_id: str) -> None:
-        """Render character stats in the detail panel."""
+    def _show_char_detail(
+        self,
+        char_id: str,
+        preview: tuple[StatBlock, int] | None = None,
+    ) -> None:
+        """Render character stats in the detail panel.
+
+        If *preview* is ``(preview_effective, preview_max_hp)``, stats are
+        colored relative to the character's **current** effective stats
+        (green = better, red = worse, blue = same).  Otherwise the default
+        rendering is used (bold for equipment buffs, red for debuffs).
+        """
         run = self.app.run_state
         if run is None:
             return
@@ -124,35 +175,57 @@ class PartyScreen(Screen):
 
         job = self.app.game_data.jobs.get(char.job_id)
         job_name = job.name if job else "?"
-        max_hp = char.max_hp
 
         base = char.base_stats
         eff = char.effective_stats
+
+        # --- Header ---
         lines: list[str] = [
             f"[bold]{char.name}[/bold] — Lv{char.level} {job_name}",
-            f"  HP: {char.current_hp}/{max_hp}  XP: {char.xp}",
-            "",
-            "[bold]Stats[/bold]  [dim](base → effective)[/dim]",
         ]
 
-        def _stat_line(name: str, base_val: int, eff_val: int) -> str:
-            if eff_val > base_val:
-                return f"  {name} [bold]{base_val:>3}[/bold] → [bold #44aa44]{eff_val:>3}[/bold #44aa44]"
-            elif eff_val < base_val:
-                return f"  {name} [bold]{base_val:>3}[/bold] → [bold #cc4444]{eff_val:>3}[/bold #cc4444]"
-            return f"  {name} [bold]{base_val:>3}[/bold]"
+        # --- HP line (with optional preview) ---
+        if preview:
+            preview_eff, preview_max_hp = preview
+            if preview_max_hp > char.max_hp:
+                hp_color = _CLR_BETTER
+            elif preview_max_hp < char.max_hp:
+                hp_color = _CLR_WORSE
+            else:
+                hp_color = _CLR_SAME
+            lines.append(
+                f"  HP: {char.current_hp}/[bold {hp_color}]{preview_max_hp}[/bold {hp_color}]  XP: {char.xp}"
+            )
+        else:
+            lines.append(f"  HP: {char.current_hp}/{char.max_hp}  XP: {char.xp}")
 
-        stat_parts = [
-            _stat_line("STR", base.STR, eff.STR),
-            _stat_line("MAG", base.MAG, eff.MAG),
-            _stat_line("DEF", base.DEF, eff.DEF),
-            _stat_line("RES", base.RES, eff.RES),
-            _stat_line("SPD", base.SPD, eff.SPD),
-        ]
+        # --- Stats ---
+        if preview:
+            preview_eff, _ = preview
+            lines.append("")
+            lines.append("[bold]Stats[/bold]  [dim](base → preview)[/dim]")
+            stat_parts = [
+                _stat_line("STR", base.STR, preview_eff.STR, compare_to=eff.STR),
+                _stat_line("MAG", base.MAG, preview_eff.MAG, compare_to=eff.MAG),
+                _stat_line("DEF", base.DEF, preview_eff.DEF, compare_to=eff.DEF),
+                _stat_line("RES", base.RES, preview_eff.RES, compare_to=eff.RES),
+                _stat_line("SPD", base.SPD, preview_eff.SPD, compare_to=eff.SPD),
+            ]
+        else:
+            lines.append("")
+            lines.append("[bold]Stats[/bold]  [dim](base → effective)[/dim]")
+            stat_parts = [
+                _stat_line("STR", base.STR, eff.STR),
+                _stat_line("MAG", base.MAG, eff.MAG),
+                _stat_line("DEF", base.DEF, eff.DEF),
+                _stat_line("RES", base.RES, eff.RES),
+                _stat_line("SPD", base.SPD, eff.SPD),
+            ]
         lines.append("  ".join(stat_parts))
+
+        # --- Equipment ---
         lines.append("")
         lines.append("[bold]Equipment[/bold]")
-
         for slot in ("WEAPON", "ARMOR", "ACCESSORY_1", "ACCESSORY_2"):
             item_id = char.equipment.get(slot)
             if item_id:
@@ -162,6 +235,7 @@ class PartyScreen(Screen):
             else:
                 lines.append(f"  {slot}: [dim]empty[/dim]")
 
+        # --- Abilities ---
         lines.append("")
         lines.append("[bold]Abilities[/bold]")
         for aid in char.abilities:
@@ -170,6 +244,7 @@ class PartyScreen(Screen):
             innate = " (innate)" if ability and ability.is_innate else ""
             lines.append(f"  {name}{innate}")
 
+        # --- Growth History (MC only) ---
         if char.is_mc and char.growth_history:
             lines.append("")
             lines.append("[bold]Growth History[/bold]")
@@ -179,6 +254,39 @@ class PartyScreen(Screen):
                 lines.append(f"  {jname}: {levels} levels")
 
         self.query_one("#char-detail", Static).update("\n".join(lines))
+
+    def _on_action_highlighted(self, idx: int) -> None:
+        """When an action is hovered, show equipment preview if applicable."""
+        if idx < 0 or idx >= len(self._action_keys) or self._current_char_id is None:
+            return
+
+        run = self.app.run_state
+        if run is None:
+            return
+
+        char = run.party.characters.get(self._current_char_id)
+        if char is None:
+            return
+
+        key = self._action_keys[idx]
+        parts = key.split(":")
+
+        preview: tuple[StatBlock, int] | None = None
+        try:
+            if parts[0] == "equip":
+                _, _char_id, item_id, slot = parts
+                preview = self.app.game_loop.preview_equipment_change(
+                    char, run.party, slot, item_id,
+                )
+            elif parts[0] == "unequip":
+                _, _char_id, slot = parts
+                preview = self.app.game_loop.preview_equipment_change(
+                    char, run.party, slot, None,
+                )
+        except (ValueError, KeyError):
+            preview = None
+
+        self._show_char_detail(self._current_char_id, preview=preview)
 
     def _show_char_actions(self, char_id: str) -> None:
         """Populate the action OptionList for a selected character."""
@@ -190,6 +298,7 @@ class PartyScreen(Screen):
         if char is None:
             return
 
+        self._current_char_id = char_id
         action_list = self.query_one("#action-option-list", OptionList)
         action_list.clear_options()
         self._action_keys = []
@@ -210,8 +319,9 @@ class PartyScreen(Screen):
         for item_id in run.party.stash:
             item = run.party.items.get(item_id) or self.app.game_data.items.get(item_id)
             if item and not item.is_consumable:
-                slot = item.slot.value if hasattr(item.slot, "value") else str(item.slot)
-                if slot == "ACCESSORY_1":
+                from heresiarch.engine.models.items import EquipType
+
+                if item.equip_type == EquipType.ACCESSORY:
                     # Accessories can go in either slot
                     for acc_slot in ("ACCESSORY_1", "ACCESSORY_2"):
                         current = char.equipment.get(acc_slot)
@@ -221,7 +331,8 @@ class PartyScreen(Screen):
                             current_name = f" (replacing {ci.name})" if ci else ""
                         action_list.add_option(Option(f"Equip {item.name} → {acc_slot}{current_name}"))
                         self._action_keys.append(f"equip:{char_id}:{item_id}:{acc_slot}")
-                else:
+                elif item.equip_type:
+                    slot = item.equip_type.value
                     action_list.add_option(Option(f"Equip {item.name} → {slot}"))
                     self._action_keys.append(f"equip:{char_id}:{item_id}:{slot}")
 

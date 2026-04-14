@@ -34,7 +34,7 @@ from heresiarch.engine.models.abilities import (
 )
 from heresiarch.engine.models.items import (
     ConversionEffect,
-    EquipSlot,
+    EquipType,
     Item,
     ItemScaling,
     ScalingType,
@@ -86,6 +86,7 @@ if TYPE_CHECKING:
 
 _DEFAULT_LEVELS = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80, 90, 99]
 _DEFAULT_ENEMY_DEF = 50
+_DEFAULT_ENEMY_RES = 50
 _OVERSTAY_MODERATE = 5
 _OVERSTAY_GRIND = 20
 
@@ -241,7 +242,7 @@ def build_compare_data(
         )
         if enemy_stats:
             heavy = calculate_physical_damage(15, 0.8, eff.STR, enemy_stats.DEF)
-            bolt = calculate_magical_damage(10, 0.7, eff.MAG)
+            bolt = calculate_magical_damage(10, 0.7, eff.MAG, target_res=enemy_stats.RES)
             partial = max(1, int(calculate_physical_damage(5, 0.5, eff.STR, enemy_stats.DEF) * 0.5))
             snap.heavy_damage = heavy
             snap.bolt_damage = bolt
@@ -264,7 +265,7 @@ def _auto_builds(game_data: GameData, job: JobTemplate) -> dict[str, list[str]]:
         if item.scaling and item.scaling.stat == primary:
             builds[item.name] = [item.id]
             for acc in game_data.items.values():
-                if acc.conversion and acc.slot in (EquipSlot.ACCESSORY_1, EquipSlot.ACCESSORY_2):
+                if acc.conversion and acc.equip_type == EquipType.ACCESSORY:
                     builds[f"{item.name} + {acc.name}"] = [item.id, acc.id]
     return builds
 
@@ -339,6 +340,7 @@ def ability_dpr_data(
     ability_ids: list[str] | None = None,
     levels: list[int] | None = None,
     enemy_def: int = _DEFAULT_ENEMY_DEF,
+    enemy_res: int = _DEFAULT_ENEMY_RES,
 ) -> AbilityDprResult:
     if levels is None:
         levels = [1, 5, 10, 15, 20, 50, 99]
@@ -365,7 +367,7 @@ def ability_dpr_data(
     if basic_attack:
         for lv in levels:
             stats = calculate_stats_at_level(job.growth, lv)
-            ba_damages[lv] = _compute_ability_total_damage(basic_attack, stats.STR, stats.MAG, enemy_def)
+            ba_damages[lv] = _compute_ability_total_damage(basic_attack, stats.STR, stats.MAG, enemy_def, enemy_res)
 
     rows: list[AbilityDprRow] = []
     for ability in abilities:
@@ -383,7 +385,7 @@ def ability_dpr_data(
         ratio_by_level: dict[int, float] = {}
         for lv in levels:
             stats = calculate_stats_at_level(job.growth, lv)
-            dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
+            dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
             damage_by_level[lv] = dmg
             ba_dmg = ba_damages.get(lv, 0)
             if ba_dmg > 0 and ability.id != "basic_attack":
@@ -403,10 +405,10 @@ def ability_dpr_data(
         ))
 
     # Quality breakdowns
-    surge_breakdowns = _surge_breakdowns(job, abilities, levels, enemy_def)
-    dot_breakdowns = _dot_breakdowns(job, abilities, levels, enemy_def)
-    pierce_breakdowns = _pierce_breakdowns(job, abilities, levels, enemy_def)
-    chain_breakdowns = _chain_breakdowns(job, abilities, levels, enemy_def)
+    surge_breakdowns = _surge_breakdowns(job, abilities, levels, enemy_def, enemy_res)
+    dot_breakdowns = _dot_breakdowns(job, abilities, levels, enemy_def, enemy_res)
+    pierce_breakdowns = _pierce_breakdowns(job, abilities, levels, enemy_def, enemy_res)
+    chain_breakdowns = _chain_breakdowns(job, abilities, levels, enemy_def, enemy_res)
 
     return AbilityDprResult(
         job_id=job_id, job_name=job.name, enemy_def=enemy_def, levels=levels,
@@ -418,7 +420,7 @@ def ability_dpr_data(
     )
 
 
-def _surge_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[int], enemy_def: int) -> list[SurgeBreakdown]:
+def _surge_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[int], enemy_def: int, enemy_res: int) -> list[SurgeBreakdown]:
     result: list[SurgeBreakdown] = []
     for ability in abilities:
         surge_eff = next((e for e in ability.effects if e.quality == DamageQuality.SURGE), None)
@@ -428,7 +430,7 @@ def _surge_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[i
         data: list[dict[str, int | float]] = []
         for lv in levels:
             stats = calculate_stats_at_level(job.growth, lv)
-            base_dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
+            base_dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
             row: dict[str, int | float] = {"level": lv, "base": base_dmg}
             for stacks in [1, 2, 3, 4, 5]:
                 row[f"x{stacks}"] = int(base_dmg * (1.0 + bonus * stacks))
@@ -437,7 +439,7 @@ def _surge_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[i
     return result
 
 
-def _dot_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[int], enemy_def: int) -> list[DotBreakdown]:
+def _dot_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[int], enemy_def: int, enemy_res: int) -> list[DotBreakdown]:
     result: list[DotBreakdown] = []
     for ability in abilities:
         dot_eff = next((e for e in ability.effects if e.quality == DamageQuality.DOT), None)
@@ -448,14 +450,14 @@ def _dot_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[int
         data: list[dict[str, int]] = []
         for lv in levels:
             stats = calculate_stats_at_level(job.growth, lv)
-            hit_dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
+            hit_dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
             total = hit_dmg + tick_base * duration
             data.append({"level": lv, "hit_dmg": hit_dmg, "tick": tick_base, "total": total})
         result.append(DotBreakdown(ability_name=ability.name, duration=duration, tick_base=tick_base, data=data))
     return result
 
 
-def _pierce_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[int], enemy_def: int) -> list[PierceBreakdown]:
+def _pierce_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[int], enemy_def: int, enemy_res: int) -> list[PierceBreakdown]:
     result: list[PierceBreakdown] = []
     def_values = [25, 50, 100, 150, 200]
     for ability in abilities:
@@ -483,7 +485,7 @@ def _pierce_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[
     return result
 
 
-def _chain_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[int], enemy_def: int) -> list[ChainBreakdown]:
+def _chain_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[int], enemy_def: int, enemy_res: int) -> list[ChainBreakdown]:
     result: list[ChainBreakdown] = []
     for ability in abilities:
         chain_eff = next((e for e in ability.effects if e.quality == DamageQuality.CHAIN), None)
@@ -493,7 +495,7 @@ def _chain_breakdowns(job: JobTemplate, abilities: list[Ability], levels: list[i
         data: list[dict[str, int]] = []
         for lv in levels:
             stats = calculate_stats_at_level(job.growth, lv)
-            per_hit = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
+            per_hit = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
             row: dict[str, int] = {"level": lv, "per_hit": per_hit}
             for n in [1, 2, 3, 4]:
                 row[f"{n}T"] = per_hit * n
@@ -512,6 +514,7 @@ def ability_compare_data(
     ability_ids: list[str],
     levels: list[int] | None = None,
     enemy_def: int = _DEFAULT_ENEMY_DEF,
+    enemy_res: int = _DEFAULT_ENEMY_RES,
 ) -> AbilityCompareResult:
     if levels is None:
         levels = list(range(1, 100))
@@ -527,7 +530,7 @@ def ability_compare_data(
         stats = calculate_stats_at_level(job.growth, lv)
         damages: dict[str, int] = {}
         for ability in abilities:
-            damages[ability.name] = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
+            damages[ability.name] = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
         best = max(damages, key=lambda n: damages[n])
         points.append(AbilityComparePoint(
             level=lv, str_val=stats.STR, mag_val=stats.MAG, damages=damages, best=best,
@@ -540,8 +543,8 @@ def ability_compare_data(
             a_was_better: bool | None = None
             for lv in range(1, 100):
                 stats = calculate_stats_at_level(job.growth, lv)
-                dmg_a = _compute_ability_total_damage(ability_a, stats.STR, stats.MAG, enemy_def)
-                dmg_b = _compute_ability_total_damage(ability_b, stats.STR, stats.MAG, enemy_def)
+                dmg_a = _compute_ability_total_damage(ability_a, stats.STR, stats.MAG, enemy_def, enemy_res)
+                dmg_b = _compute_ability_total_damage(ability_b, stats.STR, stats.MAG, enemy_def, enemy_res)
                 a_better = dmg_a >= dmg_b
                 if a_was_better is not None and a_better != a_was_better:
                     winner = ability_a.name if a_better else ability_b.name
@@ -567,6 +570,7 @@ def job_ability_curve_data(
     game_data: GameData,
     job_id: str,
     enemy_def: int = _DEFAULT_ENEMY_DEF,
+    enemy_res: int = _DEFAULT_ENEMY_RES,
 ) -> JobCurveResult:
     job = game_data.jobs[job_id]
     unlocks: list[JobCurveUnlock] = []
@@ -574,8 +578,8 @@ def job_ability_curve_data(
 
     def _make_unlock(ability: Ability, lv: int) -> JobCurveUnlock:
         stats = calculate_stats_at_level(job.growth, lv)
-        dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def)
-        ba_dmg = _compute_ability_total_damage(ba, stats.STR, stats.MAG, enemy_def) if ba else 0
+        dmg = _compute_ability_total_damage(ability, stats.STR, stats.MAG, enemy_def, enemy_res)
+        ba_dmg = _compute_ability_total_damage(ba, stats.STR, stats.MAG, enemy_def, enemy_res) if ba else 0
         quality = "---"
         scaling = "---"
         for eff in ability.effects:

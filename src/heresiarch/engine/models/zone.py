@@ -4,6 +4,15 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from heresiarch.engine.models.loot import LootPool
+
+
+class EncounterLootOverride(BaseModel):
+    """Per-encounter override for a specific enemy's loot pools."""
+
+    enemy_template_id: str
+    pools: list[LootPool] = Field(default_factory=list)
+
 
 class EncounterTemplate(BaseModel):
     """Blueprint for one encounter within a zone."""
@@ -13,6 +22,7 @@ class EncounterTemplate(BaseModel):
     is_boss: bool = False
     enemy_level_override: int | None = None  # hardcode enemy level (e.g. for bosses)
     enemy_level_range: tuple[int, int] | None = None  # per-encounter level range override
+    loot_overrides: list[EncounterLootOverride] = Field(default_factory=list)
 
 
 class ZoneUnlockRequirement(BaseModel):
@@ -50,6 +60,7 @@ class ZoneTemplate(BaseModel):
     loot_tier: int = 1
     unlock_requires: list[ZoneUnlockRequirement] = Field(default_factory=list)
     is_final: bool = False
+    next_zone: str | None = None  # cleared boss node becomes travel tile to this zone
     random_spawns: list[RandomSpawn] = Field(default_factory=list)
     enemy_level_range: tuple[int, int] = (0, 0)  # (min, max); (0,0) falls back to zone_level
     is_endless: bool = False

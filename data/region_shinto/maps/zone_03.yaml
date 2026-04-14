@@ -1,0 +1,60 @@
+# Zone path map: Bamboo Thicket
+# 7 encounters (6 regular + 1 boss). Dense bamboo forest, stalks flanking the path.
+#
+# Anchors: exit (start), enc_0..enc_5 (encounters), enc_6 (boss)
+# Path row: 8
+
+map_id: zone_03
+name: "Bamboo Thicket"
+
+art:
+  - "        |||  |||         |||  |||         |||  |||         |||  |||         |||  |||         |||  |||           "
+  - "   |||  |||  |||    |||  |||  |||    |||  |||  |||    |||  |||  |||    |||  |||  |||    |||  |||  |||    ||     "
+  - "   |||   |    |     |||   |    |     |||   |    |     |||   |    |     |||   |    |     |||   |    |     ||     "
+  - "    |              . |              . |              . |              . |              . |              . |     "
+  - "         .    .           .    .           .    .           .    .           .    .           .    .      |     "
+  - "    .         .     .         .     .         .     .         .     .         .     .         .         /|\\   "
+  - "                                                                                                      |||     "
+  - "                                                                                                      |||     "
+  - "------o---------o---------o---------o---------o---------o---------o---------o-----------------------------    "
+  - "                                                                                                      |||     "
+  - "    .         .     .         .     .         .     .         .     .         .     .         .        |||     "
+  - "         .    .           .    .           .    .           .    .           .    .           .    .    \\|/    "
+  - "    |              . |              . |              . |              . |              . |              . |     "
+  - "   |||   |    |     |||   |    |     |||   |    |     |||   |    |     |||   |    |     |||   |    |     ||     "
+  - "   |||  |||  |||    |||  |||  |||    |||  |||  |||    |||  |||  |||    |||  |||  |||    |||  |||  |||    ||     "
+  - "        |||  |||         |||  |||         |||  |||         |||  |||         |||  |||         |||  |||           "
+
+anchors:
+  - id: exit
+    row: 8
+    col: 6
+    anchor_type: exit
+  - id: enc_0
+    row: 8
+    col: 16
+    anchor_type: encounter
+  - id: enc_1
+    row: 8
+    col: 26
+    anchor_type: encounter
+  - id: enc_2
+    row: 8
+    col: 36
+    anchor_type: encounter
+  - id: enc_3
+    row: 8
+    col: 46
+    anchor_type: encounter
+  - id: enc_4
+    row: 8
+    col: 56
+    anchor_type: encounter
+  - id: enc_5
+    row: 8
+    col: 66
+    anchor_type: encounter
+  - id: enc_6
+    row: 8
+    col: 76
+    anchor_type: boss

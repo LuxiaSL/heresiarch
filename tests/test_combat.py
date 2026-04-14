@@ -879,7 +879,7 @@ class TestLeechHealing:
 
         state = combat_engine.initialize_combat([char], [enemy])
 
-        # Note: the current combat engine has a simplified _get_item_leech
-        # that returns 0. This test documents the expected behavior for when
-        # the leech system is fully connected.
-        assert game_data.items["leech_fang"].leech_percent == 0.15
+        # Leech is wired: equipped leech_fang → CombatantState.phys_leech_percent
+        assert game_data.items["leech_fang"].phys_leech_percent == 0.10
+        player = state.player_combatants[0]
+        assert player.phys_leech_percent == 0.10

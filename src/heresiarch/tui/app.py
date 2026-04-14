@@ -6,7 +6,8 @@ import random
 from pathlib import Path
 
 from textual.app import App, ComposeResult
-from textual.widgets import Footer, Header
+from textual.screen import ModalScreen
+from textual.widgets import Footer, Header, Static
 
 from heresiarch.engine.data_loader import GameData, load_all
 from heresiarch.engine.game_loop import GameLoop
@@ -14,6 +15,39 @@ from heresiarch.engine.models.combat_state import CombatState
 from heresiarch.engine.models.enemies import EnemyInstance
 from heresiarch.engine.models.run_state import RunState
 from heresiarch.engine.save_manager import SaveManager
+
+
+class QuitConfirmModal(ModalScreen):
+    """Y/N modal to prevent accidental quits."""
+
+    CSS = """
+    QuitConfirmModal {
+        align: center middle;
+    }
+    #quit-dialog {
+        width: 34;
+        height: 3;
+        border: round #cc4444;
+        background: $surface;
+        padding: 0 2;
+        content-align: center middle;
+    }
+    """
+
+    BINDINGS = [
+        ("y", "confirm", "Yes"),
+        ("n", "cancel", "No"),
+        ("escape", "cancel", "Cancel"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield Static("[bold]Quit game?[/bold]  [dim](y/n)[/dim]", id="quit-dialog")
+
+    def action_confirm(self) -> None:
+        self.app.exit()
+
+    def action_cancel(self) -> None:
+        self.dismiss()
 
 
 class HeresiarchApp(App):
@@ -56,6 +90,10 @@ class HeresiarchApp(App):
         from heresiarch.tui.screens.title import TitleScreen
 
         self.push_screen(TitleScreen())
+
+    def action_quit(self) -> None:
+        """Show confirmation modal instead of quitting immediately."""
+        self.push_screen(QuitConfirmModal())
 
     def action_screenshot(self) -> None:
         """Save an SVG screenshot to screenshots/ for debugging."""

@@ -7,11 +7,10 @@ from pydantic import BaseModel, Field
 from .stats import StatType
 
 
-class EquipSlot(str, Enum):
+class EquipType(str, Enum):
     WEAPON = "WEAPON"
     ARMOR = "ARMOR"
-    ACCESSORY_1 = "ACCESSORY_1"
-    ACCESSORY_2 = "ACCESSORY_2"
+    ACCESSORY = "ACCESSORY"
 
 
 class ScalingType(str, Enum):
@@ -51,7 +50,8 @@ class ConversionEffect(BaseModel):
 class Item(BaseModel):
     id: str
     name: str
-    slot: EquipSlot
+    equip_type: EquipType | None = None  # None = not equippable (consumable)
+    loot_category: str = ""  # grouping tag for loot pools
     tier: int = 1  # Power tier for rarity weighting (1=common, 2=mid, 3=endgame)
     scaling: ItemScaling | None = None
     conversion: ConversionEffect | None = None
@@ -59,7 +59,8 @@ class Item(BaseModel):
     flat_stat_bonus: dict[str, int] = Field(default_factory=dict)
     hp_bonus: int = 0
     extra_def_reduction: float = 0.0
-    leech_percent: float = 0.0
+    phys_leech_percent: float = 0.0
+    mag_leech_percent: float = 0.0
     base_price: int = 0
     is_consumable: bool = False
     heal_amount: int = 0
@@ -67,4 +68,19 @@ class Item(BaseModel):
     # Scroll fields
     teaches_ability_id: str | None = None  # Permanent teach scroll: consumed, grants ability forever
     casts_ability_id: str | None = None  # One-time cast scroll: consumed, performs ability once
+    # Stat tonic: grants a combat-duration stat buff when consumed
+    combat_stat_buff: dict[str, int] = Field(default_factory=dict)
     description: str = ""
+
+    @property
+    def display_type(self) -> str:
+        """Human-readable type for TUI/agent display."""
+        if self.equip_type:
+            return self.equip_type.value.title()
+        _display = {
+            "potion": "Potion",
+            "tonic": "Tonic",
+            "teach_scroll": "Scroll (Teach)",
+            "cast_scroll": "Scroll (Cast)",
+        }
+        return _display.get(self.loot_category, "Consumable")

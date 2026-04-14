@@ -21,7 +21,7 @@ class MapAnchor(BaseModel):
     id: str
     row: int
     col: int
-    anchor_type: Literal["zone", "town", "building", "exit"] = "zone"
+    anchor_type: Literal["zone", "town", "building", "exit", "encounter", "boss"] = "zone"
 
 
 class AsciiMap(BaseModel):

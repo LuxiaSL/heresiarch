@@ -26,6 +26,6 @@ class TownTemplate(BaseModel):
     region: str
     unlock_requires: list[ZoneUnlockRequirement] = Field(default_factory=list)
     shop_tiers: list[TownShopTier] = Field(default_factory=list)
-    lodge_gold_per_hp: float = 3.0
+    lodge_gold_per_hp: float = 0.7
     lodge_floor_base: int = 100
     lodge_floor_per_level: int = 5

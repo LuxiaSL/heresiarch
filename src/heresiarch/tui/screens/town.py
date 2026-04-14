@@ -43,6 +43,8 @@ class TownScreen(Screen):
 
     BINDINGS = [
         ("escape", "leave_town", "Leave Town"),
+        ("p", "party", "Party"),
+        ("i", "inventory", "Inventory"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -215,12 +217,23 @@ class TownScreen(Screen):
 
         self.app.push_screen(TavernScreen())
 
+    def action_party(self) -> None:
+        from heresiarch.tui.screens.party import PartyScreen
+
+        self.app.push_screen(PartyScreen())
+
+    def action_inventory(self) -> None:
+        from heresiarch.tui.screens.inventory import InventoryScreen
+
+        self.app.push_screen(InventoryScreen())
+
     def action_leave_town(self) -> None:
         """Leave town, return to zone select."""
         run = self.app.run_state
         if run is None:
             return
 
+        anchor_id = run.current_town_id
         run = self.app.game_loop.leave_town(run)
         self.app.run_state = run
 
@@ -231,4 +244,4 @@ class TownScreen(Screen):
 
         from heresiarch.tui.screens.zone_select import ZoneSelectScreen
 
-        self.app.switch_screen(ZoneSelectScreen())
+        self.app.switch_screen(ZoneSelectScreen(initial_anchor_id=anchor_id))

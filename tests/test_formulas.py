@@ -120,14 +120,45 @@ class TestPhysicalDamage:
 
 
 class TestMagicalDamage:
-    def test_magical_damage_no_def_reduction(self) -> None:
-        # ability_base=20, coeff=1.0, MAG=75 -> 20 + 75 = 95
+    def test_magical_damage_no_res(self) -> None:
+        # ability_base=20, coeff=1.0, MAG=75, RES=0 -> 20 + 75 = 95
         result = calculate_magical_damage(
             ability_base=20,
             ability_coefficient=1.0,
             attacker_mag=75,
         )
         assert result == 95
+
+    def test_magical_damage_with_res_reduction(self) -> None:
+        # raw = 20 + 75 = 95, reduction = 40 * 0.5 = 20, result = 75
+        result = calculate_magical_damage(
+            ability_base=20,
+            ability_coefficient=1.0,
+            attacker_mag=75,
+            target_res=40,
+        )
+        assert result == 75
+
+    def test_magical_damage_with_pierce(self) -> None:
+        # raw = 20 + 75 = 95, effective_res = 40 * 0.5 * (1 - 0.5) = 10, result = 85
+        result = calculate_magical_damage(
+            ability_base=20,
+            ability_coefficient=1.0,
+            attacker_mag=75,
+            target_res=40,
+            pierce_percent=0.5,
+        )
+        assert result == 85
+
+    def test_magical_damage_floors_at_one(self) -> None:
+        # raw = 5 + 5 = 10, reduction = 100 * 0.5 = 50, result = max(1, -40) = 1
+        result = calculate_magical_damage(
+            ability_base=5,
+            ability_coefficient=1.0,
+            attacker_mag=5,
+            target_res=100,
+        )
+        assert result == 1
 
 
 # ----------------------------------------------------------- RES Gate
@@ -149,7 +180,7 @@ class TestResGate:
 
 
 class TestSpeedBonus:
-    """Speed differential bonus actions: 2x → +1, 4x → +2 (exponential)."""
+    """Speed differential bonus actions: 2x → +1, 8x → +2, 32x → +3 (odd-power exponential)."""
 
     def test_no_bonus_below_threshold(self) -> None:
         assert calculate_speed_bonus(combatant_spd=7, slowest_opponent_spd=5) == 0
@@ -157,11 +188,15 @@ class TestSpeedBonus:
     def test_bonus_at_2x(self) -> None:
         assert calculate_speed_bonus(combatant_spd=10, slowest_opponent_spd=5) == 1
 
-    def test_bonus_at_4x(self) -> None:
-        assert calculate_speed_bonus(combatant_spd=20, slowest_opponent_spd=5) == 2
+    def test_still_1_at_4x(self) -> None:
+        # 4x no longer grants +2 under new scaling
+        assert calculate_speed_bonus(combatant_spd=20, slowest_opponent_spd=5) == 1
 
     def test_bonus_at_8x(self) -> None:
-        assert calculate_speed_bonus(combatant_spd=40, slowest_opponent_spd=5) == 3
+        assert calculate_speed_bonus(combatant_spd=40, slowest_opponent_spd=5) == 2
+
+    def test_bonus_at_32x(self) -> None:
+        assert calculate_speed_bonus(combatant_spd=160, slowest_opponent_spd=5) == 3
 
     def test_berserker_vs_slime(self) -> None:
         # Berserker lv1 SPD 7 vs slime SPD 2: ratio 3.5x → +1

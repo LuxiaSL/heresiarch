@@ -139,10 +139,10 @@
   xp_multiplier: 3.5
   stat_distribution:
     STR: 0.25
-    MAG: 0.10
-    DEF: 0.25
-    RES: 0.10
-    SPD: 0.30
+    MAG: 0.04
+    DEF: 0.28
+    RES: 0.12
+    SPD: 0.31
   base_hp: 25
   hp_per_budget: 2.0
   abilities:
@@ -251,6 +251,7 @@
             weight: 0.35
           - ability_id: taunt
             weight: 0.30
+            use_first: true
 
 # DOT specialist. Searing edge bypasses DEF over time.
 - id: toxic_slime
@@ -295,8 +296,7 @@
   hp_per_budget: 2.0
   abilities:
     - basic_attack
-  death_spawn_template_id: mini_slime
-  death_spawn_count: 2
+    - mitosis
   description: "Wobbles ominously. Splits into two smaller slimes on death."
   action_table:
     base_weights:
@@ -849,13 +849,10 @@
     - stalwart
     - basic_attack
     - regen_enhanced
+    - giga_mitosis
   equipment:
     - iron_blade
     - iron_guard
-  death_spawn_templates:
-    - slime_brute_miniboss
-    - slime_caster_miniboss
-    - slime_tank_miniboss
   description: "The lord of slimes. Regenerates, summons lesser slimes, and splits into three horrors on death."
   action_table:
     # Phase 1 (above 50%): aggressive + summon

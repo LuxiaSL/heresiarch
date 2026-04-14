@@ -1,8 +1,9 @@
 - id: iron_blade
   name: Iron Blade
-  slot: WEAPON
+  equip_type: WEAPON
+  loot_category: weapon
   tier: 1
-  description: "Reliable. Gets you home."
+  description: "Slick with slime."
   base_price: 100
   scaling:
     scaling_type: LINEAR
@@ -12,9 +13,10 @@
 
 - id: runic_edge
   name: Runic Edge
-  slot: WEAPON
+  equip_type: WEAPON
+  loot_category: weapon
   tier: 2
-  description: "Investment piece. Overtakes Iron Blade around Lv30."
+  description: "Torn from the center of a stone."
   base_price: 5000
   scaling:
     scaling_type: SUPERLINEAR
@@ -25,10 +27,11 @@
 
 - id: void_fang
   name: Void Fang
-  slot: WEAPON
+  equip_type: WEAPON
+  loot_category: weapon
   tier: 3
-  description: "Hurts you early. Kills god late. Overtakes Runic Edge around Lv60."
-  base_price: 8000
+  description: "Dropped from between dimensions."
+  base_price: 20000
   scaling:
     scaling_type: DEGENERATE
     stat: STR
@@ -37,9 +40,10 @@
 
 - id: spirit_lens
   name: Spirit Lens
-  slot: WEAPON
+  equip_type: WEAPON
+  loot_category: weapon
   tier: 1
-  description: "Caster equivalent of Iron Blade."
+  description: "Focus your MAG."
   base_price: 100
   scaling:
     scaling_type: LINEAR
@@ -49,9 +53,10 @@
 
 - id: resonance_orb
   name: Resonance Orb
-  slot: WEAPON
+  equip_type: WEAPON
+  loot_category: weapon
   tier: 2
-  description: "Deep MAG commitment. Overtakes Spirit Lens around Lv30."
+  description: "Amplify your MAG."
   base_price: 5000
   scaling:
     scaling_type: QUADRATIC

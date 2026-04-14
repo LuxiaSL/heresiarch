@@ -1,0 +1,60 @@
+# Zone path map: Inner Sanctum
+# 7 encounters (6 regular + 1 boss). Sacred shrine interior with pillars and geometry.
+#
+# Anchors: exit (start), enc_0..enc_5 (encounters), enc_6 (boss)
+# Path row: 8
+
+map_id: zone_06
+name: "Inner Sanctum"
+
+art:
+  - "   _|_    _|_    _|_    _|_    _|_    _|_    _|_    _|_    _|_    _|_    _|_    _|_    _|_    _|_    _|_       "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |       "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |       "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |       "
+  - "   | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | |       "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |       "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |   /   \\     "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |  | =/= |     "
+  - "===o======o======o======o======o======o======o======o======o======o======o======o======o======o====o=====    "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |  | === |     "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |   \\___/     "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |       "
+  - "   | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | | =  | |       "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |       "
+  - "   | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |    | |       "
+  - "   |_|    |_|    |_|    |_|    |_|    |_|    |_|    |_|    |_|    |_|    |_|    |_|    |_|    |_|    |_|       "
+
+anchors:
+  - id: exit
+    row: 8
+    col: 3
+    anchor_type: exit
+  - id: enc_0
+    row: 8
+    col: 17
+    anchor_type: encounter
+  - id: enc_1
+    row: 8
+    col: 31
+    anchor_type: encounter
+  - id: enc_2
+    row: 8
+    col: 45
+    anchor_type: encounter
+  - id: enc_3
+    row: 8
+    col: 59
+    anchor_type: encounter
+  - id: enc_4
+    row: 8
+    col: 73
+    anchor_type: encounter
+  - id: enc_5
+    row: 8
+    col: 87
+    anchor_type: encounter
+  - id: enc_6
+    row: 8
+    col: 99 
+    anchor_type: boss

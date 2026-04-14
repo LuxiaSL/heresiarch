@@ -20,6 +20,7 @@
   region: shinto_slimes
   xp_cap_level: 5
   loot_tier: 1
+  next_zone: zone_02
   unlock_requires: []
   encounters:
     - enemy_templates: [fodder_slime]
@@ -48,6 +49,7 @@
   region: shinto_slimes
   xp_cap_level: 8
   loot_tier: 1
+  next_zone: zone_03
   unlock_requires:
     - type: zone_clear
       zone_id: zone_01
@@ -89,6 +91,7 @@
   xp_cap_level: 12
   loot_tier: 1
   recruitment_chance: 0.10
+  next_zone: zone_04
   unlock_requires:
     - type: zone_clear
       zone_id: zone_02
@@ -129,6 +132,7 @@
   xp_cap_level: 15
   loot_tier: 1
   recruitment_chance: 0.15
+  next_zone: zone_05
   unlock_requires:
     - type: zone_clear
       zone_id: zone_03
@@ -164,6 +168,7 @@
   xp_cap_level: 18
   loot_tier: 2
   recruitment_chance: 0.15
+  next_zone: zone_06
   unlock_requires:
     - type: zone_clear
       zone_id: zone_04
@@ -199,6 +204,7 @@
   xp_cap_level: 22
   loot_tier: 2
   recruitment_chance: 0.15
+  next_zone: zone_07
   unlock_requires:
     - type: zone_clear
       zone_id: zone_05

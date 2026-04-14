@@ -6,11 +6,67 @@ from datetime import datetime
 
 from textual.app import ComposeResult
 from textual.containers import Vertical
-from textual.screen import Screen
+from textual.screen import ModalScreen, Screen
 from textual.widgets import Footer, OptionList, Static
 from textual.widgets.option_list import Option
 
 from heresiarch.engine.save_manager import SaveSlot
+
+
+class DeleteConfirmModal(ModalScreen):
+    """Y/N modal to confirm save deletion."""
+
+    CSS = """
+    DeleteConfirmModal {
+        align: center middle;
+    }
+    #delete-dialog {
+        width: 50;
+        height: 5;
+        border: round #cc4444;
+        background: $surface;
+        padding: 0 2;
+        content-align: center middle;
+    }
+    """
+
+    BINDINGS = [
+        ("y", "confirm", "Yes"),
+        ("n", "cancel", "No"),
+        ("escape", "cancel", "Cancel"),
+    ]
+
+    def __init__(
+        self,
+        run_id: str,
+        slot_id: str | None = None,
+    ) -> None:
+        super().__init__()
+        self.run_id = run_id
+        self.slot_id = slot_id
+
+    def compose(self) -> ComposeResult:
+        if self.slot_id is not None:
+            label = f"[bold red]Delete slot [/bold red][bold]{self.slot_id}[/bold][bold red]?[/bold red]"
+        else:
+            label = f"[bold red]Delete run [/bold red][bold]{self.run_id}[/bold][bold red]?[/bold red]"
+        yield Static(
+            f"{label}\n[dim](y/n)[/dim]",
+            id="delete-dialog",
+        )
+
+    def action_confirm(self) -> None:
+        try:
+            if self.slot_id is not None:
+                self.app.save_manager.delete_slot(self.run_id, self.slot_id)
+            else:
+                self.app.save_manager.delete_run_saves(self.run_id)
+        except Exception:
+            pass  # Silently handle — the refresh will show current state
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
 
 
 def _format_timestamp(iso_str: str) -> str:
@@ -71,6 +127,7 @@ class LoadScreen(Screen):
     BINDINGS = [
         ("escape", "go_back", "Back"),
         ("backspace", "go_back", "Back"),
+        ("d", "delete", "Delete"),
     ]
 
     def __init__(self) -> None:
@@ -89,7 +146,7 @@ class LoadScreen(Screen):
             yield Static("[bold]Load Game[/bold]", id="load-header")
             yield OptionList(id="load-list")
             yield Static("", id="load-detail")
-            yield Static("[dim]Enter to select  |  Esc to go back[/dim]", id="load-hint")
+            yield Static("[dim]Enter to select  |  d to delete  |  Esc to go back[/dim]", id="load-hint")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -279,6 +336,47 @@ class LoadScreen(Screen):
             self._show_runs()
         else:
             self.app.pop_screen()
+
+    def action_delete(self) -> None:
+        """Prompt to delete the highlighted run or slot."""
+        option_list = self.query_one("#load-list", OptionList)
+        idx = option_list.highlighted
+        if idx is None or idx < 0 or idx >= len(self._action_keys):
+            return
+
+        key = self._action_keys[idx]
+        if key.startswith("run:"):
+            run_id = key[4:]
+            self.app.push_screen(
+                DeleteConfirmModal(run_id=run_id),
+                callback=self._on_delete_dismissed,
+            )
+        elif key.startswith("slot:"):
+            parts = key.split(":", 2)
+            run_id, slot_id = parts[1], parts[2]
+            self.app.push_screen(
+                DeleteConfirmModal(run_id=run_id, slot_id=slot_id),
+                callback=self._on_delete_dismissed,
+            )
+
+    def _on_delete_dismissed(self, confirmed: bool) -> None:
+        """Refresh the list after the delete modal closes."""
+        if not confirmed:
+            return
+        # Invalidate the slot cache so we pick up the deletion
+        self._slots_cache.clear()
+        if self._view == "slots":
+            # If the run was fully deleted, go back to runs view
+            run_id = self._current_run_id
+            if run_id and not self._get_slots(run_id):
+                self.query_one("#load-header", Static).update(
+                    "[bold]Load Game[/bold]"
+                )
+                self._show_runs()
+            else:
+                self._show_slots(self._current_run_id)
+        else:
+            self._show_runs()
 
     # ------------------------------------------------------------------
     # Load logic

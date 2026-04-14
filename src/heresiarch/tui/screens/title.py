@@ -152,4 +152,6 @@ class TitleScreen(Screen):
         self.app.push_screen(LoadScreen())
 
     def action_quit_game(self) -> None:
-        self.app.exit()
+        from heresiarch.tui.app import QuitConfirmModal
+
+        self.app.push_screen(QuitConfirmModal())

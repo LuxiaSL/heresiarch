@@ -7,7 +7,7 @@ import pytest
 from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.formulas import calculate_max_hp, calculate_stats_at_level
 from heresiarch.engine.game_loop import GameLoop
-from heresiarch.engine.models.items import EquipSlot
+from heresiarch.engine.models.items import EquipType
 from heresiarch.engine.models.jobs import CharacterInstance, JobTemplate
 from heresiarch.engine.models.party import Party
 from heresiarch.engine.models.run_state import RunState
@@ -353,7 +353,7 @@ class TestRecruitEquipment:
                 # Verify it's actually an accessory from the registry
                 acc_id = candidate.character.equipment["ACCESSORY_1"]
                 item = game_data.items[acc_id]
-                assert item.slot in (EquipSlot.ACCESSORY_1, EquipSlot.ACCESSORY_2)
+                assert item.equip_type == EquipType.ACCESSORY
                 break
         assert found_accessory, "Expected at least one recruit with an accessory in 200 seeds"
 

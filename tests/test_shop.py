@@ -3,7 +3,7 @@
 import pytest
 
 from heresiarch.engine.formulas import calculate_buy_price, calculate_sell_price
-from heresiarch.engine.models.items import EquipSlot, Item
+from heresiarch.engine.models.items import EquipType, Item
 from heresiarch.engine.models.party import Party
 from heresiarch.engine.shop import STASH_LIMIT, ShopEngine, ShopInventory
 
@@ -12,7 +12,7 @@ def _test_item(item_id: str = "test_sword", base_price: int = 100) -> Item:
     return Item(
         id=item_id,
         name="Test Sword",
-        slot=EquipSlot.WEAPON,
+        equip_type=EquipType.WEAPON,
         base_price=base_price,
     )
 
@@ -23,13 +23,13 @@ def _test_registry() -> dict[str, Item]:
         "test_armor": Item(
             id="test_armor",
             name="Test Armor",
-            slot=EquipSlot.ARMOR,
+            equip_type=EquipType.ARMOR,
             base_price=200,
         ),
         "free_item": Item(
             id="free_item",
             name="Free Item",
-            slot=EquipSlot.ACCESSORY_1,
+            equip_type=EquipType.ACCESSORY,
             base_price=0,
         ),
     }

@@ -14,6 +14,7 @@ from typing import Any
 from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.formulas import (
+    RECRUITMENT_PITY_PER_CLEAR,
     calculate_effective_stats,
     calculate_endless_reward_multiplier,
     calculate_levels_gained,
@@ -30,7 +31,7 @@ from heresiarch.engine.models.jobs import AbilityUnlock, CharacterInstance
 from heresiarch.engine.models.loot import LootResult
 from heresiarch.engine.models.party import STASH_LIMIT, Party
 from heresiarch.engine.models.run_state import CombatResult, RunState
-from heresiarch.engine.models.stats import StatType
+from heresiarch.engine.models.stats import StatBlock, StatType
 from heresiarch.engine.models.zone import ZoneState, ZoneTemplate
 
 
@@ -182,17 +183,22 @@ class GameLoop:
             "ability_sources": sources,
         }
 
+    def _resolve_equipped_items(self, char: CharacterInstance, party: Party | None = None) -> list[Item]:
+        """Resolve a character's equipment IDs to Item objects."""
+        equipped: list[Item] = []
+        for item_id in char.equipment.values():
+            if item_id:
+                item = (party.items.get(item_id) if party else None) or self.game_data.items.get(item_id)
+                if item:
+                    equipped.append(item)
+        return equipped
+
     def _recompute_derived(self, char: CharacterInstance, party: Party | None = None) -> CharacterInstance:
         """Recompute effective_stats and max_hp from base_stats + equipment.
 
         Call this after ANY change to base_stats, equipment, or job.
         """
-        equipped: list[Item] = []
-        for slot, item_id in char.equipment.items():
-            if item_id:
-                item = (party.items.get(item_id) if party else None) or self.game_data.items.get(item_id)
-                if item:
-                    equipped.append(item)
+        equipped = self._resolve_equipped_items(char, party)
         effective = calculate_effective_stats(char.base_stats, equipped, [])
         job = self.game_data.jobs.get(char.job_id)
         max_hp = calculate_max_hp(job.base_hp, job.hp_growth, char.level, effective.DEF) if job else 0
@@ -200,6 +206,34 @@ class GameLoop:
             "effective_stats": effective,
             "max_hp": max_hp,
         })
+
+    def preview_equipment_change(
+        self,
+        char: CharacterInstance,
+        party: Party,
+        slot: str,
+        new_item_id: str | None,
+    ) -> tuple[StatBlock, int]:
+        """Simulate an equipment change and return preview stats without mutating state.
+
+        Returns (preview_effective_stats, preview_max_hp).
+        """
+        # Build hypothetical equipment dict
+        hypothetical_equipment = dict(char.equipment)
+        hypothetical_equipment[slot] = new_item_id
+
+        # Resolve items from the hypothetical loadout
+        equipped: list[Item] = []
+        for item_id in hypothetical_equipment.values():
+            if item_id:
+                item = party.items.get(item_id) or self.game_data.items.get(item_id)
+                if item:
+                    equipped.append(item)
+
+        effective = calculate_effective_stats(char.base_stats, equipped, [])
+        job = self.game_data.jobs.get(char.job_id)
+        max_hp = calculate_max_hp(job.base_hp, job.hp_growth, char.level, effective.DEF) if job else 0
+        return effective, max_hp
 
     def new_run(self, run_id: str, mc_name: str, mc_job_id: str) -> RunState:
         """Initialize a new run with MC at level 1."""
@@ -474,8 +508,11 @@ class GameLoop:
         if not zone or zone.recruitment_chance <= 0:
             return run, None
 
+        pity_bonus = len(run.zone_state.encounters_completed) * RECRUITMENT_PITY_PER_CLEAR
+        effective_chance = min(1.0, zone.recruitment_chance + pity_bonus)
+
         roll = self.rng.random()
-        if roll >= zone.recruitment_chance:
+        if roll >= effective_chance:
             return run, None
 
         exclude: list[str] = []
@@ -688,10 +725,18 @@ class GameLoop:
                 defeated_instances.append(instance)
 
         overstay = run.zone_state.overstay_battles if run.zone_state else 0
+        # Pass encounter template for loot overrides
+        enc_template = None
+        if zone and run.zone_state:
+            enc_idx = run.zone_state.current_encounter_index
+            if 0 <= enc_idx < len(zone.encounters):
+                enc_template = zone.encounters[enc_idx]
         loot = self.loot_resolver.resolve_encounter_drops(
             defeated_enemies=defeated_instances,
             party_cha=party.cha,
             overstay_battles=overstay,
+            zone_level=zone.zone_level if zone else 0,
+            encounter_template=enc_template,
         )
 
         # Apply endless zone gold tapering to loot money

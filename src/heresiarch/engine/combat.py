@@ -9,6 +9,7 @@ from typing import Any
 from heresiarch.engine.ai import EnemyAI
 from heresiarch.engine.passive_handlers import PASSIVE_DISPATCH, PassiveContext
 from heresiarch.engine.formulas import (
+    DEF_REDUCTION_RATIO,
     INSIGHT_MULTIPLIER_PER_STACK,
     MARK_DAMAGE_BONUS,
     MAX_ACTION_POINT_BANK,
@@ -107,8 +108,10 @@ class CombatEngine:
             )
             current_hp = char.current_hp if char.current_hp > 0 else max_hp
 
-            # Sum leech percent from all equipped items
-            total_leech = sum(item.leech_percent for item in equipped)
+            # Sum leech percent and DEF reduction bonus from all equipped items
+            total_phys_leech = sum(item.phys_leech_percent for item in equipped)
+            total_mag_leech = sum(item.mag_leech_percent for item in equipped)
+            total_extra_def_reduction = sum(item.extra_def_reduction for item in equipped)
 
             player_combatants.append(
                 CombatantState(
@@ -121,7 +124,9 @@ class CombatEngine:
                     equipment_stats=effective,  # Baseline for status tick rebuilds
                     effective_stats=effective,
                     ability_ids=list(char.abilities),
-                    leech_percent=total_leech,
+                    phys_leech_percent=total_phys_leech,
+                    mag_leech_percent=total_mag_leech,
+                    extra_def_reduction=total_extra_def_reduction,
                 )
             )
 
@@ -160,10 +165,11 @@ class CombatEngine:
     ) -> CombatState:
         """Execute one full round of combat.
 
-        1. Increment round, tick statuses
+        1. Increment round, refresh per-round state
         2. Determine turn order
         3. Process each combatant's turn
-        4. Check win/loss
+        4. Tick status durations (end-of-round)
+        5. Check win/loss
         """
         state.round_number += 1
         state.consumed_items.clear()
@@ -220,6 +226,10 @@ class CombatEngine:
                 if template:
                     state = self._resolve_enemy_turn(state, combatant_id, template)
 
+            state = self._check_combat_end(state)
+
+        if not state.is_finished:
+            state = self._end_of_round_status_tick(state)
             state = self._check_combat_end(state)
 
         return state
@@ -306,6 +316,30 @@ class CombatEngine:
                         details={"source": item.id},
                     )
                 )
+
+        # Stat tonic: apply combat-duration stat buff
+        if item.combat_stat_buff:
+            status = StatusEffect(
+                id=f"tonic_{item.id}",
+                name=f"{item.name} buff",
+                stat_modifiers=dict(item.combat_stat_buff),
+                rounds_remaining=999,  # lasts entire combat
+                source_id=actor_id,
+            )
+            target.active_statuses.append(status)
+            state.log.append(
+                CombatEvent(
+                    event_type=CombatEventType.STATUS_APPLIED,
+                    round_number=state.round_number,
+                    actor_id=actor_id,
+                    target_id=target_id,
+                    details={
+                        "status_id": status.id,
+                        "status_name": status.name,
+                        "modifiers": item.combat_stat_buff,
+                    },
+                )
+            )
 
         return state
 
@@ -446,6 +480,10 @@ class CombatEngine:
         # Cheat/Survive resolution
         match decision.cheat_survive:
             case CheatSurviveChoice.SURVIVE:
+                if combatant.cheat_debt > 0:
+                    combatant.cheat_debt = max(
+                        0, combatant.cheat_debt - CHEAT_DEBT_RECOVERY_PER_TURN
+                    )
                 survive_action = CombatAction(
                     actor_id=combatant_id,
                     ability_id="survive",
@@ -1088,6 +1126,7 @@ class CombatEngine:
         self._phase_damage_redirect(ctx)
         self._phase_damage_reduce(ctx)
         self._phase_damage_apply(ctx)
+        self._phase_split_check(ctx)
         self._phase_post_damage(ctx)
         self._phase_death_check(ctx)
         self._phase_secondary(ctx)
@@ -1202,8 +1241,9 @@ class CombatEngine:
                 )
             )
 
-        # Leech healing
-        total_leech = ctx.effect.leech_percent + self._get_item_leech(ctx.actor, ctx.state)
+        # Leech healing — ability leech applies universally, item leech is type-split
+        item_leech = self._get_item_leech_for_effect(ctx.actor, ctx.effect)
+        total_leech = ctx.effect.leech_percent + item_leech
         if total_leech > 0:
             heal = max(1, int(ctx.damage * total_leech))
             ctx.actor.current_hp = min(ctx.actor.max_hp, ctx.actor.current_hp + heal)
@@ -1217,6 +1257,57 @@ class CombatEngine:
                     details={"source": "leech"},
                 )
             )
+
+    def _phase_split_check(self, ctx: EffectContext) -> None:
+        """Phase 5.5: Split passive — lethal damage triggers mitosis instead of death.
+
+        When an enemy with a split passive (e.g. mitosis) takes lethal damage,
+        spawn replacement enemies and remove the original. Zeroes ctx.damage so
+        Phase 7 (death_check) is skipped entirely — no DEATH event, no ON_KILL.
+        """
+        if ctx.damage <= 0 or ctx.target.current_hp > 0 or ctx.target.is_player:
+            return
+
+        split_ability = self._find_split_passive(ctx.target)
+        if split_ability is None:
+            return
+
+        # Find the effect carrying the split template list
+        split_templates: list[str] = []
+        for effect in split_ability.effects:
+            if effect.split_into_templates:
+                split_templates = effect.split_into_templates
+                break
+
+        if not split_templates:
+            return
+
+        # Spawn each template entry (duplicates in the list spawn multiple copies)
+        for template_id in split_templates:
+            self._spawn_enemies(
+                ctx.state,
+                template_id=template_id,
+                count=1,
+                level=ctx.target.level,
+                event_type=CombatEventType.ENEMY_SPAWNED,
+                summoner_id=ctx.target.id,
+            )
+
+        # Remove original from combat
+        ctx.target.is_alive = False
+        ctx.state.log.append(
+            CombatEvent(
+                event_type=CombatEventType.PASSIVE_TRIGGERED,
+                round_number=ctx.state.round_number,
+                actor_id=ctx.target.id,
+                target_id=ctx.target.id,
+                ability_id=split_ability.id,
+                details={"split_into": split_templates},
+            )
+        )
+
+        # Zero damage so Phase 7 death pipeline is skipped entirely
+        ctx.damage = 0
 
     def _phase_post_damage(self, ctx: EffectContext) -> None:
         """Phase 6: Post-damage reactive passives via dispatch table."""
@@ -1234,7 +1325,8 @@ class CombatEngine:
                 trigger_source=ctx.actor,
                 damage_dealt=ctx.damage,
                 pre_def_damage=ctx.pre_def_damage,
-                item_leech_percent=self._get_item_leech(ctx.target, ctx.state),
+                item_phys_leech_percent=ctx.target.phys_leech_percent,
+                item_mag_leech_percent=ctx.target.mag_leech_percent,
             )
             handler(hit_passive, passive_ctx)
 
@@ -1271,33 +1363,6 @@ class CombatEngine:
                 target_id=ctx.target.id,
             )
         )
-
-        # Death spawning: check if the dead enemy's template has death_spawn fields
-        if not ctx.target.is_player:
-            template_id = ctx.target.id.rsplit("_", 1)[0]
-            template = self.enemy_registry.get(template_id)
-            if template:
-                # Single-template spawn (Split Slime: N copies of one type)
-                if template.death_spawn_template_id and template.death_spawn_count > 0:
-                    self._spawn_enemies(
-                        ctx.state,
-                        template_id=template.death_spawn_template_id,
-                        count=template.death_spawn_count,
-                        level=ctx.target.level,
-                        event_type=CombatEventType.ENEMY_SPAWNED,
-                        summoner_id=ctx.target.id,
-                    )
-                # Multi-template spawn (Giga Slime: one of each different type)
-                if template.death_spawn_templates:
-                    for spawn_tmpl_id in template.death_spawn_templates:
-                        self._spawn_enemies(
-                            ctx.state,
-                            template_id=spawn_tmpl_id,
-                            count=1,
-                            level=ctx.target.level,
-                            event_type=CombatEventType.ENEMY_SPAWNED,
-                            summoner_id=ctx.target.id,
-                        )
 
         # ON_KILL passives (momentum AP refund, etc.)
         if ctx.actor.is_alive:
@@ -1480,6 +1545,11 @@ class CombatEngine:
                 if not (s.grants_taunted and s.source_id == ctx.actor.id)
             ]
             ctx.target.active_statuses.append(taunt_status)
+            # Immediately update taunted_by so TUI sees correct state
+            # between rounds (the full derivation in _tick_statuses only
+            # runs at round start, which is too late for display).
+            if ctx.actor.id not in ctx.target.taunted_by:
+                ctx.target.taunted_by.append(ctx.actor.id)
             ctx.state.log.append(
                 CombatEvent(
                     event_type=CombatEventType.STATUS_APPLIED,
@@ -1504,12 +1574,15 @@ class CombatEngine:
                 attacker_str=actor.effective_stats.STR,
                 target_def=target.effective_stats.DEF,
                 pierce_percent=effect.pierce_percent,
+                def_reduction_ratio=DEF_REDUCTION_RATIO + target.extra_def_reduction,
             )
         elif effect.stat_scaling == StatType.MAG:
             damage = calculate_magical_damage(
                 ability_base=effect.base_damage,
                 ability_coefficient=effect.scaling_coefficient,
                 attacker_mag=actor.effective_stats.MAG,
+                target_res=target.effective_stats.RES,
+                pierce_percent=effect.pierce_percent,
             )
         else:
             damage = max(1, effect.base_damage)
@@ -1521,10 +1594,7 @@ class CombatEngine:
         actor: CombatantState,
         effect: AbilityEffect,
     ) -> int:
-        """Calculate damage ignoring target DEF (for thorns reflection).
-
-        Magical damage has no flat DEF reduction, so pre-DEF == normal.
-        """
+        """Calculate damage ignoring target DEF/RES (for thorns reflection)."""
         if effect.stat_scaling == StatType.STR or effect.stat_scaling is None:
             damage = calculate_physical_damage(
                 ability_base=effect.base_damage,
@@ -1537,6 +1607,7 @@ class CombatEngine:
                 ability_base=effect.base_damage,
                 ability_coefficient=effect.scaling_coefficient,
                 attacker_mag=actor.effective_stats.MAG,
+                target_res=0,
             )
         else:
             damage = max(1, effect.base_damage)
@@ -1634,7 +1705,7 @@ class CombatEngine:
     # --- Status Tick ---
 
     def _tick_statuses(self, state: CombatState) -> CombatState:
-        """Round start: tick DOTs, decrement durations, expire statuses."""
+        """Round start: reset per-round flags, derive state from active statuses."""
         living_ids = {c.id for c in state.all_combatants if c.is_alive}
 
         for combatant in state.all_combatants:
@@ -1652,8 +1723,6 @@ class CombatEngine:
                 s.grants_mark for s in combatant.active_statuses
             )
 
-            self._tick_status_effects(state, combatant)
-
             # Taunted: clean dead sources, derive taunted_by list
             combatant.active_statuses = [
                 s for s in combatant.active_statuses
@@ -1665,6 +1734,33 @@ class CombatEngine:
             ]
 
             self._evaluate_conditional_passives(state, combatant)
+            self._recalculate_combat_stats(combatant)
+
+        return state
+
+    def _end_of_round_status_tick(self, state: CombatState) -> CombatState:
+        """End of round: tick DOTs, decrement durations, expire statuses."""
+        living_ids = {c.id for c in state.all_combatants if c.is_alive}
+
+        for combatant in state.all_combatants:
+            if not combatant.is_alive:
+                continue
+
+            self._tick_status_effects(state, combatant)
+
+            # Re-derive flags after potential expiry
+            combatant.active_statuses = [
+                s for s in combatant.active_statuses
+                if not s.grants_taunted or s.source_id in living_ids
+            ]
+            combatant.taunted_by = [
+                s.source_id for s in combatant.active_statuses
+                if s.grants_taunted
+            ]
+            combatant.is_marked = any(
+                s.grants_mark for s in combatant.active_statuses
+            )
+
             self._recalculate_combat_stats(combatant)
 
         return state
@@ -1875,6 +1971,30 @@ class CombatEngine:
                     return ability
         return None
 
-    def _get_item_leech(self, combatant: CombatantState, state: CombatState) -> float:
-        """Get total leech percent from equipped items."""
-        return combatant.leech_percent
+    def _find_split_passive(self, combatant: CombatantState) -> Ability | None:
+        """Find a passive with split_into_templates effect on the combatant."""
+        for ability_id in combatant.ability_ids:
+            ability = self.abilities.get(ability_id)
+            if ability is None:
+                continue
+            for effect in ability.effects:
+                if effect.split_into_templates:
+                    return ability
+        return None
+
+    def _get_item_leech_for_effect(
+        self, combatant: CombatantState, effect: AbilityEffect,
+    ) -> float:
+        """Get item leech percent matching the effect's damage type."""
+        if effect.stat_scaling == StatType.MAG:
+            return combatant.mag_leech_percent
+        # STR-scaling, None, or any other stat → physical leech
+        return combatant.phys_leech_percent
+
+    def _get_item_leech_for_scaling(
+        self, combatant: CombatantState, stat_scaling: StatType | None,
+    ) -> float:
+        """Get item leech percent for a given stat scaling type."""
+        if stat_scaling == StatType.MAG:
+            return combatant.mag_leech_percent
+        return combatant.phys_leech_percent

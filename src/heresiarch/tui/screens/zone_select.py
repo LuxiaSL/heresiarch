@@ -43,11 +43,14 @@ class ZoneSelectScreen(Screen):
 
     BINDINGS = [
         ("escape", "go_back", "Back"),
+        ("p", "party", "Party"),
+        ("i", "inventory", "Inventory"),
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, initial_anchor_id: str | None = None) -> None:
         super().__init__()
         self._navigable_ids: list[str] = []
+        self._requested_anchor: str | None = initial_anchor_id
 
     def compose(self) -> ComposeResult:
         yield Vertical(id="map-area")
@@ -102,12 +105,15 @@ class ZoneSelectScreen(Screen):
 
         self._navigable_ids = navigable
 
-        # Find a good initial anchor: first non-cleared available, or first navigable
+        # Find a good initial anchor: requested > first available > first navigable
         initial = None
-        for aid in navigable:
-            if anchor_statuses.get(aid) == AnchorStatus.AVAILABLE:
-                initial = aid
-                break
+        if self._requested_anchor and self._requested_anchor in navigable:
+            initial = self._requested_anchor
+        else:
+            for aid in navigable:
+                if anchor_statuses.get(aid) == AnchorStatus.AVAILABLE:
+                    initial = aid
+                    break
         if initial is None and navigable:
             initial = navigable[0]
 
@@ -126,16 +132,42 @@ class ZoneSelectScreen(Screen):
             self._show_anchor_detail(initial)
 
     def _get_region_map(self) -> AsciiMap | None:
-        """Look up the region map for the current run's zones."""
+        """Look up the region map for the player's current frontier.
+
+        Picks the region that has available but not-yet-cleared zones,
+        preferring the furthest region the player has unlocked. Falls
+        back to the first region if everything is cleared.
+        """
         maps = getattr(self.app, "game_data", None)
         if maps is None:
             return None
         region_maps = maps.maps
         run = self.app.run_state
-        if run is not None:
-            for zone in self.app.game_data.zones.values():
-                if zone.region in region_maps:
-                    return region_maps[zone.region]
+        if run is None:
+            if region_maps:
+                return next(iter(region_maps.values()))
+            return None
+
+        # Find regions with available non-cleared zones (the frontier)
+        available = self.app.game_loop.get_available_zones(run)
+        completed = set(run.zones_completed)
+
+        # Prefer the region of the first available zone that isn't cleared
+        for zone in available:
+            if zone.id not in completed and zone.region in region_maps:
+                return region_maps[zone.region]
+
+        # All available zones are cleared — show region of last completed zone
+        # (reversed so we get the most recent)
+        for zone_id in reversed(run.zones_completed):
+            zone = self.app.game_data.zones.get(zone_id)
+            if zone and zone.region in region_maps:
+                return region_maps[zone.region]
+
+        # Fallback: first region found
+        for zone in self.app.game_data.zones.values():
+            if zone.region in region_maps:
+                return region_maps[zone.region]
         if region_maps:
             return next(iter(region_maps.values()))
         return None
@@ -297,6 +329,16 @@ class ZoneSelectScreen(Screen):
         from heresiarch.tui.screens.town import TownScreen
 
         self.app.switch_screen(TownScreen())
+
+    def action_party(self) -> None:
+        from heresiarch.tui.screens.party import PartyScreen
+
+        self.app.push_screen(PartyScreen())
+
+    def action_inventory(self) -> None:
+        from heresiarch.tui.screens.inventory import InventoryScreen
+
+        self.app.push_screen(InventoryScreen())
 
     def action_go_back(self) -> None:
         """Return to title."""

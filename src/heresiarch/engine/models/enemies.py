@@ -27,6 +27,7 @@ class ActionWeight(BaseModel):
     repeat_penalty: float = 0.0  # 0.0 = no penalty, 0.9 = weight * 0.1 per use
     repeat_mode: RepeatMode = RepeatMode.CONSECUTIVE
     recency_bonus: float = 0.0  # weight * (1 + bonus)^rounds_since_last_use
+    use_first: bool = False  # always pick this ability when off cooldown (AI selection, not turn order)
 
 
 class ActionCondition(BaseModel):

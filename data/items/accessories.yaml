@@ -1,44 +1,377 @@
+# ===================================================================
+# Accessories: converters, utility, leech
+# ===================================================================
+#
+# Converters: Read from post-weapon effective stat (L4), write to
+# augmented base (L2) so weapon scaling amplifies the output.
+# All tier 1 use sigmoid {max:25, mid:75, rate:0.03}.
+# Tier 2/3 converters will come with later regions.
+
+# ===================================================================
+# Stat Converters — STR source
+# ===================================================================
+
+- id: str_to_mag_charm
+  name: War Lens
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Cracked but humming. STR feeds MAG."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: STR
+    target_stat: MAG
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: str_to_def_charm
+  name: Bulwark Knot
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Rope that tightens under force. STR feeds DEF."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: STR
+    target_stat: DEF
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: str_to_res_charm
+  name: Ironwill Band
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Won't let go of your wrist. STR feeds RES."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: STR
+    target_stat: RES
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: str_to_spd_charm
+  name: Momentum Sash
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Pulls you forward. STR feeds SPD."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: STR
+    target_stat: SPD
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+# ===================================================================
+# Stat Converters — MAG source
+# ===================================================================
+
+- id: mag_to_str_charm
+  name: Arcane Fist
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Knuckles etched with runes. MAG feeds STR."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: MAG
+    target_stat: STR
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: mag_to_def_charm
+  name: Mana Shell
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Dense with residual energy. MAG feeds DEF."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: MAG
+    target_stat: DEF
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: mag_to_res_charm
+  name: Aether Ward
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Familiar sting, dulled. MAG feeds RES."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: MAG
+    target_stat: RES
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: mag_to_spd_charm
+  name: Flicker Ring
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Blinks in and out of sight. MAG feeds SPD."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: MAG
+    target_stat: SPD
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+# ===================================================================
+# Stat Converters — DEF source
+# ===================================================================
+
 - id: fortress_ring
   name: Fortress Ring
-  slot: ACCESSORY_1
-  tier: 2
-  description: "Martyr becomes a caster? Off-label enabler."
-  base_price: 5000
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Off-label enabler. DEF feeds MAG."
+  base_price: 1000
+  loot_category: converter
   conversion:
     source_stat: DEF
     target_stat: MAG
     scaling_type: SIGMOID
-    sigmoid_max: 800.0
-    sigmoid_mid: 300.0
-    sigmoid_rate: 0.015
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: def_to_str_charm
+  name: Siege Gauntlet
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Heavy enough to swing. DEF feeds STR."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: DEF
+    target_stat: STR
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: def_to_res_charm
+  name: Stalwart Seal
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Worn smooth by devotion. DEF feeds RES."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: DEF
+    target_stat: RES
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: def_to_spd_charm
+  name: Anchor Step
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Plants your feet, frees your legs. DEF feeds SPD."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: DEF
+    target_stat: SPD
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+# ===================================================================
+# Stat Converters — RES source
+# ===================================================================
+
+- id: res_to_str_charm
+  name: Spirit Grip
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Stubbornness made physical. RES feeds STR."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: RES
+    target_stat: STR
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: res_to_mag_charm
+  name: Clarity Prism
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Quiet mind, loud spell. RES feeds MAG."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: RES
+    target_stat: MAG
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: res_to_def_charm
+  name: Meditation Stone
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Warm to the touch, cold to the blade. RES feeds DEF."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: RES
+    target_stat: DEF
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: res_to_spd_charm
+  name: Wind Sutra
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Read it and feel lighter. RES feeds SPD."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: RES
+    target_stat: SPD
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+# ===================================================================
+# Stat Converters — SPD source
+# ===================================================================
 
 - id: gale_brace
   name: Gale Brace
-  slot: ACCESSORY_1
-  tier: 2
-  description: "Berserker's speed feeds damage."
-  base_price: 4000
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Catches the wind, throws the punch. SPD feeds STR."
+  base_price: 1000
+  loot_category: converter
   conversion:
     source_stat: SPD
     target_stat: STR
-    scaling_type: LINEAR
-    linear_coeff: 0.3
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
 
-- id: leech_fang
-  name: Leech Fang
-  slot: ACCESSORY_1
-  tier: 2
-  description: "Sustain. Enables Retaliate loop."
-  base_price: 5000
-  leech_percent: 0.15
+- id: spd_to_mag_charm
+  name: Quicksilver Lens
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Thinks faster than you cast. SPD feeds MAG."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: SPD
+    target_stat: MAG
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: spd_to_def_charm
+  name: Blur Plate
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Hard to hit is hard to hurt. SPD feeds DEF."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: SPD
+    target_stat: DEF
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+- id: spd_to_res_charm
+  name: Evasion Talisman
+  equip_type: ACCESSORY
+  tier: 1
+  description: "Dodges what it can't block. SPD feeds RES."
+  base_price: 1000
+  loot_category: converter
+  conversion:
+    source_stat: SPD
+    target_stat: RES
+    scaling_type: SIGMOID
+    sigmoid_max: 25.0
+    sigmoid_mid: 75.0
+    sigmoid_rate: 0.03
+
+# ===================================================================
+# Utility Accessories
+# ===================================================================
 
 - id: endurance_plate
   name: Endurance Plate
-  slot: ACCESSORY_1
-  tier: 2
-  description: "Defensive accessory. Flat DEF feeds into armor scaling."
-  base_price: 3500
+  equip_type: ACCESSORY
+  loot_category: utility_accessory
+  tier: 1
+  description: "The barkeep has this one handy."
+  base_price: 600
   flat_stat_bonus:
-    DEF: 10
-  extra_def_reduction: 0.5
-  hp_bonus: 20
+    DEF: 20
+  extra_def_reduction: 0.2
+  hp_bonus: 50
+
+- id: resilience_plate
+  name: Resilience Plate
+  equip_type: ACCESSORY
+  loot_category: utility_accessory
+  tier: 1
+  description: "Hums when magic is near."
+  base_price: 600
+  flat_stat_bonus:
+    RES: 20
+  hp_bonus: 50
+
+# ===================================================================
+# Leech Accessories
+# ===================================================================
+
+- id: leech_fang
+  name: Leech Fang
+  equip_type: ACCESSORY
+  loot_category: utility_accessory
+  tier: 1
+  description: "Soak in the blood (?) of your enemies."
+  base_price: 2000
+  phys_leech_percent: 0.10
+
+- id: spell_siphon
+  name: Spell Siphon
+  equip_type: ACCESSORY
+  loot_category: utility_accessory
+  tier: 1
+  description: "Sparks from your MAG rejuvenate."
+  base_price: 2000
+  mag_leech_percent: 0.075

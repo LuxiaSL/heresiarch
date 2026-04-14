@@ -863,7 +863,7 @@ def lookup_item_view(item_id: str, game_data: GameData) -> str:
 
     lines: list[str] = []
     lines.append(f"=== {item.name} ({item_id}) ===")
-    lines.append(f"Slot: {item.slot.value} | Base price: {item.base_price}g")
+    lines.append(f"Type: {item.display_type} | Base price: {item.base_price}g")
     lines.append("")
 
     if item.scaling:
@@ -889,8 +889,10 @@ def lookup_item_view(item_id: str, game_data: GameData) -> str:
                 extras.append(f"{stat} +{val}")
     if item.hp_bonus:
         extras.append(f"HP +{item.hp_bonus}")
-    if item.leech_percent > 0:
-        extras.append(f"Leech {item.leech_percent:.0%}")
+    if item.phys_leech_percent > 0:
+        extras.append(f"Phys Leech {item.phys_leech_percent:.0%}")
+    if item.mag_leech_percent > 0:
+        extras.append(f"Mag Leech {item.mag_leech_percent:.0%}")
     if item.extra_def_reduction > 0:
         extras.append(f"DEF reduction +{item.extra_def_reduction}")
     if item.granted_ability_id:
@@ -955,15 +957,31 @@ def lookup_enemy_view(enemy_id: str, game_data: GameData) -> str:
 
     # Drop table
     dt = game_data.drop_tables.get(enemy_id)
-    if dt:
+    if dt and dt.pools:
         lines.append("")
         lines.append("Drops:")
-        if dt.common_item_ids:
-            lines.append(f"  Common ({dt.common_drop_chance:.0%}): {', '.join(dt.common_item_ids)}")
-        if dt.rare_item_ids:
-            lines.append(f"  Rare ({dt.rare_drop_chance:.0%}): {', '.join(dt.rare_item_ids)}")
-        if dt.equipment_drop_chance > 0:
-            lines.append(f"  Equipment drop: {dt.equipment_drop_chance:.0%}")
+        for i, pool in enumerate(dt.pools):
+            chance_str = f"{pool.chance:.0%}" if pool.chance < 1.0 else "guaranteed"
+            entry_descs: list[str] = []
+            for entry in pool.items:
+                if entry.item_id:
+                    item = game_data.items.get(entry.item_id)
+                    entry_descs.append(item.name if item else entry.item_id)
+                elif entry.category:
+                    tier_str = f" T{entry.tier}" if entry.tier else ""
+                    entry_descs.append(f"[{entry.category}{tier_str}]")
+            for branch in pool.branches:
+                b_entries: list[str] = []
+                for entry in branch.items:
+                    if entry.item_id:
+                        item = game_data.items.get(entry.item_id)
+                        b_entries.append(item.name if item else entry.item_id)
+                    elif entry.category:
+                        tier_str = f" T{entry.tier}" if entry.tier else ""
+                        b_entries.append(f"[{entry.category}{tier_str}]")
+                entry_descs.append(f"{branch.count}x({'/'.join(b_entries)})")
+            items_str = ", ".join(entry_descs) if entry_descs else "?"
+            lines.append(f"  Pool {i+1} ({chance_str}, {pool.count}x): {items_str}")
 
     return "\n".join(lines)
 
@@ -1147,7 +1165,7 @@ def _short_item_desc(item: Item) -> str:
         else:
             parts.append("Consumable")
     else:
-        parts.append(f"{item.slot.value}")
+        parts.append(f"{item.display_type}")
         if item.scaling:
             parts.append(_item_scaling_desc(item))
     return " | ".join(parts) if parts else item.name

@@ -92,6 +92,24 @@ class SaveManager:
             f.unlink()
         run_dir.rmdir()
 
+    def delete_slot(self, run_id: str, slot_id: str) -> None:
+        """Delete a single save slot. Removes the run dir if no slots remain."""
+        run_dir = self.save_dir / run_id
+        save_path = run_dir / f"{slot_id}.json"
+        if save_path.exists():
+            save_path.unlink()
+
+        # Update metadata to remove the slot
+        metadata_path = run_dir / "metadata.json"
+        if metadata_path.exists():
+            slots = json.loads(metadata_path.read_text())
+            slots = [s for s in slots if s.get("slot_id") != slot_id]
+            if slots:
+                metadata_path.write_text(json.dumps(slots, indent=2))
+            else:
+                # No slots left — clean up the whole run directory
+                self.delete_run_saves(run_id)
+
     def autosave(self, run: RunState) -> SaveSlot:
         """Save to the 'autosave' slot for this run."""
         return self.save_run(run, "autosave")

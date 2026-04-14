@@ -39,7 +39,7 @@ from heresiarch.engine.models.combat_state import (
     PlayerTurnDecision,
     StatusEffect,
 )
-from heresiarch.engine.models.items import EquipSlot, Item
+from heresiarch.engine.models.items import EquipType, Item
 from heresiarch.engine.models.jobs import CharacterInstance
 from heresiarch.engine.models.stats import StatBlock
 
@@ -431,7 +431,7 @@ class TestCombatItemUse:
         )
 
     def test_heal_flat_amount(self, combat_engine: CombatEngine):
-        item = Item(id="potion", name="Potion", slot=EquipSlot.WEAPON, is_consumable=True,
+        item = Item(id="potion", name="Potion", equip_type=EquipType.WEAPON, is_consumable=True,
                     heal_amount=30, heal_percent=0.0, base_price=50)
         state = self._make_combat_state(hp=50, max_hp=100)
 
@@ -439,7 +439,7 @@ class TestCombatItemUse:
         assert state.get_combatant("p1").current_hp == 80
 
     def test_heal_percent(self, combat_engine: CombatEngine):
-        item = Item(id="elixir", name="Elixir", slot=EquipSlot.WEAPON, is_consumable=True,
+        item = Item(id="elixir", name="Elixir", equip_type=EquipType.WEAPON, is_consumable=True,
                     heal_amount=0, heal_percent=0.5, base_price=300)
         state = self._make_combat_state(hp=30, max_hp=100)
 
@@ -447,7 +447,7 @@ class TestCombatItemUse:
         assert state.get_combatant("p1").current_hp == 80  # 30 + 50
 
     def test_heal_caps_at_max_hp(self, combat_engine: CombatEngine):
-        item = Item(id="mega_potion", name="Mega Potion", slot=EquipSlot.WEAPON, is_consumable=True,
+        item = Item(id="mega_potion", name="Mega Potion", equip_type=EquipType.WEAPON, is_consumable=True,
                     heal_amount=999, heal_percent=0.0, base_price=999)
         state = self._make_combat_state(hp=90, max_hp=100)
 
@@ -455,7 +455,7 @@ class TestCombatItemUse:
         assert state.get_combatant("p1").current_hp == 100
 
     def test_emits_healing_event(self, combat_engine: CombatEngine):
-        item = Item(id="potion", name="Potion", slot=EquipSlot.WEAPON, is_consumable=True,
+        item = Item(id="potion", name="Potion", equip_type=EquipType.WEAPON, is_consumable=True,
                     heal_amount=20, heal_percent=0.0, base_price=50)
         state = self._make_combat_state(hp=50, max_hp=100)
 
@@ -466,7 +466,7 @@ class TestCombatItemUse:
         assert heal_events[0].details["source"] == "potion"
 
     def test_rejects_non_consumable(self, combat_engine: CombatEngine):
-        item = Item(id="sword", name="Sword", slot=EquipSlot.WEAPON, is_consumable=False,
+        item = Item(id="sword", name="Sword", equip_type=EquipType.WEAPON, is_consumable=False,
                     base_price=100)
         state = self._make_combat_state()
 
@@ -474,7 +474,7 @@ class TestCombatItemUse:
             combat_engine.use_combat_item(state, "p1", "p1", item)
 
     def test_rejects_dead_target(self, combat_engine: CombatEngine):
-        item = Item(id="potion", name="Potion", slot=EquipSlot.WEAPON, is_consumable=True,
+        item = Item(id="potion", name="Potion", equip_type=EquipType.WEAPON, is_consumable=True,
                     heal_amount=30, heal_percent=0.0, base_price=50)
         state = self._make_combat_state(hp=0)
         state.player_combatants[0].is_alive = False
@@ -483,7 +483,7 @@ class TestCombatItemUse:
             combat_engine.use_combat_item(state, "p1", "p1", item)
 
     def test_rejects_invalid_target(self, combat_engine: CombatEngine):
-        item = Item(id="potion", name="Potion", slot=EquipSlot.WEAPON, is_consumable=True,
+        item = Item(id="potion", name="Potion", equip_type=EquipType.WEAPON, is_consumable=True,
                     heal_amount=30, heal_percent=0.0, base_price=50)
         state = self._make_combat_state()
 
@@ -581,7 +581,7 @@ class TestStatusFlagSync:
         assert state.enemy_combatants[0].is_marked is True
 
     def test_taunted_expires_after_final_round(self, combat_engine: CombatEngine):
-        """Taunted status with 1 round remaining expires after tick."""
+        """Taunted status with 1 round remaining expires at end-of-round tick."""
         player = CombatantState(
             id="p1", is_player=True, current_hp=100, max_hp=100,
             base_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
@@ -606,8 +606,12 @@ class TestStatusFlagSync:
             enemy_combatants=[enemy],
         )
 
-        # Status expires during tick, taunted_by derived AFTER tick
+        # Round start: taunt still active, taunted_by derived
         state = combat_engine._tick_statuses(state)
+        assert state.player_combatants[0].taunted_by == ["e1"]
+
+        # End of round: status expires, taunted_by cleared
+        state = combat_engine._end_of_round_status_tick(state)
         assert state.player_combatants[0].taunted_by == []
         assert len(state.player_combatants[0].active_statuses) == 0
 
@@ -679,7 +683,7 @@ class TestAbilitySourceTracking:
         party = run.party.model_copy(update={"stash": new_stash, "items": new_items})
         run = run.model_copy(update={"party": party})
 
-        run = gl.equip_item(run, mc_id, item.id, item.slot.value)
+        run = gl.equip_item(run, mc_id, item.id, item.equip_type.value)
         updated_mc = run.party.characters[mc_id]
 
         # Should have ability_sources populated

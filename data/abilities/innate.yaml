@@ -39,3 +39,26 @@
   description: "Reflects 70% of incoming pre-defense damage back to the attacker. Scales +20% per 10 levels."
   effects:
     - reflect_percent: 0.70
+
+- id: mitosis
+  name: Mitosis
+  category: PASSIVE
+  target: SELF
+  is_innate: true
+  description: "When this enemy takes lethal damage, it splits into two smaller slimes instead of dying."
+  effects:
+    - split_into_templates:
+        - mini_slime
+        - mini_slime
+
+- id: giga_mitosis
+  name: Giga Mitosis
+  category: PASSIVE
+  target: SELF
+  is_innate: true
+  description: "When this boss takes lethal damage, it splits into three archetypal mini-bosses instead of dying."
+  effects:
+    - split_into_templates:
+        - slime_brute_miniboss
+        - slime_caster_miniboss
+        - slime_tank_miniboss

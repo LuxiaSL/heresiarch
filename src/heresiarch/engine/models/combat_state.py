@@ -112,7 +112,9 @@ class CombatantState(BaseModel):
     is_surviving: bool = False
     insight_stacks: int = 0  # onmyoji: empowers next ability cast per stack
     dealt_damage_this_round: bool = False  # tracks whether combatant dealt damage
-    leech_percent: float = 0.0
+    phys_leech_percent: float = 0.0
+    mag_leech_percent: float = 0.0
+    extra_def_reduction: float = 0.0  # bonus DEF reduction ratio from equipment
     level: int = 1
     has_endured: bool = False  # True once Endure has been consumed this fight
     is_marked: bool = False  # Mark: bonus damage from all attackers

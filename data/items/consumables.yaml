@@ -1,91 +1,730 @@
+# ===================================================================
+# Consumables: potions, stat tonics, teach scrolls, cast scrolls
+# ===================================================================
+#
+# Pricing: 10x per tier. Cast scrolls = 20-30% of teach price.
+# Tier 1: basic/early abilities. Tier 2: strong/build-defining.
+# Passives have teach scrolls only (no cast version).
+
+# ===================================================================
+# Healing Potions
+# ===================================================================
+
 - id: minor_potion
   name: Minor Potion
-  slot: ACCESSORY_1
+  tier: 1
   is_consumable: true
+  loot_category: potion
   heal_amount: 50
   base_price: 30
   description: "Restores 50 HP. Tastes like shrine water."
 
 - id: potion
   name: Potion
-  slot: ACCESSORY_1
+  tier: 1
   is_consumable: true
+  loot_category: potion
   heal_amount: 150
   base_price: 90
   description: "Restores 150 HP. Standard issue."
 
 - id: major_potion
   name: Major Potion
-  slot: ACCESSORY_1
+  tier: 2
   is_consumable: true
+  loot_category: potion
   heal_amount: 400
   base_price: 240
   description: "Restores 400 HP. For when it matters."
 
 - id: elixir
   name: Elixir
-  slot: ACCESSORY_1
+  tier: 3
   is_consumable: true
+  loot_category: potion
   heal_percent: 1.0
-  base_price: 300
+  base_price: 2500
   description: "Restores full HP. Liquid regret prevention."
 
-# --- Teach Scrolls (permanent ability grant) ---
+# ===================================================================
+# Stat Tonics — combat-duration stat buffs
+# ===================================================================
 
-- id: scroll_arc_slash
-  name: Scroll of Arc Slash
-  slot: ACCESSORY_1
+# --- Single stat ---
+
+- id: str_tonic
+  name: Might Tonic
+  tier: 1
   is_consumable: true
-  teaches_ability_id: arc_slash
+  loot_category: tonic
+  base_price: 100
+  combat_stat_buff:
+    STR: 20
+  description: "Grants +20 STR for the entire combat."
+
+- id: mag_tonic
+  name: Focus Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 100
+  combat_stat_buff:
+    MAG: 20
+  description: "Grants +20 MAG for the entire combat."
+
+- id: def_tonic
+  name: Iron Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 100
+  combat_stat_buff:
+    DEF: 20
+  description: "Grants +20 DEF for the entire combat."
+
+- id: res_tonic
+  name: Ward Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 100
+  combat_stat_buff:
+    RES: 20
+  description: "Grants +20 RES for the entire combat."
+
+- id: spd_tonic
+  name: Haste Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 100
+  combat_stat_buff:
+    SPD: 20
+  description: "Grants +20 SPD for the entire combat."
+
+# --- Hybrid (all stat pairs) ---
+
+- id: war_tonic
+  name: War Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 125
+  combat_stat_buff:
+    STR: 12
+    MAG: 12
+  description: "Grants +12 STR and +12 MAG for the entire combat."
+
+- id: bastion_tonic
+  name: Bastion Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 125
+  combat_stat_buff:
+    DEF: 12
+    RES: 12
+  description: "Grants +12 DEF and +12 RES for the entire combat."
+
+- id: berserker_tonic
+  name: Berserker Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 125
+  combat_stat_buff:
+    STR: 12
+    SPD: 12
+  description: "Grants +12 STR and +12 SPD for the entire combat."
+
+- id: battlemage_tonic
+  name: Battlemage Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 125
+  combat_stat_buff:
+    MAG: 12
+    SPD: 12
+  description: "Grants +12 MAG and +12 SPD for the entire combat."
+
+- id: crusader_tonic
+  name: Crusader Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 125
+  combat_stat_buff:
+    STR: 12
+    DEF: 12
+  description: "Grants +12 STR and +12 DEF for the entire combat."
+
+- id: paladin_tonic
+  name: Paladin Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 125
+  combat_stat_buff:
+    STR: 12
+    RES: 12
+  description: "Grants +12 STR and +12 RES for the entire combat."
+
+- id: sage_tonic
+  name: Sage Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 125
+  combat_stat_buff:
+    MAG: 12
+    RES: 12
+  description: "Grants +12 MAG and +12 RES for the entire combat."
+
+- id: warden_tonic
+  name: Warden Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 125
+  combat_stat_buff:
+    MAG: 12
+    DEF: 12
+  description: "Grants +12 MAG and +12 DEF for the entire combat."
+
+- id: sentinel_tonic
+  name: Sentinel Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 125
+  combat_stat_buff:
+    DEF: 12
+    SPD: 12
+  description: "Grants +12 DEF and +12 SPD for the entire combat."
+
+- id: mystic_tonic
+  name: Mystic Tonic
+  tier: 1
+  is_consumable: true
+  loot_category: tonic
+  base_price: 125
+  combat_stat_buff:
+    RES: 12
+    SPD: 12
+  description: "Grants +12 RES and +12 SPD for the entire combat."
+
+# ===================================================================
+# Teach Scrolls — Tier 1 (basic combat abilities, ~300-400g)
+# ===================================================================
+
+- id: scroll_bolt
+  name: Scroll of Bolt
+  tier: 1
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: bolt
   base_price: 300
-  description: "Teaches Arc Slash permanently. STR chain attack — hits all enemies."
+  description: "Tattered scroll; if you read closely you can see that it teaches you Bolt."
 
-- id: scroll_drain
-  name: Scroll of Drain
-  slot: ACCESSORY_1
+- id: scroll_heavy_strike
+  name: Scroll of Heavy Strike
+  tier: 1
   is_consumable: true
-  teaches_ability_id: drain
+  loot_category: teach_scroll
+  teaches_ability_id: heavy_strike
+  base_price: 300
+  description: "Tattered scroll; if you read closely you can see that it teaches you Heavy Strike."
+
+- id: scroll_quick_strike
+  name: Scroll of Quick Strike
+  tier: 1
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: quick_strike
   base_price: 350
-  description: "Teaches Drain permanently. MAG leech — heals for damage dealt."
-
-- id: scroll_mark
-  name: Scroll of Mark
-  slot: ACCESSORY_1
-  is_consumable: true
-  teaches_ability_id: mark
-  base_price: 400
-  description: "Teaches Mark permanently. Focus fire enabler — bonus damage on target."
-
-- id: scroll_haste
-  name: Scroll of Haste
-  slot: ACCESSORY_1
-  is_consumable: true
-  teaches_ability_id: haste
-  base_price: 400
-  description: "Teaches Haste permanently. Grant ally massive SPD boost."
+  description: "Tattered scroll; if you read closely you can see that it teaches you Quick Strike."
 
 - id: scroll_searing_edge
   name: Scroll of Searing Edge
-  slot: ACCESSORY_1
+  tier: 1
   is_consumable: true
+  loot_category: teach_scroll
   teaches_ability_id: searing_edge
-  base_price: 250
-  description: "Teaches Searing Edge permanently. STR DOT — bypasses DEF."
+  base_price: 350
+  description: "Tattered scroll; if you read closely you can see that it teaches you Searing Edge."
 
-# --- One-Time Cast Scrolls (single use, performs ability) ---
-
-- id: blast_scroll
-  name: Blast Scroll
-  slot: ACCESSORY_1
+- id: scroll_brace_strike
+  name: Scroll of Brace Strike
+  tier: 1
   is_consumable: true
-  casts_ability_id: void_bolt
-  base_price: 150
-  description: "Casts Void Bolt once. Massive degenerate MAG damage, then gone."
+  loot_category: teach_scroll
+  teaches_ability_id: brace_strike
+  base_price: 350
+  description: "Tattered scroll; if you read closely you can see that it teaches you Brace Strike."
+
+- id: scroll_stalwart
+  name: Scroll of Stalwart
+  tier: 1
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: stalwart
+  base_price: 400
+  description: "Tattered scroll; if you read closely you can see that it teaches you Stalwart."
+
+# ===================================================================
+# Teach Scrolls — Tier 2 (strong/build-defining, ~2000-4000g)
+# ===================================================================
+
+- id: scroll_arc_slash
+  name: Scroll of Arc Slash
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: arc_slash
+  base_price: 2000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Arc Slash."
+
+- id: scroll_drain
+  name: Scroll of Drain
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: drain
+  base_price: 2500
+  description: "Tattered scroll; if you read closely you can see that it teaches you Drain."
+
+- id: scroll_thrust
+  name: Scroll of Thrust
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: thrust
+  base_price: 2000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Thrust."
+
+- id: scroll_hex
+  name: Scroll of Hex
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: hex
+  base_price: 2500
+  description: "Tattered scroll; if you read closely you can see that it teaches you Hex."
+
+- id: scroll_fracture
+  name: Scroll of Fracture
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: fracture
+  base_price: 3000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Fracture."
+
+- id: scroll_double_hit
+  name: Scroll of Double Hit
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: double_hit
+  base_price: 2000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Double Hit."
+
+- id: scroll_crescendo
+  name: Scroll of Crescendo
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: crescendo
+  base_price: 3500
+  description: "Tattered scroll; if you read closely you can see that it teaches you Crescendo."
+
+- id: scroll_reckless_blow
+  name: Scroll of Reckless Blow
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: reckless_blow
+  base_price: 2500
+  description: "Tattered scroll; if you read closely you can see that it teaches you Reckless Blow."
+
+- id: scroll_void_bolt
+  name: Scroll of Void Bolt
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: void_bolt
+  base_price: 4000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Void Bolt."
+
+- id: scroll_mark
+  name: Scroll of Mark
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: mark
+  base_price: 3000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Mark."
+
+- id: scroll_haste
+  name: Scroll of Haste
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: haste
+  base_price: 3000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Haste."
+
+- id: scroll_infuse
+  name: Scroll of Infuse
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: infuse
+  base_price: 2500
+  description: "Tattered scroll; if you read closely you can see that it teaches you Infuse."
+
+- id: scroll_sacrifice
+  name: Scroll of Sacrifice
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: sacrifice
+  base_price: 2000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Sacrifice."
+
+- id: scroll_bestow_split
+  name: Scroll of Bestow Split
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: bestow_split
+  base_price: 3000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Bestow Split."
+
+- id: scroll_taunt
+  name: Scroll of Taunt
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: taunt
+  base_price: 3000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Taunt."
+
+- id: scroll_damage_split
+  name: Scroll of Damage Split
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: damage_split
+  base_price: 3000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Damage Split."
+
+- id: scroll_ward
+  name: Scroll of Ward
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: ward
+  base_price: 2500
+  description: "Tattered scroll; if you read closely you can see that it teaches you Ward."
+
+- id: scroll_anchor
+  name: Scroll of Anchor
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: anchor
+  base_price: 2000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Anchor."
+
+- id: scroll_foresight
+  name: Scroll of Foresight
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: foresight
+  base_price: 2000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Foresight."
+
+# ===================================================================
+# Teach Scrolls — Tier 2 Passives (permanent grants, no cast version)
+# ===================================================================
+
+- id: scroll_endure
+  name: Scroll of Endure
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: endure
+  base_price: 3000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Endure."
+
+- id: scroll_blood_rush
+  name: Scroll of Blood Rush
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: blood_rush
+  base_price: 3000
+  description: "Tattered scroll; if you read closely you can see that it teaches you Blood Rush."
+
+- id: scroll_vengeance
+  name: Scroll of Vengeance
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: vengeance
+  base_price: 2500
+  description: "Tattered scroll; if you read closely you can see that it teaches you Vengeance."
+
+- id: scroll_momentum
+  name: Scroll of Momentum
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: momentum
+  base_price: 3500
+  description: "Tattered scroll; if you read closely you can see that it teaches you Momentum."
+
+- id: scroll_counter_hex
+  name: Scroll of Counter Hex
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: counter_hex
+  base_price: 2500
+  description: "Tattered scroll; if you read closely you can see that it teaches you Counter Hex."
+
+- id: scroll_siphon
+  name: Scroll of Siphon
+  tier: 2
+  is_consumable: true
+  loot_category: teach_scroll
+  teaches_ability_id: siphon
+  base_price: 2500
+  description: "Tattered scroll; if you read closely you can see that it teaches you Siphon."
+
+# ===================================================================
+# Cast Scrolls — Tier 1 (single use, ~50-75g)
+# ===================================================================
+
+- id: cast_bolt
+  name: Bolt Scroll
+  tier: 1
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: bolt
+  base_price: 50
+  description: "Tattered scroll; if you read closely you can see that it casts Bolt."
+
+- id: cast_heavy_strike
+  name: Heavy Strike Scroll
+  tier: 1
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: heavy_strike
+  base_price: 50
+  description: "Tattered scroll; if you read closely you can see that it casts Heavy Strike."
+
+- id: cast_quick_strike
+  name: Quick Strike Scroll
+  tier: 1
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: quick_strike
+  base_price: 60
+  description: "Tattered scroll; if you read closely you can see that it casts Quick Strike."
+
+- id: cast_searing_edge
+  name: Searing Edge Scroll
+  tier: 1
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: searing_edge
+  base_price: 60
+  description: "Tattered scroll; if you read closely you can see that it casts Searing Edge."
+
+- id: cast_brace_strike
+  name: Brace Strike Scroll
+  tier: 1
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: brace_strike
+  base_price: 60
+  description: "Tattered scroll; if you read closely you can see that it casts Brace Strike."
+
+- id: cast_stalwart
+  name: Stalwart Scroll
+  tier: 1
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: stalwart
+  base_price: 75
+  description: "Tattered scroll; if you read closely you can see that it casts Stalwart."
+
+# ===================================================================
+# Cast Scrolls — Tier 2 (single use, ~500-1000g)
+# ===================================================================
+
+- id: cast_arc_slash
+  name: Arc Slash Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: arc_slash
+  base_price: 500
+  description: "Tattered scroll; if you read closely you can see that it casts Arc Slash."
+
+- id: cast_drain
+  name: Drain Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: drain
+  base_price: 600
+  description: "Tattered scroll; if you read closely you can see that it casts Drain."
+
+- id: cast_thrust
+  name: Thrust Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: thrust
+  base_price: 500
+  description: "Tattered scroll; if you read closely you can see that it casts Thrust."
+
+- id: cast_hex
+  name: Hex Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: hex
+  base_price: 600
+  description: "Tattered scroll; if you read closely you can see that it casts Hex."
 
 - id: shatter_scroll
   name: Shatter Scroll
-  slot: ACCESSORY_1
+  tier: 2
   is_consumable: true
+  loot_category: cast_scroll
   casts_ability_id: fracture
-  base_price: 120
-  description: "Casts Fracture once. Shatters enemy DEF for your follow-up."
+  base_price: 700
+  description: "Tattered scroll; if you read closely you can see that it casts Fracture."
+
+- id: cast_double_hit
+  name: Double Hit Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: double_hit
+  base_price: 500
+  description: "Tattered scroll; if you read closely you can see that it casts Double Hit."
+
+- id: cast_crescendo
+  name: Crescendo Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: crescendo
+  base_price: 1000
+  description: "Tattered scroll; if you read closely you can see that it casts Crescendo."
+
+- id: cast_reckless_blow
+  name: Reckless Blow Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: reckless_blow
+  base_price: 600
+  description: "Tattered scroll; if you read closely you can see that it casts Reckless Blow."
+
+- id: blast_scroll
+  name: Blast Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: void_bolt
+  base_price: 900
+  description: "Tattered scroll; if you read closely you can see that it casts Void Bolt."
+
+- id: cast_mark
+  name: Mark Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: mark
+  base_price: 700
+  description: "Tattered scroll; if you read closely you can see that it casts Mark."
+
+- id: cast_haste
+  name: Haste Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: haste
+  base_price: 700
+  description: "Tattered scroll; if you read closely you can see that it casts Haste."
+
+- id: cast_infuse
+  name: Infuse Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: infuse
+  base_price: 600
+  description: "Tattered scroll; if you read closely you can see that it casts Infuse."
+
+- id: cast_sacrifice
+  name: Sacrifice Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: sacrifice
+  base_price: 500
+  description: "Tattered scroll; if you read closely you can see that it casts Sacrifice."
+
+- id: cast_taunt
+  name: Taunt Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: taunt
+  base_price: 700
+  description: "Tattered scroll; if you read closely you can see that it casts Taunt."
+
+- id: cast_ward
+  name: Ward Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: ward
+  base_price: 600
+  description: "Tattered scroll; if you read closely you can see that it casts Ward."
+
+- id: cast_anchor
+  name: Anchor Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: anchor
+  base_price: 500
+  description: "Tattered scroll; if you read closely you can see that it casts Anchor."
+
+- id: cast_bestow_split
+  name: Bestow Split Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: bestow_split
+  base_price: 700
+  description: "Tattered scroll; if you read closely you can see that it casts Bestow Split."
+
+- id: cast_damage_split
+  name: Damage Split Scroll
+  tier: 2
+  is_consumable: true
+  loot_category: cast_scroll
+  casts_ability_id: damage_split
+  base_price: 700
+  description: "Tattered scroll; if you read closely you can see that it casts Damage Split."

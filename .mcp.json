@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "heresiarch": {
+      "command": "/home/luxia/projects/heresiarch/.venv/bin/python",
+      "args": ["-m", "heresiarch.agent"],
+      "cwd": "/home/luxia/projects/heresiarch"
+    }
+  }
+}

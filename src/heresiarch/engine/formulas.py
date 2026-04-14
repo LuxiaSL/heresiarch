@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 HP_COEFFICIENT: float = 1.5
 DEF_REDUCTION_RATIO: float = 0.5
+RES_REDUCTION_RATIO: float = 0.5
 RES_THRESHOLD_RATIO: float = 0.7
 SPEED_BONUS_RATIO: float = 2.0  # 2x faster than slowest opponent → +1 bonus action
 SURVIVE_DAMAGE_REDUCTION: float = 0.5
@@ -34,8 +35,8 @@ CHEAT_DEBT_PER_ACTION: int = 1
 CHEAT_DEBT_RECOVERY_PER_TURN: int = 1
 
 # Combat modifier constants
-FRENZY_FLOOR: float = 2.1  # multiplier at chain 1 (immediate payoff)
-FRENZY_GROWTH: float = 4 / 3  # per-chain exponential growth after floor (~1.333)
+FRENZY_FLOOR: float = 1.5  # multiplier at chain 1 (immediate payoff)
+FRENZY_GROWTH: float = 1.5  # per-chain exponential growth (1.5^chain)
 INSIGHT_MULTIPLIER_PER_STACK: float = 0.4
 THORNS_SCALING_PER_TIER: float = 0.2
 THORNS_TIER_LEVELS: int = 10
@@ -104,13 +105,20 @@ def calculate_magical_damage(
     ability_base: int,
     ability_coefficient: float,
     attacker_mag: int,
+    target_res: int = 0,
     item_scaling_bonus: float = 0.0,
+    pierce_percent: float = 0.0,
+    res_reduction_ratio: float = RES_REDUCTION_RATIO,
 ) -> int:
-    """Calculate magical damage. No flat reduction from RES.
+    """Calculate magical damage after RES reduction.
 
     raw = ability_base + (coefficient * MAG) + item_scaling_bonus
+    reduction = target_RES * res_reduction_ratio * (1 - pierce_percent)
+    damage = max(1, raw - reduction)
     """
-    return max(1, int(ability_base + (ability_coefficient * attacker_mag) + item_scaling_bonus))
+    raw = ability_base + (ability_coefficient * attacker_mag) + item_scaling_bonus
+    effective_res = target_res * res_reduction_ratio * (1.0 - pierce_percent)
+    return max(1, int(raw - effective_res))
 
 
 # --- RES Threshold Gate ---
@@ -139,8 +147,7 @@ def calculate_speed_bonus(
 ) -> int:
     """Bonus actions from outspeeding the slowest opponent.
 
-    bonus = floor(combatant_spd / (slowest_opponent_spd * ratio))
-    At 2x → +1, at 4x → +2, at 8x → +3 (exponential thresholds).
+    At 2x → +1, at 8x → +2, at 32x → +3 (odd-power exponential thresholds).
     Returns 0 if opponent SPD is 0 or ratio not met.
     """
     if slowest_opponent_spd <= 0:
@@ -148,12 +155,13 @@ def calculate_speed_bonus(
     speed_ratio = combatant_spd / slowest_opponent_spd
     if speed_ratio < ratio:
         return 0
-    # Exponential thresholds: +1 at ratio, +2 at ratio^2, +3 at ratio^3
+    # Exponential thresholds: +1 at ratio, +2 at ratio^3, +3 at ratio^5
+    # Each additional bonus costs ratio^2 more (odd powers only).
     bonus = 0
     threshold = ratio
     while speed_ratio >= threshold:
         bonus += 1
-        threshold *= ratio
+        threshold *= ratio ** 2
     return bonus
 
 
@@ -235,7 +243,7 @@ def calculate_frenzy_multiplier(
 ) -> float:
     """Frenzy chain multiplier: floor * growth^(chain-1) for chain >= 1, else 1.0.
 
-    2x at chain 1, ~1.33x compounding per chain after that.
+    1.5^chain: 1.5x at chain 1, 2.25x at chain 2, 3.38x at chain 3.
     """
     if chain <= 0:
         return 1.0
@@ -315,51 +323,75 @@ def calculate_effective_stats(
     equipped_items: list[Item],
     active_buffs: list[StatusEffect],
 ) -> StatBlock:
-    """Compute effective stats by layering:
+    """Compute effective stats by layering (two-pass for converters):
 
-    Layer 1: Base stats (from level-ups)
-    Layer 2: + flat item bonuses → "augmented base" (feeds into Layer 3 scaling)
-    Layer 3: + weapon/item scaling (reads augmented base, adds to effective)
-    Layer 4: + converters (reads current effective, adds to effective)
-             + buff/debuff modifiers
+    Pass 1 — build effective stats without converters:
+      Layer 1: Base stats (from level-ups)
+      Layer 2: + flat item bonuses → "augmented base" (feeds into Layer 3 scaling)
+      Layer 3: + weapon/item scaling (reads augmented base, adds to effective)
 
-    No feedback loops: each layer only reads from layers above it.
+    Converter evaluation — reads from Pass 1 effective (Layer 1+2+3):
+      Converter output writes to augmented base (Layer 2) so that weapon
+      scaling in Pass 2 amplifies the converted stat.
+
+    Pass 2 — re-run weapon scaling with converter-enriched augmented base:
+      Layer 3': + weapon/item scaling (reads augmented base + converter output)
+      Layer 4:  + buff/debuff modifiers
+
+    No circular dependencies: all converters read from the same Pass 1 snapshot.
     """
     data = base_stats.model_dump()
 
     # --- Layer 2: Flat bonuses (e.g., Endurance Plate: DEF +10) ---
-    # These increase the "augmented base" that weapon scaling reads from.
     for item in equipped_items:
         for stat_name, bonus in item.flat_stat_bonus.items():
             if stat_name in data:
                 data[stat_name] += bonus
 
-    # Snapshot augmented base for scaling input
-    augmented_base = StatBlock(**{k: max(0, v) for k, v in data.items()})
+    # Snapshot augmented base for Pass 1 weapon scaling
+    augmented_data = {k: max(0, v) for k, v in data.items()}
 
-    # --- Layer 3: Weapon/item scaling → stat boost ---
-    # Reads from augmented base (Layer 1+2), output added to effective stat.
-    # e.g., Iron Blade (LINEAR STR, base=20, coeff=1.0) at augmented STR 10 → +30 STR
+    # --- Pass 1, Layer 3: Weapon scaling (reads augmented base) ---
+    pass1_data = dict(augmented_data)
     for item in equipped_items:
         if item.scaling:
             stat_key = item.scaling.stat.value
-            if stat_key in data:
-                stat_value = augmented_base.get(StatType(stat_key))
-                scaling_bonus = int(evaluate_item_scaling(item.scaling, stat_value))
-                data[stat_key] += scaling_bonus
+            if stat_key in pass1_data:
+                stat_value = augmented_data.get(stat_key, 0)
+                scaling_bonus = int(evaluate_item_scaling(
+                    item.scaling, stat_value,
+                ))
+                pass1_data[stat_key] += scaling_bonus
 
-    # --- Layer 4: Converters + buffs/debuffs ---
-    # Converters read from current effective (Layer 1+2+3), add to effective.
-    effective_snapshot = StatBlock(**{k: max(0, v) for k, v in data.items()})
-    for item in equipped_items:
-        if item.conversion:
-            source_val = effective_snapshot.get(StatType(item.conversion.source_stat.value))
-            bonus = evaluate_conversion(item.conversion, source_val)
-            target_key = item.conversion.target_stat.value
-            if target_key in data:
-                data[target_key] += bonus
+    # --- Converter evaluation: read Pass 1 effective, write to augmented base ---
+    converters = [item for item in equipped_items if item.conversion]
+    if converters:
+        pass1_snapshot = StatBlock(**{k: max(0, v) for k, v in pass1_data.items()})
+        for item in converters:
+            conv = item.conversion
+            assert conv is not None  # mypy narrow
+            source_val = pass1_snapshot.get(StatType(conv.source_stat.value))
+            bonus = evaluate_conversion(conv, source_val)
+            target_key = conv.target_stat.value
+            if target_key in augmented_data:
+                augmented_data[target_key] += bonus
 
-    # Buffs/debuffs (Layer 4 — temporary combat modifiers)
+        # --- Pass 2, Layer 3': Re-run weapon scaling with enriched augmented base ---
+        data = dict(augmented_data)
+        for item in equipped_items:
+            if item.scaling:
+                stat_key = item.scaling.stat.value
+                if stat_key in data:
+                    stat_value = augmented_data.get(stat_key, 0)
+                    scaling_bonus = int(evaluate_item_scaling(
+                        item.scaling, stat_value,
+                    ))
+                    data[stat_key] += scaling_bonus
+    else:
+        # No converters — Pass 1 is final
+        data = pass1_data
+
+    # --- Layer 4: Buffs/debuffs (temporary combat modifiers) ---
     for buff in active_buffs:
         for stat_name, mod in buff.stat_modifiers.items():
             if stat_name in data:
@@ -494,3 +526,8 @@ def calculate_endless_reward_multiplier(
         return floor_multiplier
     ratio = player_level / zone_max_level
     return max(floor_multiplier, 1.0 - (1.0 - floor_multiplier) * ratio ** 2)
+
+
+# --- Recruitment Pity ---
+
+RECRUITMENT_PITY_PER_CLEAR: float = 0.06  # +6% per encounter cleared without recruit

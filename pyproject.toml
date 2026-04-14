@@ -16,6 +16,7 @@ dependencies = [
 [project.scripts]
 heresiarch = "heresiarch.tui.app:main"
 heresiarch-map = "heresiarch.tools.map_tool:main"
+heresiarch-preview = "heresiarch.tools.map_preview:main"
 heresiarch-dash = "heresiarch.dashboard.__main__:main"
 
 [build-system]

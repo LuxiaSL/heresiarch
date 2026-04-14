@@ -2,10 +2,11 @@
 
 - id: warding_mail
   name: Warding Mail
-  slot: ARMOR
+  equip_type: ARMOR
+  loot_category: armor
   tier: 1
-  description: "Blended protection. Strong early, outpaced by specialists."
-  base_price: 80
+  description: "The merchant insisted upon this."
+  base_price: 200
   flat_stat_bonus:
     DEF: 30
     RES: 30
@@ -15,9 +16,10 @@
 
 - id: iron_guard
   name: Iron Guard
-  slot: ARMOR
+  equip_type: ARMOR
+  loot_category: armor
   tier: 1
-  description: "Reliable. Holds the line."
+  description: "Found on the side of the road."
   base_price: 120
   scaling:
     scaling_type: LINEAR
@@ -27,9 +29,10 @@
 
 - id: runic_plate
   name: Runic Plate
-  slot: ARMOR
+  equip_type: ARMOR
+  loot_category: armor
   tier: 2
-  description: "Investment piece. Overtakes Iron Guard around Lv30."
+  description: "Scavenged from the corpse of a warrior."
   base_price: 5000
   scaling:
     scaling_type: SUPERLINEAR
@@ -40,10 +43,11 @@
 
 - id: void_bastion
   name: Void Bastion
-  slot: ARMOR
+  equip_type: ARMOR
+  loot_category: armor
   tier: 3
-  description: "Hurts you early. Unkillable late. Overtakes Runic Plate around Lv60."
-  base_price: 9000
+  description: "Dropped from between dimensions."
+  base_price: 20000
   scaling:
     scaling_type: DEGENERATE
     stat: DEF
@@ -55,9 +59,10 @@
 
 - id: spirit_mantle
   name: Spirit Mantle
-  slot: ARMOR
+  equip_type: ARMOR
+  loot_category: armor
   tier: 1
-  description: "Wards off secondary effects. Caster baseline."
+  description: "A glowing yet shoddy cloak."
   base_price: 120
   scaling:
     scaling_type: LINEAR
@@ -67,9 +72,10 @@
 
 - id: resonance_veil
   name: Resonance Veil
-  slot: ARMOR
+  equip_type: ARMOR
+  loot_category: armor
   tier: 2
-  description: "Deep RES commitment. Overtakes Spirit Mantle around Lv30."
+  description: "Rends away dissonance."
   base_price: 5000
   scaling:
     scaling_type: QUADRATIC

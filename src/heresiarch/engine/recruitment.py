@@ -13,7 +13,7 @@ from heresiarch.engine.formulas import (
     calculate_max_hp,
     calculate_stats_at_level,
 )
-from heresiarch.engine.models.items import EquipSlot, Item
+from heresiarch.engine.models.items import EquipType, Item
 from heresiarch.engine.models.jobs import CharacterInstance, JobTemplate
 from heresiarch.engine.models.party import Party
 from heresiarch.engine.models.stats import GrowthVector, StatType
@@ -183,18 +183,18 @@ class RecruitmentEngine:
             item = self.item_registry.get(item_id)
             if item is None or item.is_consumable:
                 continue
-            if item.slot == EquipSlot.WEAPON and item.scaling:
+            if item.equip_type == EquipType.WEAPON and item.scaling:
                 if prefers_str and item.scaling.stat == StatType.STR:
                     weapons.append(item_id)
                 elif not prefers_str and item.scaling.stat == StatType.MAG:
                     weapons.append(item_id)
-            elif item.slot == EquipSlot.ARMOR and item.scaling:
+            elif item.equip_type == EquipType.ARMOR and item.scaling:
                 if prefers_def and item.scaling.stat == StatType.DEF:
                     armors.append(item_id)
                 elif not prefers_def and item.scaling.stat == StatType.RES:
                     armors.append(item_id)
             # Flat-stat armor (e.g. warding_mail) matches either affinity
-            elif item.slot == EquipSlot.ARMOR and item.flat_stat_bonus:
+            elif item.equip_type == EquipType.ARMOR and item.flat_stat_bonus:
                 armors.append(item_id)
 
         if weapons and self.rng.random() < RECRUIT_WEAPON_CHANCE:
@@ -206,7 +206,7 @@ class RecruitmentEngine:
         # Accessories: small chance, fully random from all accessories in registry
         accessories = [
             iid for iid, item in self.item_registry.items()
-            if item.slot in (EquipSlot.ACCESSORY_1, EquipSlot.ACCESSORY_2)
+            if item.equip_type == EquipType.ACCESSORY
             and not item.is_consumable
         ]
         if accessories and self.rng.random() < RECRUIT_ACCESSORY_CHANCE:

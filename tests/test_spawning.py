@@ -142,15 +142,17 @@ class TestSummonAbility:
         assert ability.cooldown == 5
 
 
-class TestDeathSpawn:
-    def test_death_spawn_template_loads(self, game_data: GameData) -> None:
-        """Verify death_spawn fields exist on EnemyTemplate model."""
-        from heresiarch.engine.models.enemies import EnemyTemplate
-        # These fields should be available on any template
+class TestMitosisPassive:
+    def test_split_into_templates_field_exists(self, game_data: GameData) -> None:
+        """Verify split_into_templates field exists on AbilityEffect."""
+        ability = game_data.abilities["mitosis"]
+        assert ability.effects[0].split_into_templates == ["mini_slime", "mini_slime"]
+
+    def test_non_splitter_has_no_split_passive(self, game_data: GameData) -> None:
+        """Regular enemies should not have split passives."""
         template = game_data.enemies["fodder_slime"]
-        assert template.death_spawn_template_id == ""
-        assert template.death_spawn_count == 0
-        assert template.death_spawn_templates == []
+        assert "mitosis" not in template.abilities
+        assert "giga_mitosis" not in template.abilities
 
     def test_kodama_elder_data_valid(self, game_data: GameData) -> None:
         """Kodama Elder should load with all expected abilities."""

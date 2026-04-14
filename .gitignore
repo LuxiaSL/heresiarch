@@ -16,3 +16,6 @@ screenshots/
 # Agent state
 agent_saves/
 agent_notes.json
+
+# Design docs
+design/

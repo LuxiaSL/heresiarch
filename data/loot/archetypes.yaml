@@ -1,101 +1,434 @@
-# Loot drop tables per enemy archetype
-# Accessories come ONLY from drops, never shops
-# Equipment drops = items the enemy is carrying (matching their class)
+# ===================================================================
+# Loot Tables — Pool-Based Format
+# ===================================================================
+#
+# Design rules:
+#   - ALL regular enemies: 10% tonic (category-based, uniform random)
+#   - Zone 3+ enemies: additional 15% minor_potion chance
+#   - NO weapon/armor/accessory drops from regular mobs
+#   - Exception: swime has 5% iron_blade
+#   - Summoned/split enemies (kodama, split_slime): no drops
+#   - Bosses Z1-3: guaranteed potion + scroll set + utility accessory
+#   - Bosses Z4-6: guaranteed potion + scroll set + converter
+#   - Giga Slime: splits into fragments; only brute fragment drops items
+
+# ===================================================================
+# Zone 1 — Tutorial Enemies
+# ===================================================================
 
 - enemy_template_id: fodder_slime
   guaranteed_money: true
-  common_item_ids:
-    - minor_potion
-  common_drop_chance: 0.1
-  rare_item_ids: []
-  rare_drop_chance: 0.0
-  equipment_drop_chance: 0.0
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
 
+# Zone 1 Boss: Alpha Slime
 - enemy_template_id: alpha_slime
   guaranteed_money: true
   money_multiplier: 3.5
-  common_item_ids: []
-  common_drop_chance: 0.0
-  rare_item_ids: []
-  rare_drop_chance: 0.0
-  equipment_drop_chance: 0.0
-  guaranteed_pools:
-    # Always drop a potion
-    - items:
-        - { item_id: minor_potion, weight: 3 }
-        - { item_id: potion, weight: 1 }
-    # Always drop a gear piece
-    - items:
-        - { item_id: endurance_plate, weight: 2 }
-        - { item_id: gale_brace, weight: 2 }
-        - { item_id: iron_blade, weight: 3 }
-        - { item_id: scroll_searing_edge, weight: 1 }
+  pools:
+    # Guaranteed potion
+    - chance: 1.0
+      count: 1
+      items:
+        - category: potion
+          tier: 1
+    # Scroll set: 66% → 2x cast scroll, 33% → 1x teach scroll
+    - chance: 1.0
+      branches:
+        - weight: 2
+          count: 2
+          items:
+            - category: cast_scroll
+              tier: 1
+        - weight: 1
+          count: 1
+          items:
+            - category: teach_scroll
+              tier: 1
+    # Weak converter chance (tutorial boss)
+    - chance: 0.15
+      count: 1
+      items:
+        - category: converter
 
+# ===================================================================
+# Zone 2 — Slime Variants
+# ===================================================================
+
+# Random spawn across zones 2-7
 - enemy_template_id: bandit_slime
   guaranteed_money: true
   money_multiplier: 2.0
-  common_item_ids:
-    - minor_potion
-  common_drop_chance: 0.15
-  rare_item_ids: []
-  rare_drop_chance: 0.0
-  equipment_drop_chance: 0.0
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
 
+# Standard slime
+- enemy_template_id: slime
+  guaranteed_money: true
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
+
+# Sword slime — sole exception: 5% iron_blade drop
+- enemy_template_id: swime
+  guaranteed_money: true
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
+    # 5% iron_blade (designer exception)
+    - chance: 0.05
+      count: 1
+      items:
+        - item_id: iron_blade
+
+# Magic slime
+- enemy_template_id: mystic_slime
+  guaranteed_money: true
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
+
+# Tank slime
+- enemy_template_id: chunky_slime
+  guaranteed_money: true
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
+
+# DOT slime
+- enemy_template_id: toxic_slime
+  guaranteed_money: true
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
+
+# Zone 2 Boss: Omega Slime
+- enemy_template_id: omega_slime
+  guaranteed_money: true
+  money_multiplier: 3.5
+  pools:
+    # Guaranteed potion
+    - chance: 1.0
+      count: 1
+      items:
+        - category: potion
+          tier: 1
+    # Scroll set: 66% → 2x cast scroll, 33% → 1x teach scroll
+    - chance: 1.0
+      branches:
+        - weight: 2
+          count: 2
+          items:
+            - category: cast_scroll
+              tier: 1
+        - weight: 1
+          count: 1
+          items:
+            - category: teach_scroll
+              tier: 1
+    # 50% utility accessory
+    - chance: 0.50
+      count: 1
+      items:
+        - category: utility_accessory
+
+# ===================================================================
+# Zone 3+ — Real Archetypes
+# ===================================================================
+
+# Brute: STR heavy hitter
 - enemy_template_id: brute_oni
   guaranteed_money: true
-  common_item_ids:
-    - potion
-    - iron_blade
-    - iron_guard
-  common_drop_chance: 0.2
-  rare_item_ids:
-    - endurance_plate
-    - leech_fang
-    - void_fang
-  rare_drop_chance: 0.05
-  equipment_drop_chance: 0.1
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
+    # 15% minor potion (zone 3+)
+    - chance: 0.15
+      count: 1
+      items:
+        - item_id: minor_potion
 
+# Caster: MAG specialist
 - enemy_template_id: caster_kitsune
   guaranteed_money: true
-  common_item_ids:
-    - potion
-    - spirit_lens
-    - spirit_mantle
-  common_drop_chance: 0.2
-  rare_item_ids:
-    - fortress_ring
-    - resonance_orb
-    - scroll_drain
-    - scroll_mark
-  rare_drop_chance: 0.05
-  equipment_drop_chance: 0.1
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
+    # 15% minor potion (zone 3+)
+    - chance: 0.15
+      count: 1
+      items:
+        - item_id: minor_potion
 
+# Speeder: fast debuffer
 - enemy_template_id: speeder_tengu
   guaranteed_money: true
-  common_item_ids:
-    - potion
-    - iron_blade
-  common_drop_chance: 0.15
-  rare_item_ids:
-    - gale_brace
-    - leech_fang
-    - scroll_arc_slash
-    - blast_scroll
-  rare_drop_chance: 0.05
-  equipment_drop_chance: 0.1
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
+    # 15% minor potion (zone 3+)
+    - chance: 0.15
+      count: 1
+      items:
+        - item_id: minor_potion
 
+# Support: healer/buffer
 - enemy_template_id: support_tanuki
   guaranteed_money: true
-  common_item_ids:
-    - potion
-    - spirit_lens
-    - spirit_mantle
-  common_drop_chance: 0.15
-  rare_item_ids:
-    - fortress_ring
-    - endurance_plate
-    - void_bastion
-    - scroll_haste
-    - shatter_scroll
-  rare_drop_chance: 0.03
-  equipment_drop_chance: 0.05
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
+    # 15% minor potion (zone 3+)
+    - chance: 0.15
+      count: 1
+      items:
+        - item_id: minor_potion
+
+# Zone 3 Boss: Kodama Elder
+- enemy_template_id: kodama_elder
+  guaranteed_money: true
+  money_multiplier: 3.5
+  pools:
+    # Guaranteed potion
+    - chance: 1.0
+      count: 1
+      items:
+        - category: potion
+          tier: 1
+    # Scroll set: 66% → 2x cast scroll, 33% → 1x teach scroll
+    - chance: 1.0
+      branches:
+        - weight: 2
+          count: 2
+          items:
+            - category: cast_scroll
+              tier: 1
+        - weight: 1
+          count: 1
+          items:
+            - category: teach_scroll
+              tier: 1
+    # 50% utility accessory
+    - chance: 0.50
+      count: 1
+      items:
+        - category: utility_accessory
+
+# Kodama: summoned add — no drops
+- enemy_template_id: kodama
+  guaranteed_money: false
+  pools: []
+
+# ===================================================================
+# Zone 4+ — Advanced Enemies
+# ===================================================================
+
+# Split slime: no drops (splits into mini_slime on death)
+- enemy_template_id: split_slime
+  guaranteed_money: false
+  pools: []
+
+# Mini slime: basic drops (spawned by split_slime)
+- enemy_template_id: mini_slime
+  guaranteed_money: true
+  pools:
+    # 5% minor potion
+    - chance: 0.05
+      count: 1
+      items:
+        - item_id: minor_potion
+
+# Leech slime: life-draining caster (zone 5+)
+- enemy_template_id: leech_slime
+  guaranteed_money: true
+  pools:
+    # 10% tonic
+    - chance: 0.10
+      count: 1
+      items:
+        - category: tonic
+    # 15% minor potion (zone 3+)
+    - chance: 0.15
+      count: 1
+      items:
+        - item_id: minor_potion
+
+# Zone 4 Boss: Kappa
+- enemy_template_id: kappa
+  guaranteed_money: true
+  money_multiplier: 4.0
+  pools:
+    # Guaranteed potion
+    - chance: 1.0
+      count: 1
+      items:
+        - category: potion
+          tier: 1
+    # Scroll set: 66% → 2x cast scroll, 33% → 1x teach scroll
+    - chance: 1.0
+      branches:
+        - weight: 2
+          count: 2
+          items:
+            - category: cast_scroll
+              tier: 1
+        - weight: 1
+          count: 1
+          items:
+            - category: teach_scroll
+              tier: 1
+    # 30% converter (zone 4+ bosses)
+    - chance: 0.30
+      count: 1
+      items:
+        - category: converter
+
+# Zone 5 Boss: Tanuki Trickster
+- enemy_template_id: tanuki_boss
+  guaranteed_money: true
+  money_multiplier: 4.0
+  pools:
+    # Guaranteed potion
+    - chance: 1.0
+      count: 1
+      items:
+        - category: potion
+          tier: 1
+    # Scroll set: 66% → 2x cast scroll, 33% → 1x teach scroll
+    - chance: 1.0
+      branches:
+        - weight: 2
+          count: 2
+          items:
+            - category: cast_scroll
+              tier: 1
+        - weight: 1
+          count: 1
+          items:
+            - category: teach_scroll
+              tier: 1
+    # 30% converter (zone 4+ bosses)
+    - chance: 0.30
+      count: 1
+      items:
+        - category: converter
+
+# Zone 6 Boss: Nue
+- enemy_template_id: nue
+  guaranteed_money: true
+  money_multiplier: 4.5
+  pools:
+    # Guaranteed potion
+    - chance: 1.0
+      count: 1
+      items:
+        - category: potion
+          tier: 1
+    # Scroll set: 66% → 2x cast scroll, 33% → 1x teach scroll
+    - chance: 1.0
+      branches:
+        - weight: 2
+          count: 2
+          items:
+            - category: cast_scroll
+              tier: 1
+        - weight: 1
+          count: 1
+          items:
+            - category: teach_scroll
+              tier: 1
+    # 30% converter (zone 4+ bosses)
+    - chance: 0.30
+      count: 1
+      items:
+        - category: converter
+
+# ===================================================================
+# Zone 7 — Giga Slime + Fragments
+# ===================================================================
+
+# Giga Slime: splits on death — no direct drops
+- enemy_template_id: giga_slime
+  guaranteed_money: false
+  pools: []
+
+# Giga Fragment (Brute): the ONE fragment that drops items
+# Designer: "only one boss drops the items; the player can't tell"
+- enemy_template_id: slime_brute_miniboss
+  guaranteed_money: true
+  money_multiplier: 5.0
+  pools:
+    # Guaranteed potion
+    - chance: 1.0
+      count: 1
+      items:
+        - category: potion
+    # Scroll set: 66% → 2x cast scroll, 33% → 1x teach scroll
+    - chance: 1.0
+      branches:
+        - weight: 2
+          count: 2
+          items:
+            - category: cast_scroll
+        - weight: 1
+          count: 1
+          items:
+            - category: teach_scroll
+    # Guaranteed weapon or armor (final boss reward)
+    - chance: 1.0
+      count: 1
+      items:
+        - category: weapon
+        - category: armor
+    # 50% converter
+    - chance: 0.50
+      count: 1
+      items:
+        - category: converter
+
+# Giga Fragment (Caster): gold only
+- enemy_template_id: slime_caster_miniboss
+  guaranteed_money: true
+  money_multiplier: 5.0
+  pools: []
+
+# Giga Fragment (Tank): gold only
+- enemy_template_id: slime_tank_miniboss
+  guaranteed_money: true
+  money_multiplier: 5.0
+  pools: []

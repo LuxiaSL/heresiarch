@@ -35,7 +35,7 @@ def list_items(request: Request) -> dict[str, ItemSummary]:
     gd = request.app.state.game_data
     return {
         iid: ItemSummary(
-            id=i.id, name=i.name, slot=i.slot.value,
+            id=i.id, name=i.name, slot=i.display_type,
             scaling_type=i.scaling.scaling_type.value if i.scaling else None,
             scaling_stat=i.scaling.stat.value if i.scaling else None,
             has_conversion=i.conversion is not None,

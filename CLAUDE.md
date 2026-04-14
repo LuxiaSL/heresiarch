@@ -46,7 +46,8 @@ src/heresiarch/
     summarizer.py      # Engine state → text for LLM consumption
 
   tools/               # CLI balance tools
-    sim.py             # Sweep, DPR, economy, progression sims
+    sim.py             # Sweep, DPR, economy, progression sims + CLI entry
+    combat_sim.py      # General-purpose combat simulator (drives real CombatEngine)
     shared.py          # Shared damage computation helpers (sim + dashboard)
     map_tool.py        # Map authoring/visualization
 
@@ -76,7 +77,7 @@ data/                  # YAML game data
 
 5. **Abilities are data-driven.** AbilityEffect is a flat model with zero-default fields. New effects = new fields, not new subclasses. Passive triggers dispatch through `passive_handlers.py` based on AbilityEffect fields, not ability IDs.
 
-6. **Never check ability IDs in game logic.** Use behavioral flags on AbilityEffect (`survive_lethal`, `applies_taunt`, `applies_mark`, `ap_refund`) and on StatusEffect (`grants_taunt`, `grants_mark`). The YAML data sets these flags.
+6. **Never check ability IDs in game logic.** Use behavioral flags on AbilityEffect (`survive_lethal`, `applies_taunt`, `applies_mark`, `ap_refund`) and on StatusEffect (`grants_taunted`, `grants_mark`). The YAML data sets these flags.
 
 7. **Ability sources are tracked.** `CharacterInstance.ability_sources` maps source names (core/innate/breakpoints/equipment/learned) to ability ID lists. When modifying abilities, update the relevant source — don't reconstruct from scratch.
 
@@ -123,13 +124,58 @@ _phase_utility          → Gold steal, heal, mark, taunt
 - Run combat tests fast: `uv run pytest tests/test_combat.py tests/test_effect_pipeline.py -v`
 - All tests must pass before committing. No skipping hooks.
 
+## Balance Sim Tool
+
+The sim tool (`uv run python -m heresiarch.tools.sim <subcommand>`) has multiple analysis modes. The most powerful is `combat`, which drives the **real CombatEngine** with scripted player decisions.
+
+### `combat` — Full combat simulator
+
+Simulates encounters using the actual engine (all passives, frenzy, thorns, insight, enemy AI fire correctly).
+
+```bash
+# Berserker survive→cheat cycle through zone 1
+uv run python -m heresiarch.tools.sim combat --job berserker --zone zone_01 --cycle "S,S,S,C3"
+
+# Onmyoji insight→bolt cycle against specific enemies
+uv run python -m heresiarch.tools.sim combat --job onmyoji --level 5 --enemy fodder_slime --enemy-level 3 --cycle "S,S,A:bolt"
+
+# With potion between encounters 1 and 2
+uv run python -m heresiarch.tools.sim combat --job berserker --zone zone_01 --cycle "S,S,S,C3" --between "2:minor_potion"
+
+# With equipment
+uv run python -m heresiarch.tools.sim combat --job einherjar --level 10 --zone zone_03 --cycle "A:heavy_strike" --equipment "WEAPON=iron_blade"
+```
+
+**Cycle DSL tokens** (comma-separated, case-insensitive):
+- `S` — Survive (halve damage, bank 1 AP)
+- `A` or `A:ability_id` — Normal turn with ability (default: basic_attack)
+- `C{N}` or `C{N}:ability_id` — Cheat spending N AP (1 primary + N extra attacks)
+- `I:item_id` — Use consumable mid-combat
+
+**Output shows per-round**: player HP, AP banked, cheat debt, insight stacks, enemy HP, damage events (frenzy chains, thorns, retaliate, healing).
+
+### Other sim subcommands
+
+- `xp-curve` — XP/level at each zone exit (rush/moderate/grind)
+- `progression` — Full run: level, gold, weapons, abilities per zone
+- `ability-dpr` — DPR tables for offensive abilities across levels
+- `ability-compare` — Side-by-side ability comparison with crossover
+- `economy` — Gold drops, overstay decay, pilfer analysis
+- `enemy-stats` — Enemy stat tables at each zone level
+- `shop-pricing` — Shop affordability check
+- `lodge-tuning` — Lodge rest cost analysis
+
+### Architecture note
+
+`combat` lives in `tools/combat_sim.py` (CombatSimulator class). It builds real `CharacterInstance` + `EnemyInstance` objects and calls `CombatEngine.initialize_combat()` / `process_round()` directly. This means any engine change (new passive, formula tweak, new mechanic) is automatically reflected in sim output — no reimplementation needed.
+
 ## Common Pitfalls
 
 - **Don't put game logic in TUI or agent.** If you're computing damage, checking ability conditions, or modifying RunState outside the engine, stop. Add an engine method.
 - **Don't hardcode ability IDs.** Use behavioral flags on AbilityEffect/StatusEffect. The dispatch table in passive_handlers.py handles the rest.
 - **Don't reconstruct ability lists from scratch.** Use `ability_sources` and update only the relevant source key.
 - **`STASH_LIMIT` lives in `models/party.py`.** Don't redefine it.
-- **Status flags (`is_taunting`, `is_marked`) are derived from StatusEffect fields** (`grants_taunt`, `grants_mark`) during `_tick_statuses`. Don't string-match status IDs.
+- **Status flags (`taunted_by`, `is_marked`) are derived from StatusEffect fields** (`grants_taunted`, `grants_mark`) during `_tick_statuses`. Don't string-match status IDs.
 - **Retaliate uses its own effect data** (`base_damage: 5, scaling_coefficient: 0.5`), not a basic_attack lookup.
 
 ## Design Docs

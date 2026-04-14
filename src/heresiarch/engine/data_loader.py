@@ -12,7 +12,7 @@ from heresiarch.engine.models.abilities import Ability
 from heresiarch.engine.models.enemies import EnemyTemplate
 from heresiarch.engine.models.items import Item
 from heresiarch.engine.models.jobs import JobTemplate
-from heresiarch.engine.models.loot import DropTable
+from heresiarch.engine.models.loot import EnemyLootTable
 from heresiarch.engine.models.region_map import AsciiMap
 from heresiarch.engine.models.town import TownTemplate
 from heresiarch.engine.models.zone import ZoneTemplate
@@ -25,7 +25,7 @@ class GameData(BaseModel):
     abilities: dict[str, Ability]
     items: dict[str, Item]
     enemies: dict[str, EnemyTemplate]
-    drop_tables: dict[str, DropTable] = {}
+    drop_tables: dict[str, EnemyLootTable] = {}
     towns: dict[str, TownTemplate] = {}
     zones: dict[str, ZoneTemplate] = {}
     maps: dict[str, AsciiMap] = {}
@@ -62,22 +62,24 @@ class GameData(BaseModel):
                 errors.append(
                     f"Drop table '{dt_id}' references unknown enemy '{dt.enemy_template_id}'"
                 )
-            for item_id in dt.common_item_ids:
-                if item_id not in self.items:
-                    errors.append(
-                        f"Drop table '{dt_id}' references unknown common item '{item_id}'"
-                    )
-            for item_id in dt.rare_item_ids:
-                if item_id not in self.items:
-                    errors.append(
-                        f"Drop table '{dt_id}' references unknown rare item '{item_id}'"
-                    )
-            for pool_idx, pool in enumerate(dt.guaranteed_pools):
-                for entry in pool.items:
-                    if entry.item_id not in self.items:
+            for pool_idx, pool in enumerate(dt.pools):
+                all_entries = list(pool.items)
+                for branch in pool.branches:
+                    all_entries.extend(branch.items)
+                valid_categories = {
+                    item.loot_category for item in self.items.values()
+                    if item.loot_category
+                }
+                for entry in all_entries:
+                    if entry.item_id and entry.item_id not in self.items:
                         errors.append(
-                            f"Drop table '{dt_id}' guaranteed pool {pool_idx} "
+                            f"Drop table '{dt_id}' pool {pool_idx} "
                             f"references unknown item '{entry.item_id}'"
+                        )
+                    if entry.category and entry.category not in valid_categories:
+                        errors.append(
+                            f"Drop table '{dt_id}' pool {pool_idx} "
+                            f"references unknown category '{entry.category}'"
                         )
 
         for zone_id, zone in self.zones.items():
@@ -92,6 +94,10 @@ class GameData(BaseModel):
                     errors.append(
                         f"Zone '{zone_id}' random_spawn references unknown enemy '{spawn.enemy_template_id}'"
                     )
+            if zone.next_zone and zone.next_zone not in self.zones:
+                errors.append(
+                    f"Zone '{zone_id}' next_zone references unknown zone '{zone.next_zone}'"
+                )
 
         # Validate scroll ability references
         for item_id, item in self.items.items():
@@ -224,13 +230,13 @@ def load_enemies(directory: Path) -> dict[str, EnemyTemplate]:
     return enemies
 
 
-def load_drop_tables(directory: Path) -> dict[str, DropTable]:
+def load_drop_tables(directory: Path) -> dict[str, EnemyLootTable]:
     """Load all drop table YAML files from a directory.
 
     Each file can contain a single drop table dict or a list.
-    Returns enemy_template_id -> DropTable.
+    Returns enemy_template_id -> EnemyLootTable.
     """
-    tables: dict[str, DropTable] = {}
+    tables: dict[str, EnemyLootTable] = {}
     if not directory.exists():
         return tables
 
@@ -241,7 +247,7 @@ def load_drop_tables(directory: Path) -> dict[str, DropTable]:
 
         items_list: list[dict[str, Any]] = data if isinstance(data, list) else [data]
         for item_data in items_list:
-            dt = DropTable(**item_data)
+            dt = EnemyLootTable(**item_data)
             tables[dt.enemy_template_id] = dt
 
     return tables

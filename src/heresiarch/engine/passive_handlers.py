@@ -52,7 +52,8 @@ class PassiveContext:
     trigger_source: CombatantState | None = None
     damage_dealt: int = 0
     pre_def_damage: int = 0  # damage before target DEF reduction (for thorns)
-    item_leech_percent: float = 0.0  # owner's total item leech
+    item_phys_leech_percent: float = 0.0  # owner's physical item leech
+    item_mag_leech_percent: float = 0.0   # owner's magical item leech
 
 
 PassiveHandler = Callable[[Ability, PassiveContext], None]
@@ -88,6 +89,7 @@ def handle_on_hit_received(passive: Ability, ctx: PassiveContext) -> None:
                     ability_base=effect.base_damage,
                     ability_coefficient=effect.scaling_coefficient,
                     attacker_mag=ctx.owner.effective_stats.MAG,
+                    target_res=ctx.trigger_source.effective_stats.RES,
                 )
             else:
                 ret_damage = max(1, effect.base_damage)
@@ -104,9 +106,14 @@ def handle_on_hit_received(passive: Ability, ctx: PassiveContext) -> None:
                         value=ret_damage,
                     )
                 )
-                # Leech on counter-attack
-                if ctx.item_leech_percent > 0:
-                    heal = max(1, int(ret_damage * ctx.item_leech_percent))
+                # Leech on counter-attack (type-matched to the passive's scaling)
+                leech_pct = (
+                    ctx.item_mag_leech_percent
+                    if effect.stat_scaling == StatType.MAG
+                    else ctx.item_phys_leech_percent
+                )
+                if leech_pct > 0:
+                    heal = max(1, int(ret_damage * leech_pct))
                     ctx.owner.current_hp = min(ctx.owner.max_hp, ctx.owner.current_hp + heal)
                     ctx.state.log.append(
                         CombatEvent(

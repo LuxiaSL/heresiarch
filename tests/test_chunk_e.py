@@ -329,12 +329,13 @@ class TestGigaSlimeData:
     def test_giga_slime_exists(self, game_data: GameData) -> None:
         assert "giga_slime" in game_data.enemies
 
-    def test_giga_slime_has_death_spawn_templates(self, game_data: GameData) -> None:
+    def test_giga_slime_has_mitosis_passive(self, game_data: GameData) -> None:
         giga = game_data.enemies["giga_slime"]
-        assert len(giga.death_spawn_templates) == 3
-        assert "slime_brute_miniboss" in giga.death_spawn_templates
-        assert "slime_caster_miniboss" in giga.death_spawn_templates
-        assert "slime_tank_miniboss" in giga.death_spawn_templates
+        assert "giga_mitosis" in giga.abilities
+        ability = game_data.abilities["giga_mitosis"]
+        assert set(ability.effects[0].split_into_templates) == {
+            "slime_brute_miniboss", "slime_caster_miniboss", "slime_tank_miniboss",
+        }
 
     def test_giga_slime_has_regen_enhanced(self, game_data: GameData) -> None:
         giga = game_data.enemies["giga_slime"]
@@ -374,8 +375,8 @@ class TestGigaSlimeData:
         assert len(boss_encounters) == 1
         assert "giga_slime" in boss_encounters[0].enemy_templates
 
-    def test_giga_slime_splits_on_death(self, game_data: GameData) -> None:
-        """Killing Giga Slime should spawn 3 mini-bosses via death_spawn_templates."""
+    def test_giga_slime_splits_on_lethal(self, game_data: GameData) -> None:
+        """Killing Giga Slime should trigger giga_mitosis, spawning 3 mini-bosses."""
         rng = random.Random(42)
         engine = CombatEngine(
             ability_registry=game_data.abilities,
@@ -422,10 +423,25 @@ class TestGigaSlimeData:
         }
         state = engine.process_round(state, decisions, game_data.enemies)
 
-        # Giga should be dead
+        # Giga should be dead (removed by mitosis)
         giga = state.get_combatant("giga_slime_0")
         assert giga is not None
         assert not giga.is_alive
+
+        # Mitosis passive should have fired, not a DEATH event
+        passive_events = [
+            e for e in state.log
+            if e.event_type == CombatEventType.PASSIVE_TRIGGERED
+            and e.ability_id == "giga_mitosis"
+        ]
+        assert len(passive_events) == 1
+
+        death_events = [
+            e for e in state.log
+            if e.event_type == CombatEventType.DEATH
+            and e.target_id == "giga_slime_0"
+        ]
+        assert len(death_events) == 0
 
         # 3 mini-bosses should have spawned (one of each template)
         spawn_events = [e for e in state.log if e.event_type == CombatEventType.ENEMY_SPAWNED]

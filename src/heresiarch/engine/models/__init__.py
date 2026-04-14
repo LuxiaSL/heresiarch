@@ -26,15 +26,15 @@ from .enemies import (
     EnemyInstance,
     EnemyTemplate,
 )
-from .items import ConversionEffect, EquipSlot, Item, ItemScaling, ScalingType
+from .items import ConversionEffect, EquipType, Item, ItemScaling, ScalingType
 from .jobs import CharacterInstance, JobTemplate
-from .loot import DropTable, LootResult
+from .loot import EnemyLootTable, LootPool, LootPoolEntry, LootResult
 from .party import Party
 from .battle_record import BattleRecord, EncounterRecord, RoundRecord
 from .region_map import AsciiMap, MapAnchor, RegionMap, ZoneAnchor
 from .run_state import CombatResult, RunState
 from .stats import GrowthVector, StatBlock, StatType
-from .zone import EncounterTemplate, ZoneState, ZoneTemplate
+from .zone import EncounterLootOverride, EncounterTemplate, ZoneState, ZoneTemplate
 
 __all__ = [
     "Ability",
@@ -54,17 +54,20 @@ __all__ = [
     "CombatState",
     "ConversionEffect",
     "DamageQuality",
-    "DropTable",
+    "EnemyLootTable",
+    "EncounterLootOverride",
     "EncounterRecord",
     "EncounterTemplate",
     "EnemyArchetype",
     "EnemyInstance",
     "EnemyTemplate",
-    "EquipSlot",
+    "EquipType",
     "GrowthVector",
     "Item",
     "ItemScaling",
     "JobTemplate",
+    "LootPool",
+    "LootPoolEntry",
     "LootResult",
     "Party",
     "PlayerTurnDecision",

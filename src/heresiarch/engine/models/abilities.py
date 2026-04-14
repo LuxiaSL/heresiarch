@@ -104,6 +104,10 @@ class AbilityEffect(BaseModel):
     # Invulnerability: reduce all incoming damage to 0 for N turns
     grants_invulnerable: int = 0     # number of turns of invulnerability to grant
 
+    # Split (mitosis): on lethal damage, spawn these enemies instead of dying.
+    # Each entry is a template_id; duplicates spawn multiple copies.
+    split_into_templates: list[str] = Field(default_factory=list)
+
 
 class Ability(BaseModel):
     id: str
