@@ -616,6 +616,135 @@ class TestStatusFlagSync:
         assert len(state.player_combatants[0].active_statuses) == 0
 
 
+# --- Gold Steal (Pilfer) Capping Tests ---
+
+
+class TestGoldStealCapping:
+    """Gold steal should never take more than the party has."""
+
+    _DUMMY_ABILITY = Ability(
+        id="pilfer", name="Pilfer", category=AbilityCategory.OFFENSIVE,
+        target=TargetType.SINGLE_ENEMY, effects=[AbilityEffect(gold_steal_flat=1)],
+    )
+
+    def _make_pilfer_state(self, party_gold: int = 100) -> CombatState:
+        player = CombatantState(
+            id="p1", is_player=True, current_hp=100, max_hp=100,
+            base_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            equipment_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            effective_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+        )
+        enemy = CombatantState(
+            id="e1", is_player=False, current_hp=100, max_hp=100, level=5,
+            base_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            equipment_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+            effective_stats=StatBlock(STR=10, MAG=10, DEF=10, RES=10, SPD=10),
+        )
+        return CombatState(
+            round_number=1,
+            player_combatants=[player],
+            enemy_combatants=[enemy],
+            party_gold=party_gold,
+        )
+
+    def test_enemy_steal_capped_at_party_gold(self, combat_engine: CombatEngine):
+        """Enemy steals only what the party actually has."""
+        state = self._make_pilfer_state(party_gold=5)
+        effect = AbilityEffect(gold_steal_flat=20)
+        enemy = state.enemy_combatants[0]
+        player = state.player_combatants[0]
+
+        ctx = EffectContext(
+            state=state, actor=enemy, target=player,
+            effect=effect, ability=self._DUMMY_ABILITY, insight_multiplier=1.0,
+        )
+        combat_engine._phase_utility(ctx)
+
+        assert state.gold_stolen_by_enemies == 5
+        assert state.party_gold == 0
+        stolen_events = [e for e in state.log if e.event_type == CombatEventType.GOLD_STOLEN]
+        assert len(stolen_events) == 1
+        assert stolen_events[0].value == 5
+
+    def test_enemy_steal_zero_gold_no_event(self, combat_engine: CombatEngine):
+        """No GOLD_STOLEN event when party has 0 gold."""
+        state = self._make_pilfer_state(party_gold=0)
+        effect = AbilityEffect(gold_steal_flat=20)
+        enemy = state.enemy_combatants[0]
+        player = state.player_combatants[0]
+
+        ctx = EffectContext(
+            state=state, actor=enemy, target=player,
+            effect=effect, ability=self._DUMMY_ABILITY, insight_multiplier=1.0,
+        )
+        combat_engine._phase_utility(ctx)
+
+        assert state.gold_stolen_by_enemies == 0
+        assert state.party_gold == 0
+        stolen_events = [e for e in state.log if e.event_type == CombatEventType.GOLD_STOLEN]
+        assert len(stolen_events) == 0
+
+    def test_enemy_steal_exact_amount(self, combat_engine: CombatEngine):
+        """When party has enough gold, the full amount is stolen."""
+        state = self._make_pilfer_state(party_gold=100)
+        effect = AbilityEffect(gold_steal_flat=15)
+        enemy = state.enemy_combatants[0]
+        player = state.player_combatants[0]
+
+        ctx = EffectContext(
+            state=state, actor=enemy, target=player,
+            effect=effect, ability=self._DUMMY_ABILITY, insight_multiplier=1.0,
+        )
+        combat_engine._phase_utility(ctx)
+
+        assert state.gold_stolen_by_enemies == 15
+        assert state.party_gold == 85
+        stolen_events = [e for e in state.log if e.event_type == CombatEventType.GOLD_STOLEN]
+        assert stolen_events[0].value == 15
+
+    def test_repeated_steals_drain_to_zero(self, combat_engine: CombatEngine):
+        """Multiple pilfer hits drain gold correctly, second hit gets remainder."""
+        state = self._make_pilfer_state(party_gold=25)
+        effect = AbilityEffect(gold_steal_flat=20)
+        enemy = state.enemy_combatants[0]
+        player = state.player_combatants[0]
+
+        # First steal: takes 20 of 25
+        ctx = EffectContext(
+            state=state, actor=enemy, target=player,
+            effect=effect, ability=self._DUMMY_ABILITY, insight_multiplier=1.0,
+        )
+        combat_engine._phase_utility(ctx)
+        assert state.gold_stolen_by_enemies == 20
+        assert state.party_gold == 5
+
+        # Second steal: only 5 left
+        ctx2 = EffectContext(
+            state=state, actor=enemy, target=player,
+            effect=effect, ability=self._DUMMY_ABILITY, insight_multiplier=1.0,
+        )
+        combat_engine._phase_utility(ctx2)
+        assert state.gold_stolen_by_enemies == 25
+        assert state.party_gold == 0
+
+    def test_player_steal_not_capped(self, combat_engine: CombatEngine):
+        """Player gold steal is not limited by party_gold (enemies have unlimited gold)."""
+        state = self._make_pilfer_state(party_gold=0)
+        effect = AbilityEffect(gold_steal_flat=30)
+        player = state.player_combatants[0]
+        enemy = state.enemy_combatants[0]
+
+        ctx = EffectContext(
+            state=state, actor=player, target=enemy,
+            effect=effect, ability=self._DUMMY_ABILITY, insight_multiplier=1.0,
+        )
+        combat_engine._phase_utility(ctx)
+
+        assert state.gold_stolen_by_players == 30
+        stolen_events = [e for e in state.log if e.event_type == CombatEventType.GOLD_STOLEN]
+        assert stolen_events[0].value == 30
+
+
 # --- Ability Source Tracking Tests (WI-6) ---
 
 

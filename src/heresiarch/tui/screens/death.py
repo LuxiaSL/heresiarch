@@ -116,8 +116,8 @@ class DeathScreen(Screen):
                     lines.append(f"  {char.name}: {dmg}")
             lines.append("")
 
-        # Most used abilities
-        ability_counts = record.most_used_abilities()
+        # Most used abilities (player characters only)
+        ability_counts = record.most_used_abilities(actor_filter=set(party.characters))
         if ability_counts:
             lines.append("[bold]Most Used Abilities[/bold]")
             sorted_abilities = sorted(ability_counts.items(), key=lambda x: x[1], reverse=True)[:5]

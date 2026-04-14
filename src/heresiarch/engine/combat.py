@@ -68,6 +68,7 @@ class CombatEngine(EffectPipelineMixin):
         self,
         player_characters: list[CharacterInstance],
         enemies: list[EnemyInstance],
+        party_gold: int = 0,
     ) -> CombatState:
         """Set up initial CombatState from party and enemy group."""
         player_combatants = []
@@ -124,6 +125,7 @@ class CombatEngine(EffectPipelineMixin):
         state = CombatState(
             player_combatants=player_combatants,
             enemy_combatants=enemy_combatants,
+            party_gold=party_gold,
         )
 
         state.turn_order = self._determine_turn_order(state)

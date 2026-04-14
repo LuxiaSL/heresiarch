@@ -58,6 +58,17 @@
       stat_scaling: STR
       scaling_coefficient: 0.3
 
+- id: rebuke
+  name: Rebuke
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  insight_amplified: true
+  description: "Strikes with defensive might. Deals 5 + 0.5x DEF damage, reduced by target DEF."
+  effects:
+    - base_damage: 5
+      stat_scaling: DEF
+      scaling_coefficient: 0.5
+
 # --- Droppable offensive abilities (seed pool) ---
 
 - id: searing_edge

@@ -140,6 +140,7 @@ class CombatState(BaseModel):
     foresight_revealed: list[str] = Field(default_factory=list)
     gold_stolen_by_enemies: int = 0
     gold_stolen_by_players: int = 0
+    party_gold: int = 0  # tracks remaining party gold so pilfer can cap correctly
 
     def get_combatant(self, combatant_id: str) -> CombatantState | None:
         for c in self.player_combatants + self.enemy_combatants:

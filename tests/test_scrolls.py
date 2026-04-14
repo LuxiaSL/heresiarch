@@ -74,6 +74,82 @@ class TestTeachScroll:
         with pytest.raises(ValueError, match="not a teach scroll"):
             game_loop.use_teach_scroll(run, "minor_potion", "mc_einherjar")
 
+    def test_teach_scroll_persists_through_breakpoint_overlap(
+        self, game_loop: GameLoop
+    ) -> None:
+        """Scroll-teaching an ability that a character also gets from a breakpoint
+        should still add it to 'learned', so a job swap doesn't lose it."""
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        mc = run.party.characters["mc_einherjar"]
+
+        # Level the einherjar to 3 so they unlock brace_strike from breakpoints
+        mc = game_loop._check_ability_unlocks(mc, 1, 3)
+        mc = mc.model_copy(update={"level": 3})
+        assert "brace_strike" in mc.abilities
+
+        # Add the brace_strike teach scroll to stash
+        new_stash = ["scroll_brace_strike"]
+        new_items = {"scroll_brace_strike": game_loop.game_data.items["scroll_brace_strike"]}
+        new_chars = dict(run.party.characters)
+        new_chars["mc_einherjar"] = mc
+        run = run.model_copy(
+            update={"party": run.party.model_copy(
+                update={"characters": new_chars, "stash": new_stash, "items": new_items}
+            )}
+        )
+
+        # Use the scroll — ability should be added to "learned" source
+        run = game_loop.use_teach_scroll(run, "scroll_brace_strike", "mc_einherjar")
+        mc = run.party.characters["mc_einherjar"]
+        assert "brace_strike" in mc.ability_sources.get("learned", [])
+        # Still only appears once in the flat list
+        assert mc.abilities.count("brace_strike") == 1
+
+    def test_use_consumable_rejects_teach_scroll(self, game_loop: GameLoop) -> None:
+        """use_consumable should refuse teach scrolls so they can't be
+        silently consumed without teaching."""
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        new_stash = ["scroll_arc_slash"]
+        new_items = {"scroll_arc_slash": game_loop.game_data.items["scroll_arc_slash"]}
+        run = run.model_copy(
+            update={"party": run.party.model_copy(
+                update={"stash": new_stash, "items": new_items}
+            )}
+        )
+        with pytest.raises(ValueError, match="teach scroll"):
+            game_loop.use_consumable(run, "scroll_arc_slash", "mc_einherjar")
+
+    def test_teach_scroll_already_learned_no_duplicate(
+        self, game_loop: GameLoop
+    ) -> None:
+        """Using a scroll for an ability already in 'learned' should consume
+        the scroll but not duplicate the entry."""
+        run = game_loop.new_run("run_001", "Hero", "einherjar")
+        mc = run.party.characters["mc_einherjar"]
+
+        # Manually inject arc_slash into learned sources
+        sources = dict(mc.ability_sources) if mc.ability_sources else {}
+        sources["learned"] = ["arc_slash"]
+        new_abilities = list(mc.abilities) + ["arc_slash"]
+        mc = mc.model_copy(update={
+            "abilities": new_abilities,
+            "ability_sources": sources,
+        })
+        new_chars = dict(run.party.characters)
+        new_chars["mc_einherjar"] = mc
+        new_stash = ["scroll_arc_slash"]
+        new_items = {"scroll_arc_slash": game_loop.game_data.items["scroll_arc_slash"]}
+        run = run.model_copy(
+            update={"party": run.party.model_copy(
+                update={"characters": new_chars, "stash": new_stash, "items": new_items}
+            )}
+        )
+
+        run = game_loop.use_teach_scroll(run, "scroll_arc_slash", "mc_einherjar")
+        mc = run.party.characters["mc_einherjar"]
+        assert mc.ability_sources["learned"].count("arc_slash") == 1
+        assert "scroll_arc_slash" not in run.party.stash
+
 
 class TestScrollDataIntegrity:
     def test_all_teach_scrolls_reference_valid_abilities(self, game_data: GameData) -> None:

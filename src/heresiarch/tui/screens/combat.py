@@ -175,7 +175,9 @@ class CombatScreen(AutoBattleMixin, Screen):
             if cid in run.party.characters
         ]
 
-        combat = app.game_loop.combat_engine.initialize_combat(characters, enemies)
+        combat = app.game_loop.combat_engine.initialize_combat(
+            characters, enemies, party_gold=run.party.money
+        )
         app.combat_state = combat
 
         # Build name mappings
@@ -1236,7 +1238,7 @@ class CombatScreen(AutoBattleMixin, Screen):
                 if event.target_id in self._display_alive:
                     self._display_alive[event.target_id] = False
                     self._display_hp[event.target_id] = 0
-            case CombatEventType.RETALIATE_TRIGGERED:
+            case CombatEventType.RETALIATE_TRIGGERED | CombatEventType.THORNS_TRIGGERED:
                 if event.target_id in self._display_hp:
                     self._display_hp[event.target_id] = max(0, self._display_hp[event.target_id] - event.value)
 

@@ -416,7 +416,9 @@ class GameSession:
             if cid in run.party.characters
         ]
 
-        self._combat_state = gl.combat_engine.initialize_combat(characters, enemies)
+        self._combat_state = gl.combat_engine.initialize_combat(
+            characters, enemies, party_gold=run.party.money
+        )
 
         # Map combatant IDs to template IDs (enemies are created in same order)
         self._enemy_combatant_templates = {}

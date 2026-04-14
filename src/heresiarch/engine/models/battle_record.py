@@ -92,12 +92,21 @@ class BattleRecord(BaseModel):
                         totals[event.actor_id] = totals.get(event.actor_id, 0) + event.value
         return totals
 
-    def most_used_abilities(self) -> dict[str, int]:
-        """Count ability uses across all encounters."""
+    def most_used_abilities(
+        self,
+        actor_filter: set[str] | None = None,
+    ) -> dict[str, int]:
+        """Count ability uses across all encounters.
+
+        If *actor_filter* is provided, only events whose ``actor_id`` is in
+        the set are counted (useful for excluding enemy abilities).
+        """
         counts: dict[str, int] = {}
         for encounter in self.encounters:
             for rnd in encounter.rounds:
                 for event in rnd.events:
                     if event.event_type in ("ACTION_DECLARED", "BONUS_ACTION") and event.ability_id:
+                        if actor_filter is not None and event.actor_id not in actor_filter:
+                            continue
                         counts[event.ability_id] = counts.get(event.ability_id, 0) + 1
         return counts

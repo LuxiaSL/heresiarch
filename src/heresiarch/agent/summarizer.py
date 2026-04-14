@@ -746,7 +746,7 @@ def summarize_run_report(run: RunState, game_data: GameData) -> str:
     lines.append("")
 
     # Ability usage
-    usage = br.most_used_abilities()
+    usage = br.most_used_abilities(actor_filter=set(run.party.characters))
     if usage:
         top = sorted(usage.items(), key=lambda x: -x[1])[:10]
         parts = [f"{aid} ({count})" for aid, count in top]

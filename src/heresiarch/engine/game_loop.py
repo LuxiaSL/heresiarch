@@ -1168,19 +1168,25 @@ class GameLoop:
         char = party.characters[target_character_id]
         ability_id = item.teaches_ability_id
 
-        # Grant the ability if not already known
-        new_abilities = list(char.abilities)
+        # Bootstrap ability_sources if empty (fresh character / old save)
+        if not char.ability_sources:
+            bootstrap = self._rebuild_abilities(char, char.equipment, party.items)
+            char = char.model_copy(update=bootstrap)
+
+        # Check learned source specifically — equipment-granted abilities
+        # shouldn't block permanently learning via scroll.
+        sources = dict(char.ability_sources)
+        learned = list(sources.get("learned", []))
         update: dict[str, Any] = {}
-        if ability_id not in new_abilities:
-            new_abilities.append(ability_id)
-            # Track in learned source
-            sources = dict(char.ability_sources) if char.ability_sources else {}
-            if sources:
-                learned = list(sources.get("learned", []))
-                learned.append(ability_id)
-                sources["learned"] = learned
-                update["ability_sources"] = sources
-        update["abilities"] = new_abilities
+        if ability_id not in learned:
+            learned.append(ability_id)
+            sources["learned"] = learned
+            update["ability_sources"] = sources
+            # Rebuild flat list from sources so it stays in sync
+            new_abilities = list(char.abilities)
+            if ability_id not in new_abilities:
+                new_abilities.append(ability_id)
+            update["abilities"] = new_abilities
 
         new_char = char.model_copy(update=update)
 
@@ -1210,6 +1216,10 @@ class GameLoop:
         item = self.game_data.items.get(item_id) or party.items.get(item_id)
         if item is None or not item.is_consumable:
             raise ValueError(f"'{item_id}' is not a consumable")
+        if item.teaches_ability_id:
+            raise ValueError(
+                f"'{item_id}' is a teach scroll — use use_teach_scroll instead"
+            )
 
         char = party.characters[target_character_id]
         job = self.game_data.jobs[char.job_id]

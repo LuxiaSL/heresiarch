@@ -615,16 +615,20 @@ class EffectPipelineMixin:
                 if ctx.actor.is_player:
                     ctx.state.gold_stolen_by_players += steal_amount
                 else:
+                    # Cap at remaining party gold so we never steal more than exists
+                    steal_amount = min(steal_amount, ctx.state.party_gold)
                     ctx.state.gold_stolen_by_enemies += steal_amount
-                ctx.state.log.append(
-                    CombatEvent(
-                        event_type=CombatEventType.GOLD_STOLEN,
-                        round_number=ctx.state.round_number,
-                        actor_id=ctx.actor.id,
-                        target_id=ctx.target.id,
-                        value=steal_amount,
+                    ctx.state.party_gold -= steal_amount
+                if steal_amount > 0:
+                    ctx.state.log.append(
+                        CombatEvent(
+                            event_type=CombatEventType.GOLD_STOLEN,
+                            round_number=ctx.state.round_number,
+                            actor_id=ctx.actor.id,
+                            target_id=ctx.target.id,
+                            value=steal_amount,
+                        )
                     )
-                )
 
         # Heal effect (Sacrifice, enemy heal, etc.) — heals the TARGET
         if ctx.effect.heal_percent > 0 and ctx.target.is_alive:
@@ -730,6 +734,23 @@ class EffectPipelineMixin:
                 target_res=target.effective_stats.RES,
                 pierce_percent=effect.pierce_percent,
             )
+        elif effect.stat_scaling == StatType.DEF:
+            damage = calculate_physical_damage(
+                ability_base=effect.base_damage,
+                ability_coefficient=effect.scaling_coefficient,
+                attacker_str=actor.effective_stats.DEF,
+                target_def=target.effective_stats.DEF,
+                pierce_percent=effect.pierce_percent,
+                def_reduction_ratio=DEF_REDUCTION_RATIO + target.extra_def_reduction,
+            )
+        elif effect.stat_scaling == StatType.RES:
+            damage = calculate_magical_damage(
+                ability_base=effect.base_damage,
+                ability_coefficient=effect.scaling_coefficient,
+                attacker_mag=actor.effective_stats.RES,
+                target_res=target.effective_stats.RES,
+                pierce_percent=effect.pierce_percent,
+            )
         else:
             damage = max(1, effect.base_damage)
 
@@ -753,6 +774,20 @@ class EffectPipelineMixin:
                 ability_base=effect.base_damage,
                 ability_coefficient=effect.scaling_coefficient,
                 attacker_mag=actor.effective_stats.MAG,
+                target_res=0,
+            )
+        elif effect.stat_scaling == StatType.DEF:
+            damage = calculate_physical_damage(
+                ability_base=effect.base_damage,
+                ability_coefficient=effect.scaling_coefficient,
+                attacker_str=actor.effective_stats.DEF,
+                target_def=0,
+            )
+        elif effect.stat_scaling == StatType.RES:
+            damage = calculate_magical_damage(
+                ability_base=effect.base_damage,
+                ability_coefficient=effect.scaling_coefficient,
+                attacker_mag=actor.effective_stats.RES,
                 target_res=0,
             )
         else:

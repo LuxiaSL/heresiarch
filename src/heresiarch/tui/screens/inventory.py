@@ -409,10 +409,20 @@ class InventoryScreen(Screen):
         if run is None or self._selected_item_id is None:
             return
 
+        item = (
+            self.app.game_data.items.get(self._selected_item_id)
+            or run.party.items.get(self._selected_item_id)
+        )
+
         try:
-            self.app.run_state = self.app.game_loop.use_consumable(
-                run, self._selected_item_id, char_id
-            )
+            if item and item.teaches_ability_id:
+                self.app.run_state = self.app.game_loop.use_teach_scroll(
+                    run, self._selected_item_id, char_id
+                )
+            else:
+                self.app.run_state = self.app.game_loop.use_consumable(
+                    run, self._selected_item_id, char_id
+                )
         except ValueError:
             pass
 
