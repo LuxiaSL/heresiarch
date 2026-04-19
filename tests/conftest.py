@@ -86,6 +86,11 @@ def berserker_lv15(game_data: GameData) -> CharacterInstance:
 
 
 @pytest.fixture
+def sacrist_lv15(game_data: GameData) -> CharacterInstance:
+    return _make_character(game_data, "sacrist", 15, "spirit_lens")
+
+
+@pytest.fixture
 def brute_oni_zone15(game_data: GameData, combat_engine: CombatEngine) -> EnemyInstance:
     """Zone 15 Oni (Brute archetype)."""
     template = game_data.enemies["brute_oni"]

@@ -234,7 +234,12 @@ class TownScreen(Screen):
             return
 
         anchor_id = run.current_town_id
+        town_id = run.current_town_id
         run = self.app.game_loop.leave_town(run)
+        run = run.record_macro(
+            "leave_town",
+            {"town_id": town_id},
+        )
         self.app.run_state = run
 
         try:

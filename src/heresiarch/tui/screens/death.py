@@ -7,6 +7,11 @@ from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Label, Static
 
+from heresiarch.tui.widgets.particle_field import (
+    THEME_DEATH_ASH,
+    ParticleField,
+)
+
 
 YOU_DIED = r"""
  ██    ██  ██████  ██    ██     ██████  ██ ███████ ██████
@@ -23,8 +28,16 @@ class DeathScreen(Screen):
     CSS = """
     DeathScreen {
         align: center middle;
+        layers: bg fg;
+    }
+    #death-backdrop {
+        layer: bg;
+        width: 100%;
+        height: 100%;
+        offset: 0 0;
     }
     #death-container {
+        layer: fg;
         width: 65%;
         height: auto;
         padding: 1 4;
@@ -39,6 +52,7 @@ class DeathScreen(Screen):
     ]
 
     def compose(self) -> ComposeResult:
+        yield ParticleField(theme=THEME_DEATH_ASH, id="death-backdrop")
         with Vertical(id="death-container"):
             yield Static(
                 f"[bold #880000]{YOU_DIED}[/bold #880000]",

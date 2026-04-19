@@ -457,7 +457,16 @@ class ZoneScreen(Screen):
             return
 
         anchor_id = run.current_zone_id
+        zs = run.zone_state
+        payload = {
+            "zone_id": run.current_zone_id,
+            "zone_cleared": zs.is_cleared if zs else False,
+            "overstay_battles": zs.overstay_battles if zs else 0,
+            "current_encounter_index": zs.current_encounter_index if zs else 0,
+            "reason": "voluntary_leave",
+        }
         run = self.app.game_loop.leave_zone(run)
+        run = run.record_macro("leave_zone", payload)
         self.app.run_state = run
 
         try:
@@ -540,7 +549,17 @@ class ZoneScreen(Screen):
         if zone is None or not zone.next_zone:
             return
 
+        zs = run.zone_state
+        leave_payload = {
+            "zone_id": run.current_zone_id,
+            "zone_cleared": zs.is_cleared if zs else False,
+            "overstay_battles": zs.overstay_battles if zs else 0,
+            "current_encounter_index": zs.current_encounter_index if zs else 0,
+            "reason": "travel_next_zone",
+            "next_zone_id": zone.next_zone,
+        }
         run = self.app.game_loop.leave_zone(run)
+        run = run.record_macro("leave_zone", leave_payload)
         self.app.run_state = run
 
         try:
@@ -560,6 +579,10 @@ class ZoneScreen(Screen):
         else:
             # Same region — enter the zone directly
             run = self.app.game_loop.enter_zone(run, zone.next_zone)
+            run = run.record_macro(
+                "enter_zone",
+                {"zone_id": zone.next_zone, "via": "travel_next_zone"},
+            )
             self.app.run_state = run
             try:
                 self.app.save_manager.autosave(run)

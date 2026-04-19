@@ -9,6 +9,11 @@ from textual.screen import Screen
 from textual.widgets import Footer, OptionList, Static
 from textual.widgets.option_list import Option
 
+from heresiarch.tui.widgets.particle_field import (
+    THEME_TITLE_EMBERS,
+    ParticleField,
+)
+
 # ---------------------------------------------------------------------------
 # Visual assets
 # ---------------------------------------------------------------------------
@@ -107,8 +112,16 @@ class TitleScreen(Screen):
     CSS = """
     TitleScreen {
         align: center middle;
+        layers: bg fg;
+    }
+    #title-backdrop {
+        layer: bg;
+        width: 100%;
+        height: 100%;
+        offset: 0 0;
     }
     #title-frame {
+        layer: fg;
         width: auto;
         max-width: 76;
         height: auto;
@@ -149,6 +162,9 @@ class TitleScreen(Screen):
         background: #2a1a3e;
         color: #e6c566;
     }
+    Footer {
+        layer: fg;
+    }
     """
 
     BINDINGS = [
@@ -164,6 +180,7 @@ class TitleScreen(Screen):
         self._phase: int = 0
 
     def compose(self) -> ComposeResult:
+        yield ParticleField(theme=THEME_TITLE_EMBERS, id="title-backdrop")
         with Vertical(id="title-frame"):
             yield Static(
                 _render_noise(_NOISE_TOP[0], _NOISE_COLORS[0]),

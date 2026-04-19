@@ -42,6 +42,8 @@ THORNS_SCALING_PER_TIER: float = 0.2
 THORNS_TIER_LEVELS: int = 10
 MARK_DAMAGE_BONUS: float = 1.25
 VENGEANCE_DEFAULT_DURATION: int = 4
+COMMUNION_MAX_BONUS: float = 1.0  # Sacrist: max magical damage bonus at Communion knee
+COMMUNION_RAMP_KNEE: float = 0.5  # Sacrist: missing-HP fraction at which Communion reaches max
 
 
 # --- HP ---
@@ -256,6 +258,26 @@ def calculate_insight_multiplier(
 ) -> float:
     """Insight damage/buff amplification: 1.0 + per_stack * stacks."""
     return 1.0 + per_stack * stacks
+
+
+def calculate_communion_multiplier(
+    current_hp: int,
+    max_hp: int,
+    max_bonus: float = COMMUNION_MAX_BONUS,
+    knee: float = COMMUNION_RAMP_KNEE,
+) -> float:
+    """Communion: damage scales linearly with missing HP fraction up to a knee.
+
+    At full HP: 1.0x. The ramp reaches max_bonus at `knee` missing-HP fraction
+    (default: 50% missing HP = full bonus). Beyond the knee, clamped at max.
+    This front-loads early-game Sacrist texture — each point of HP lost matters
+    before 50%, nothing extra after.
+    """
+    if max_hp <= 0 or knee <= 0:
+        return 1.0
+    missing_fraction = max(0.0, min(1.0, 1.0 - current_hp / max_hp))
+    ramp = min(missing_fraction / knee, 1.0)
+    return 1.0 + ramp * max_bonus
 
 
 def calculate_thorns_percent(

@@ -132,7 +132,16 @@ class JobSelectScreen(Screen):
 
         run_id = f"run_{uuid.uuid4().hex[:8]}"
         app = self.app
-        app.run_state = app.game_loop.new_run(run_id, mc_name, self._selected_job_id)
+        run = app.game_loop.new_run(run_id, mc_name, self._selected_job_id)
+        run = run.record_macro(
+            "run_start",
+            {
+                "mc_name": mc_name,
+                "mc_job_id": self._selected_job_id,
+            },
+        )
+        app.run_state = run
+        app.persist_run()
 
         from heresiarch.tui.screens.zone_select import ZoneSelectScreen
 

@@ -229,8 +229,20 @@ class RecruitmentScreen(Screen):
         if run is None:
             return
 
+        char = run.party.characters.get(character_id)
+        dismissed_info: dict[str, object] = {"character_id": character_id}
+        if char is not None:
+            dismissed_info.update({
+                "job_id": char.job_id,
+                "level": char.level,
+                "name": char.name,
+            })
+
         try:
-            self.app.run_state = self.app.game_loop.dismiss_character(run, character_id)
+            run = self.app.game_loop.dismiss_character(run, character_id)
+            run = run.record_macro("party_dismiss", dismissed_info)
+            self.app.run_state = run
+            self.app.persist_run()
         except ValueError:
             pass
 
@@ -242,17 +254,41 @@ class RecruitmentScreen(Screen):
         if run is None:
             return
 
+        cand = self._candidate.character
         try:
             new_party = self.app.game_loop.recruitment_engine.recruit(
                 run.party, self._candidate
             )
-            self.app.run_state = run.model_copy(update={"party": new_party})
+            run = run.model_copy(update={"party": new_party})
+            run = run.record_macro(
+                "recruit_accept",
+                {
+                    "candidate_id": cand.id,
+                    "job_id": cand.job_id,
+                    "level": cand.level,
+                    "name": cand.name,
+                },
+            )
+            self.app.run_state = run
         except ValueError:
             pass
 
         self._go_to_zone()
 
     def _pass(self) -> None:
+        run = self.app.run_state
+        if run is not None:
+            cand = self._candidate.character
+            run = run.record_macro(
+                "recruit_pass",
+                {
+                    "candidate_id": cand.id,
+                    "job_id": cand.job_id,
+                    "level": cand.level,
+                    "name": cand.name,
+                },
+            )
+            self.app.run_state = run
         self._go_to_zone()
 
     def _go_to_zone(self) -> None:

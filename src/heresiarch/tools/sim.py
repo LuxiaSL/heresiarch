@@ -292,6 +292,328 @@ def cmd_sigmoid(args: argparse.Namespace) -> None:
     print(sigmoid_explorer(args.max, args.mid, args.rate))
 
 
+def _run_one_seed(args: tuple):
+    """Worker function for parallel multi-seed runs.
+
+    Each worker loads its own GameData and constructs fresh policies
+    to avoid shared mutable state across processes.
+    """
+    from heresiarch.analytics.record_db import RecordDB as _RecordDB
+    from heresiarch.engine.data_loader import load_all as _load_all
+    from heresiarch.policy.builtin.default_macro import DefaultMacroPolicy
+    from heresiarch.policy.builtin.floor import FloorCombatPolicy
+    from heresiarch.policy.builtin.floor_plus import (
+        FloorPlusCombatPolicy,
+        FloorPlusMacroPolicy,
+    )
+    from heresiarch.policy.builtin.golden_einherjar import make_golden_einherjar
+    from heresiarch.policy.builtin.golden_macro import (
+        make_golden_macro_einherjar,
+        make_golden_macro_for_job,
+    )
+    from heresiarch.policy.macro_solver import MacroSolverConfig, make_macro_solver
+    from heresiarch.policy.solver import make_solver
+    from heresiarch.tools.run_driver import simulate_run as _simulate_run
+
+    seed, job_id, policy_name, macro_name, data_path, max_enc, db_path, solver_depth, solver_prune, macro_lookahead = args
+    gd = _load_all(Path(data_path))
+
+    from heresiarch.policy.solver import SolverConfig
+    solver_cfg = SolverConfig(search_depth=solver_depth, prune_after_ply=solver_prune)
+    solver = make_solver(gd, config=solver_cfg)
+    combat_policies = {
+        "floor": FloorCombatPolicy(),
+        "floor_plus": FloorPlusCombatPolicy(),
+        "golden_einherjar": make_golden_einherjar(gd),
+        "solver": solver,
+    }
+    macro_solver_cfg = MacroSolverConfig(lookahead_encounters=macro_lookahead)
+    macro_policies = {
+        "default_macro": DefaultMacroPolicy(),
+        "floor_plus_macro": FloorPlusMacroPolicy(),
+        "golden_macro_einherjar": make_golden_macro_einherjar(gd),
+        "golden_macro": make_golden_macro_for_job(gd, job_id),
+        "macro_solver": make_macro_solver(gd, solver, config=macro_solver_cfg, job_id=job_id),
+    }
+
+    record_db = _RecordDB(Path(db_path)) if db_path else None
+    try:
+        return _simulate_run(
+            mc_job_id=job_id,
+            combat_policy=combat_policies[policy_name],
+            macro_policy=macro_policies[macro_name],
+            seed=seed,
+            game_data=gd,
+            max_encounters=max_enc,
+            record_db=record_db,
+        )
+    finally:
+        if record_db is not None:
+            record_db.close()
+
+
+def cmd_run(args: argparse.Namespace) -> None:
+    """Full-run Monte Carlo: N seeds × one policy pair, aggregate report."""
+    import json as _json
+    import sys
+    from heresiarch.analytics.record_db import RecordDB
+    from heresiarch.policy.builtin.default_macro import DefaultMacroPolicy
+    from heresiarch.policy.builtin.floor import FloorCombatPolicy
+    from heresiarch.policy.builtin.floor_plus import (
+        FloorPlusCombatPolicy,
+        FloorPlusMacroPolicy,
+    )
+    from heresiarch.policy.builtin.golden_einherjar import make_golden_einherjar
+    from heresiarch.policy.builtin.golden_macro import (
+        make_golden_macro_einherjar,
+        make_golden_macro_for_job,
+    )
+    from heresiarch.policy.macro_solver import MacroSolverConfig, make_macro_solver
+    from heresiarch.policy.protocols import CombatPolicy, MacroPolicy
+    from heresiarch.policy.solver import make_solver
+    from heresiarch.tools.run_driver import simulate_run
+    from heresiarch.tools.run_report import format_summary, summarize
+
+    gd = _load_game_data()
+    if args.job not in gd.jobs:
+        print(f"Unknown job: {args.job}. Available: {', '.join(gd.jobs.keys())}")
+        return
+
+    from heresiarch.policy.solver import SolverConfig
+    solver_config = SolverConfig(
+        search_depth=args.solver_depth,
+        prune_after_ply=args.solver_prune,
+    )
+    solver = make_solver(gd, config=solver_config)
+    macro_solver_cfg = MacroSolverConfig(
+        lookahead_encounters=args.macro_lookahead,
+    )
+    combat_policies: dict[str, CombatPolicy] = {
+        "floor": FloorCombatPolicy(),
+        "floor_plus": FloorPlusCombatPolicy(),
+        "golden_einherjar": make_golden_einherjar(gd),
+        "solver": solver,
+    }
+    macro_policies: dict[str, MacroPolicy] = {
+        "default_macro": DefaultMacroPolicy(),
+        "floor_plus_macro": FloorPlusMacroPolicy(),
+        "golden_macro_einherjar": make_golden_macro_einherjar(gd),
+        "golden_macro": make_golden_macro_for_job(gd, args.job),
+        "macro_solver": make_macro_solver(gd, solver, config=macro_solver_cfg, job_id=args.job),
+    }
+
+    if args.policy not in combat_policies:
+        print(
+            f"Unknown combat policy: {args.policy}. "
+            f"Available: {', '.join(combat_policies)}"
+        )
+        return
+    if args.macro not in macro_policies:
+        print(
+            f"Unknown macro policy: {args.macro}. "
+            f"Available: {', '.join(macro_policies)}"
+        )
+        return
+
+    combat_policy = combat_policies[args.policy]
+    macro_policy = macro_policies[args.macro]
+
+    record_db: RecordDB | None = None
+    if args.record_db:
+        record_db = RecordDB(Path(args.record_db))
+
+    results = []
+    if args.workers > 1 and args.n > 1:
+        import multiprocessing
+
+        worker_args = [
+            (
+                args.seed_start + i, args.job,
+                args.policy, args.macro,
+                str(Path("data")),
+                args.max_encounters,
+                args.record_db or "",
+                args.solver_depth, args.solver_prune,
+                args.macro_lookahead,
+            )
+            for i in range(args.n)
+        ]
+        n_workers = min(args.workers, args.n)
+        if args.progress:
+            print(f"  Running {args.n} seeds across {n_workers} workers...", file=sys.stderr)
+        with multiprocessing.Pool(n_workers) as pool:
+            for r in pool.imap_unordered(_run_one_seed, worker_args):
+                results.append(r)
+                if args.progress:
+                    outcome = "dead" if r.is_dead else "alive"
+                    print(
+                        f"  seed {r.seed:>4}: {outcome}  "
+                        f"zones={len(r.zones_cleared):>2}  "
+                        f"enc={r.encounters_cleared:>3}  "
+                        f"lv={r.final_mc_level:>2}",
+                        file=sys.stderr,
+                    )
+    else:
+        for i in range(args.n):
+            seed = args.seed_start + i
+            r = simulate_run(
+                mc_job_id=args.job,
+                combat_policy=combat_policy,
+                macro_policy=macro_policy,
+                seed=seed,
+                max_encounters=args.max_encounters,
+                game_data=gd,
+                record_db=record_db,
+            )
+            results.append(r)
+            if args.progress:
+                outcome = "dead" if r.is_dead else "alive"
+                print(
+                    f"  seed {seed:>4}: {outcome}  "
+                    f"zones={len(r.zones_cleared):>2}  "
+                    f"enc={r.encounters_cleared:>3}  "
+                    f"lv={r.final_mc_level:>2}",
+                    file=sys.stderr,
+                )
+
+    summary = summarize(results)
+
+    if not args.quiet:
+        print(format_summary(summary))
+
+    if args.json:
+        payload = {
+            "summary": summary.model_dump(mode="json"),
+            "results": [r.model_dump(mode="json") for r in results],
+        }
+        Path(args.json).write_text(_json.dumps(payload, indent=2))
+        print(f"\nDumped {len(results)} run results + summary → {args.json}")
+
+    if record_db is not None:
+        n_total = record_db.count_runs()
+        print(f"Recorded {len(results)} runs to {args.record_db} "
+              f"(DB now holds {n_total} total)")
+        record_db.close()
+
+
+def cmd_deep_analyze(args: argparse.Namespace) -> None:
+    """Two-phase analysis: broad sweep then deep dive on worst seeds.
+
+    Phase 1: Run N seeds with standard solver config.
+    Phase 2: Re-run the bottom K seeds with cranked depth/pruning.
+    Report the diff — which seeds improved and by how much.
+    """
+    import multiprocessing
+    import sys
+
+    from heresiarch.tools.run_report import format_summary, summarize
+
+    gd = _load_game_data()
+    if args.job not in gd.jobs:
+        print(f"Unknown job: {args.job}. Available: {', '.join(gd.jobs.keys())}")
+        return
+
+    n_workers = min(args.workers, args.n)
+
+    # --- Phase 1: Broad sweep ---
+    print(f"=== Phase 1: Broad sweep ({args.n} seeds, depth={args.broad_depth}) ===", file=sys.stderr)
+    macro_lookahead = getattr(args, "macro_lookahead", 3)
+    broad_args = [
+        (
+            args.seed_start + i, args.job,
+            "solver", args.macro,
+            str(Path("data")),
+            args.max_encounters, "",
+            args.broad_depth, args.broad_prune,
+            macro_lookahead,
+        )
+        for i in range(args.n)
+    ]
+    broad_results = []
+    with multiprocessing.Pool(n_workers) as pool:
+        for r in pool.imap_unordered(_run_one_seed, broad_args):
+            broad_results.append(r)
+            if args.progress:
+                outcome = "dead" if r.is_dead else "alive"
+                print(
+                    f"  seed {r.seed:>4}: {outcome}  enc={r.encounters_cleared:>3}  lv={r.final_mc_level:>2}",
+                    file=sys.stderr,
+                )
+
+    broad_summary = summarize(broad_results)
+    print(f"\n--- Broad sweep results ---")
+    print(format_summary(broad_summary))
+
+    # --- Identify worst seeds ---
+    broad_results.sort(key=lambda r: r.encounters_cleared)
+    worst_n = min(args.deep_n, len(broad_results))
+    worst_seeds = broad_results[:worst_n]
+    worst_seed_ids = [r.seed for r in worst_seeds]
+
+    print(f"\n=== Phase 2: Deep dive on {worst_n} worst seeds (depth={args.deep_depth}, prune={args.deep_prune}) ===", file=sys.stderr)
+    print(f"  Seeds: {worst_seed_ids}", file=sys.stderr)
+    print(f"  Broad results for these seeds:", file=sys.stderr)
+    for r in worst_seeds:
+        print(f"    seed {r.seed:>4}: enc={r.encounters_cleared:>3}  lv={r.final_mc_level:>2}  killed_by={r.killed_by}", file=sys.stderr)
+
+    # --- Phase 2: Deep dive ---
+    deep_args = [
+        (
+            seed, args.job,
+            "solver", args.macro,
+            str(Path("data")),
+            args.max_encounters, "",
+            args.deep_depth, args.deep_prune,
+            macro_lookahead,
+        )
+        for seed in worst_seed_ids
+    ]
+    deep_results = []
+    deep_workers = min(n_workers, worst_n)
+    with multiprocessing.Pool(deep_workers) as pool:
+        for r in pool.imap_unordered(_run_one_seed, deep_args):
+            deep_results.append(r)
+            if args.progress:
+                outcome = "dead" if r.is_dead else "alive"
+                print(
+                    f"  seed {r.seed:>4}: {outcome}  enc={r.encounters_cleared:>3}  lv={r.final_mc_level:>2}",
+                    file=sys.stderr,
+                )
+
+    # --- Diff report ---
+    broad_by_seed = {r.seed: r for r in worst_seeds}
+    deep_by_seed = {r.seed: r for r in deep_results}
+
+    print(f"\n--- Deep dive diff ---")
+    print(f"{'Seed':>6}  {'Broad enc':>9}  {'Deep enc':>8}  {'Delta':>6}  {'Broad killer':>16}  {'Deep killer':>16}")
+    print("-" * 70)
+    total_improvement = 0
+    improved_count = 0
+    for seed in worst_seed_ids:
+        b = broad_by_seed[seed]
+        d = deep_by_seed.get(seed)
+        if d is None:
+            continue
+        delta = d.encounters_cleared - b.encounters_cleared
+        total_improvement += max(0, delta)
+        if delta > 0:
+            improved_count += 1
+        marker = " +" if delta > 0 else ("  " if delta == 0 else " -")
+        print(
+            f"{seed:>6}  {b.encounters_cleared:>9}  {d.encounters_cleared:>8}  "
+            f"{marker}{abs(delta):<4}  {b.killed_by:>16}  {d.killed_by:>16}"
+        )
+
+    print(f"\n  Improved: {improved_count}/{worst_n} seeds")
+    if worst_n > 0:
+        print(f"  Mean improvement: +{total_improvement / worst_n:.1f} encounters")
+
+    if deep_results:
+        deep_summary = summarize(deep_results)
+        print(f"\n--- Deep dive summary (worst {worst_n} seeds only) ---")
+        print(format_summary(deep_summary))
+
+
 def cmd_combat(args: argparse.Namespace) -> None:
     """General-purpose combat sim using the real CombatEngine."""
     from heresiarch.tools.combat_sim import (
@@ -472,6 +794,64 @@ def main() -> None:
     p.add_argument("--job", default="einherjar", help="Job ID")
     p.add_argument("--party-size", type=int, default=1, help="Party size for total HP calc (default: 1)")
     p.set_defaults(func=cmd_lodge_tuning)
+
+    # run — Monte Carlo full-run simulator
+    p = sub.add_parser(
+        "run",
+        help="Monte Carlo full-run sim: N seeds × one policy pair, aggregated",
+    )
+    p.add_argument("--job", required=True, help="MC job ID")
+    p.add_argument("--policy", default="floor", help="Combat policy name (default: floor)")
+    p.add_argument(
+        "--macro", default="default_macro",
+        help="Macro policy name (default: default_macro)",
+    )
+    p.add_argument("--n", type=int, default=100, help="Number of seeds (default: 100)")
+    p.add_argument("--seed-start", type=int, default=0, help="Starting seed (default: 0)")
+    p.add_argument(
+        "--max-encounters", type=int, default=200,
+        help="Hard cap on encounters per run (default: 200)",
+    )
+    p.add_argument("--json", default=None, help="Path to dump full JSON results")
+    p.add_argument(
+        "--record-db",
+        default=None,
+        help="Path to SQLite DB. Each run's battle record is upserted for "
+             "later mining (golden-path analysis, regressions).",
+    )
+    p.add_argument(
+        "--progress", action="store_true",
+        help="Print per-run progress to stderr",
+    )
+    p.add_argument("--quiet", action="store_true", help="Suppress summary table")
+    p.add_argument(
+        "--workers", type=int, default=1,
+        help="Parallel workers for multi-seed runs (default: 1, sequential)",
+    )
+    p.add_argument("--solver-depth", type=int, default=3, help="Solver search depth (default: 3)")
+    p.add_argument("--solver-prune", type=int, default=20, help="Solver candidates kept per inner ply (default: 20)")
+    p.add_argument("--macro-lookahead", type=int, default=3, help="Macro solver encounter lookahead (default: 3)")
+    p.set_defaults(func=cmd_run)
+
+    # deep-analyze — two-phase broad sweep + deep dive on worst seeds
+    p = sub.add_parser(
+        "deep-analyze",
+        help="Two-phase: broad sweep then deep dive on worst seeds",
+    )
+    p.add_argument("--job", required=True, help="MC job ID")
+    p.add_argument("--macro", default="golden_macro_einherjar", help="Macro policy name")
+    p.add_argument("--n", type=int, default=50, help="Seeds for broad sweep (default: 50)")
+    p.add_argument("--seed-start", type=int, default=0, help="Starting seed")
+    p.add_argument("--max-encounters", type=int, default=400, help="Encounter cap (default: 400)")
+    p.add_argument("--workers", type=int, default=16, help="Parallel workers (default: 16)")
+    p.add_argument("--deep-n", type=int, default=10, help="Number of worst seeds to deep-dive (default: 10)")
+    p.add_argument("--broad-depth", type=int, default=3, help="Solver depth for broad sweep (default: 3)")
+    p.add_argument("--broad-prune", type=int, default=20, help="Solver prune for broad sweep (default: 20)")
+    p.add_argument("--deep-depth", type=int, default=5, help="Solver depth for deep dive (default: 5)")
+    p.add_argument("--deep-prune", type=int, default=40, help="Solver prune for deep dive (default: 40)")
+    p.add_argument("--macro-lookahead", type=int, default=3, help="Macro solver encounter lookahead (default: 3)")
+    p.add_argument("--progress", action="store_true", help="Print per-seed progress")
+    p.set_defaults(func=cmd_deep_analyze)
 
     # combat — general-purpose combat simulator
     p = sub.add_parser("combat", help="Simulate combat with scripted action cycles against encounters")

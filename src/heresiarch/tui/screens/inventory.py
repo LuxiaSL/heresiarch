@@ -338,10 +338,26 @@ class InventoryScreen(Screen):
         if run is None or self._selected_item_id is None:
             return
 
+        # Capture what was displaced (if anything) before the swap.
+        char = run.party.characters.get(char_id)
+        previous = char.equipment.get(slot) if char else None
+        item_id = self._selected_item_id
+
         try:
-            self.app.run_state = self.app.game_loop.equip_item(
-                run, char_id, self._selected_item_id, slot
+            run = self.app.game_loop.equip_item(
+                run, char_id, item_id, slot
             )
+            run = run.record_macro(
+                "equip",
+                {
+                    "character_id": char_id,
+                    "slot": slot,
+                    "item_id": item_id,
+                    "displaced_item_id": previous,
+                },
+            )
+            self.app.run_state = run
+            self.app.persist_run()
         except ValueError:
             pass
 
@@ -409,20 +425,48 @@ class InventoryScreen(Screen):
         if run is None or self._selected_item_id is None:
             return
 
+        item_id = self._selected_item_id
         item = (
-            self.app.game_data.items.get(self._selected_item_id)
-            or run.party.items.get(self._selected_item_id)
+            self.app.game_data.items.get(item_id)
+            or run.party.items.get(item_id)
         )
+
+        target = run.party.characters.get(char_id)
+        hp_before = target.current_hp if target else 0
+        max_hp = target.max_hp if target else 0
 
         try:
             if item and item.teaches_ability_id:
-                self.app.run_state = self.app.game_loop.use_teach_scroll(
-                    run, self._selected_item_id, char_id
+                run = self.app.game_loop.use_teach_scroll(
+                    run, item_id, char_id
+                )
+                run = run.record_macro(
+                    "use_teach_scroll",
+                    {
+                        "item_id": item_id,
+                        "target_character_id": char_id,
+                        "teaches_ability_id": item.teaches_ability_id,
+                    },
                 )
             else:
-                self.app.run_state = self.app.game_loop.use_consumable(
-                    run, self._selected_item_id, char_id
+                run = self.app.game_loop.use_consumable(
+                    run, item_id, char_id
                 )
+                after = run.party.characters.get(char_id)
+                hp_after = after.current_hp if after else 0
+                run = run.record_macro(
+                    "use_consumable",
+                    {
+                        "item_id": item_id,
+                        "target_character_id": char_id,
+                        "hp_before": hp_before,
+                        "hp_after": hp_after,
+                        "max_hp": max_hp,
+                        "in_combat": False,
+                    },
+                )
+            self.app.run_state = run
+            self.app.persist_run()
         except ValueError:
             pass
 

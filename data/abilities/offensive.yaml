@@ -242,3 +242,54 @@
       scaling_coefficient: 0.2
       gold_steal_flat: 5
       gold_steal_per_level: 12.0
+
+# --- Sacrist abilities (Communion-synergy, pays HP for power) ---
+
+- id: litany
+  name: Litany
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  insight_amplified: true
+  description: "The opening psalm. Deals 5 + 1.0x MAG damage. Ignores DEF."
+  effects:
+    - base_damage: 5
+      stat_scaling: MAG
+      scaling_coefficient: 1.0
+
+- id: sanguine_rite
+  name: Sanguine Rite
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  insight_amplified: true
+  description: "Paid in scarlet. Deals 3 + 1.3x MAG damage at the cost of 15% max HP. Ignores DEF."
+  effects:
+    - base_damage: 3
+      stat_scaling: MAG
+      scaling_coefficient: 1.3
+      self_damage_ratio: 0.15
+
+- id: crown_of_thorns
+  name: Crown of Thorns
+  category: OFFENSIVE
+  target: ALL_ENEMIES
+  insight_amplified: true
+  description: "You are crowned. So are they. Hits all enemies for 70% of (2 + 0.8x MAG) damage each at the cost of 20% max HP. Ignores DEF."
+  effects:
+    - quality: CHAIN
+      base_damage: 2
+      stat_scaling: MAG
+      scaling_coefficient: 0.8
+      chain_damage_ratio: 0.7
+      self_damage_ratio: 0.20
+
+- id: passion
+  name: Passion
+  category: OFFENSIVE
+  target: SINGLE_ENEMY
+  insight_amplified: true
+  description: "The death blow, if you survive casting it. Deals 5 + 2.2x MAG damage at the cost of 35% max HP. Ignores DEF."
+  effects:
+    - base_damage: 5
+      stat_scaling: MAG
+      scaling_coefficient: 2.2
+      self_damage_ratio: 0.35

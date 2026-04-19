@@ -8,10 +8,14 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
 from heresiarch.engine.models.run_state import RunState
+
+if TYPE_CHECKING:
+    from heresiarch.analytics.record_db import RecordDB
 
 
 class SaveSlot(BaseModel):
@@ -33,8 +37,13 @@ class SaveManager:
         saves/{run_id}/metadata.json  (list of SaveSlot)
     """
 
-    def __init__(self, save_dir: Path):
+    def __init__(
+        self,
+        save_dir: Path,
+        record_db: RecordDB | None = None,
+    ):
         self.save_dir = save_dir
+        self.record_db = record_db
 
     def save_run(self, run: RunState, slot_id: str) -> SaveSlot:
         """Serialize RunState to JSON file. Returns slot metadata."""
@@ -111,8 +120,23 @@ class SaveManager:
                 self.delete_run_saves(run_id)
 
     def autosave(self, run: RunState) -> SaveSlot:
-        """Save to the 'autosave' slot for this run."""
-        return self.save_run(run, "autosave")
+        """Save to the 'autosave' slot for this run.
+
+        Also upserts to the attached RecordDB (if any) so every
+        played run accumulates in the analytics store. DB failures
+        are swallowed — never block a save on analytics.
+        """
+        slot = self.save_run(run, "autosave")
+        if self.record_db is not None:
+            from heresiarch.analytics.record_db import RunRecordMetadata
+            try:
+                self.record_db.record_run(
+                    run,
+                    RunRecordMetadata(source="tui"),
+                )
+            except Exception:
+                pass
+        return slot
 
     def _build_level_summary(self, run: RunState) -> str:
         """Build a brief summary of party levels."""

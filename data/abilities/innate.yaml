@@ -40,6 +40,17 @@
   effects:
     - reflect_percent: 0.70
 
+- id: communion
+  name: Communion
+  category: PASSIVE
+  target: SELF
+  trigger: ON_DAMAGE_MODIFY
+  is_innate: true
+  description: "Your magical abilities burn brighter with every wound. +0% at full HP, ramping linearly to +100% at 50% HP lost. No further bonus below that — first blood matters most."
+  effects:
+    - stat_scaling: MAG
+      missing_hp_damage_bonus: 1.0
+
 - id: mitosis
   name: Mitosis
   category: PASSIVE

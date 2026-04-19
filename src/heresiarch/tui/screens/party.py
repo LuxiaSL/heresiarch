@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Label, OptionList, Static
 from textual.widgets.option_list import Option
@@ -438,37 +438,104 @@ class PartyScreen(Screen):
 
         parts = key.split(":")
 
+        mutated = False
         try:
             match parts[0]:
                 case "unequip":
                     _, char_id, slot = parts
-                    self.app.run_state = self.app.game_loop.unequip_item(run, char_id, slot)
+                    char = run.party.characters.get(char_id)
+                    prev = char.equipment.get(slot) if char else None
+                    run = self.app.game_loop.unequip_item(run, char_id, slot)
+                    run = run.record_macro(
+                        "unequip",
+                        {
+                            "character_id": char_id,
+                            "slot": slot,
+                            "item_id": prev,
+                        },
+                    )
+                    self.app.run_state = run
+                    mutated = True
                 case "equip":
                     _, char_id, item_id, slot = parts
-                    self.app.run_state = self.app.game_loop.equip_item(run, char_id, item_id, slot)
+                    char = run.party.characters.get(char_id)
+                    prev = char.equipment.get(slot) if char else None
+                    run = self.app.game_loop.equip_item(run, char_id, item_id, slot)
+                    run = run.record_macro(
+                        "equip",
+                        {
+                            "character_id": char_id,
+                            "slot": slot,
+                            "item_id": item_id,
+                            "displaced_item_id": prev,
+                        },
+                    )
+                    self.app.run_state = run
+                    mutated = True
                 case "swap":
                     _, active_id, reserve_id = parts
-                    self.app.run_state = self.app.game_loop.swap_party_member(run, active_id, reserve_id)
+                    run = self.app.game_loop.swap_party_member(run, active_id, reserve_id)
+                    run = run.record_macro(
+                        "swap_party_member",
+                        {"active_id": active_id, "reserve_id": reserve_id},
+                    )
+                    self.app.run_state = run
+                    mutated = True
                 case "promote":
                     _, char_id = parts
-                    self.app.run_state = self.app.game_loop.promote_to_active(run, char_id)
+                    run = self.app.game_loop.promote_to_active(run, char_id)
+                    run = run.record_macro(
+                        "promote_to_active", {"character_id": char_id},
+                    )
+                    self.app.run_state = run
+                    mutated = True
                 case "bench":
                     _, char_id = parts
-                    self.app.run_state = self.app.game_loop.bench_to_reserve(run, char_id)
+                    run = self.app.game_loop.bench_to_reserve(run, char_id)
+                    run = run.record_macro(
+                        "bench_to_reserve", {"character_id": char_id},
+                    )
+                    self.app.run_state = run
+                    mutated = True
                 case "mimic":
                     _, job_id = parts
-                    self.app.run_state = self.app.game_loop.mc_swap_job(run, job_id)
+                    mc = next(
+                        (c for c in run.party.characters.values() if c.is_mc),
+                        None,
+                    )
+                    old_job = mc.job_id if mc else None
+                    run = self.app.game_loop.mc_swap_job(run, job_id)
+                    run = run.record_macro(
+                        "mc_swap_job",
+                        {"old_job_id": old_job, "new_job_id": job_id},
+                    )
+                    self.app.run_state = run
+                    mutated = True
                 case "dismiss":
                     _, char_id = parts
                     self._confirm_dismiss(char_id)
                     return  # Don't refresh yet — show confirmation
                 case "confirm_dismiss":
                     _, char_id = parts
-                    self.app.run_state = self.app.game_loop.dismiss_character(run, char_id)
+                    char = run.party.characters.get(char_id)
+                    info: dict[str, object] = {"character_id": char_id}
+                    if char is not None:
+                        info.update({
+                            "job_id": char.job_id,
+                            "level": char.level,
+                            "name": char.name,
+                        })
+                    run = self.app.game_loop.dismiss_character(run, char_id)
+                    run = run.record_macro("party_dismiss", info)
+                    self.app.run_state = run
+                    mutated = True
                 case "cancel_dismiss" | "cancel":
                     pass
         except ValueError:
             pass
+
+        if mutated:
+            self.app.persist_run()
 
         # Refresh after action
         self._populate_char_list()

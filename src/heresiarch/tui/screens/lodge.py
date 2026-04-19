@@ -140,11 +140,22 @@ class LodgeScreen(Screen):
         if run is None:
             return
 
+        cost = self.app.game_loop.get_lodge_cost(run) or 0
+        gold_before = run.party.money
+
         try:
             run = self.app.game_loop.rest_at_lodge(run)
         except ValueError:
             return
 
+        run = run.record_macro(
+            "lodge_rest",
+            {
+                "cost": cost,
+                "gold_before": gold_before,
+                "gold_after": run.party.money,
+            },
+        )
         self.app.run_state = run
         self._rested = True
 

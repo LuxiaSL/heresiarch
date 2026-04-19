@@ -225,11 +225,28 @@ class ShopScreen(Screen):
         run = self.app.run_state
         if run is None:
             return
+        # Capture the full buy menu BEFORE the transaction for macro log.
+        offered: list[dict[str, int]] = []
+        if self._shop is not None:
+            for oid, oprice in self.app.game_loop.shop_engine.get_buy_menu(
+                self._shop, run.party.cha,
+            ):
+                offered.append({"item_id": oid, "price": oprice})
         try:
             new_party = self.app.game_loop.shop_engine.buy_item(
                 run.party, item_id, price
             )
-            self.app.run_state = run.model_copy(update={"party": new_party})
+            run = run.model_copy(update={"party": new_party})
+            run = run.record_macro(
+                "shop_buy",
+                {
+                    "item_id": item_id,
+                    "price": price,
+                    "offered": offered,
+                },
+            )
+            self.app.run_state = run
+            self.app.persist_run()
         except ValueError:
             pass
         self._refresh()
@@ -240,7 +257,13 @@ class ShopScreen(Screen):
             return
         try:
             new_party = self.app.game_loop.shop_engine.sell_item(run.party, item_id)
-            self.app.run_state = run.model_copy(update={"party": new_party})
+            run = run.model_copy(update={"party": new_party})
+            run = run.record_macro(
+                "shop_sell",
+                {"item_id": item_id},
+            )
+            self.app.run_state = run
+            self.app.persist_run()
         except ValueError:
             pass
         self._refresh()

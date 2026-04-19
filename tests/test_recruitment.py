@@ -8,19 +8,15 @@ from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.formulas import calculate_max_hp, calculate_stats_at_level
 from heresiarch.engine.game_loop import GameLoop
 from heresiarch.engine.models.items import EquipType
-from heresiarch.engine.models.jobs import CharacterInstance, JobTemplate
+from heresiarch.engine.models.jobs import CharacterInstance
 from heresiarch.engine.models.party import Party
 from heresiarch.engine.models.run_state import RunState
-from heresiarch.engine.models.stats import GrowthVector, StatType
+from heresiarch.engine.models.stats import StatType
 from heresiarch.engine.recruitment import (
-    CHA_FULL_THRESHOLD,
-    CHA_MODERATE_THRESHOLD,
     GROWTH_FLOOR,
     GROWTH_VARIANCE,
     MAX_PARTY_SIZE,
-    RECRUIT_ACCESSORY_CHANCE,
     InspectionLevel,
-    RecruitCandidate,
     RecruitmentEngine,
 )
 
@@ -235,7 +231,7 @@ class TestRecruitEquipment:
             )
             candidate = engine.generate_candidate(
                 zone_level=5,
-                exclude_job_ids=["onmyoji"],  # only STR jobs
+                exclude_job_ids=["onmyoji", "sacrist"],  # only STR jobs
                 shop_pool=["iron_blade", "spirit_lens"],
             )
             weapon = candidate.character.equipment.get("WEAPON")
@@ -546,8 +542,7 @@ class TestDismiss:
 
     def test_dismiss_from_reserve(self, game_data: GameData) -> None:
         run, gl = self._make_equipped_party(game_data)
-        # Move ally_2 to reserve first by adding a 4th, or manipulate directly
-        ally2 = run.party.characters["ally_2"]
+        # Move ally_2 to reserve by direct model manipulation.
         new_active = [cid for cid in run.party.active if cid != "ally_2"]
         new_party = run.party.model_copy(
             update={"active": new_active, "reserve": ["ally_2"]}

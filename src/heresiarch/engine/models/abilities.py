@@ -45,6 +45,7 @@ class TriggerCondition(str, Enum):
     ON_CONSECUTIVE_ATTACK = "ON_CONSECUTIVE_ATTACK"
     ON_NON_DAMAGE_ACTION = "ON_NON_DAMAGE_ACTION"
     ON_TURN_START = "ON_TURN_START"  # fires at start of combatant's turn (regen, etc.)
+    ON_DAMAGE_MODIFY = "ON_DAMAGE_MODIFY"  # read inline during damage_modify phase (Communion)
 
 
 class AbilityEffect(BaseModel):
@@ -95,6 +96,12 @@ class AbilityEffect(BaseModel):
 
     # Regen: heal this % of missing HP per trigger (ON_TURN_START)
     regen_missing_hp_percent: float = 0.0
+
+    # Communion: amplify outgoing damage by (missing_hp_fraction * bonus).
+    # Applied in _phase_damage_modify when actor has an ON_DAMAGE_MODIFY passive.
+    # If stat_scaling is set on the effect, only abilities with matching stat_scaling
+    # are amplified (e.g., stat_scaling=MAG amplifies only magical abilities).
+    missing_hp_damage_bonus: float = 0.0
 
     # Summon: spawn enemies mid-combat (boss summon abilities)
     summon_template_id: str = ""     # enemy template to summon

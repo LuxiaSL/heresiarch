@@ -17,6 +17,7 @@ from heresiarch.engine.formulas import (
     MARK_DAMAGE_BONUS,
     MAX_ACTION_POINT_BANK,
     apply_survive_reduction,
+    calculate_communion_multiplier,
     calculate_frenzy_multiplier,
     calculate_insight_multiplier,
     calculate_magical_damage,
@@ -101,20 +102,10 @@ class EffectPipelineMixin:
         if actor.is_player:
             actor.frenzy_stacks += 1
 
-        state.log.append(
-            CombatEvent(
-                event_type=CombatEventType.BONUS_ACTION if is_speed_bonus else CombatEventType.ACTION_DECLARED,
-                round_number=state.round_number,
-                actor_id=actor_id,
-                ability_id=action.ability_id,
-                details={"targets": action.target_ids, "speed_bonus": is_speed_bonus},
-            )
-        )
-
-        # For SELF-targeting abilities, use actor as target
+        # Resolve effective targets BEFORE logging so the declaration reflects
+        # the actual landing targets (e.g. a heal on a dead ally redirects to
+        # a living one).
         effective_target_ids = list(action.target_ids)
-        if ability.target == TargetType.SELF and not effective_target_ids:
-            effective_target_ids = [actor_id]
 
         # Determine if this is an ally-targeting or enemy-targeting ability
         targets_allies = ability.target in (TargetType.SINGLE_ALLY, TargetType.ALL_ALLIES)
@@ -134,28 +125,46 @@ class EffectPipelineMixin:
                 effective_target_ids = [e.id for e in state.living_enemies]
 
         # Auto-retarget dead targets to next living combatant on the correct side
-        retargeted: list[str] = []
-        for tid in effective_target_ids:
-            target = state.get_combatant(tid)
-            if target is not None and target.is_alive:
-                retargeted.append(tid)
-            else:
-                # Find a replacement from the correct side
-                if targets_allies:
-                    # Ally-targeting: same side as actor
-                    if actor.is_player:
-                        replacements = [p.id for p in state.living_players if p.id not in retargeted]
-                    else:
-                        replacements = [e.id for e in state.living_enemies if e.id not in retargeted]
+        if ability.target != TargetType.SELF:
+            retargeted: list[str] = []
+            for tid in effective_target_ids:
+                target = state.get_combatant(tid)
+                if target is not None and target.is_alive:
+                    retargeted.append(tid)
                 else:
-                    # Enemy-targeting: opposite side from actor
-                    if actor.is_player:
-                        replacements = [e.id for e in state.living_enemies if e.id not in retargeted]
+                    # Find a replacement from the correct side
+                    if targets_allies:
+                        # Ally-targeting: same side as actor
+                        if actor.is_player:
+                            replacements = [p.id for p in state.living_players if p.id not in retargeted]
+                        else:
+                            replacements = [e.id for e in state.living_enemies if e.id not in retargeted]
                     else:
-                        replacements = [p.id for p in state.living_players if p.id not in retargeted]
-                if replacements:
-                    retargeted.append(replacements[0])
-        effective_target_ids = retargeted
+                        # Enemy-targeting: opposite side from actor
+                        if actor.is_player:
+                            replacements = [e.id for e in state.living_enemies if e.id not in retargeted]
+                        else:
+                            replacements = [p.id for p in state.living_players if p.id not in retargeted]
+                    if replacements:
+                        retargeted.append(replacements[0])
+            effective_target_ids = retargeted
+
+        # Log with resolved targets. SELF abilities log an empty list so the
+        # TUI renders "Actor uses Ability" without an "on X" suffix.
+        logged_targets = [] if ability.target == TargetType.SELF else list(effective_target_ids)
+        state.log.append(
+            CombatEvent(
+                event_type=CombatEventType.BONUS_ACTION if is_speed_bonus else CombatEventType.ACTION_DECLARED,
+                round_number=state.round_number,
+                actor_id=actor_id,
+                ability_id=action.ability_id,
+                details={"targets": logged_targets, "speed_bonus": is_speed_bonus},
+            )
+        )
+
+        # SELF default applied after logging so display stays "Actor uses Ability"
+        if ability.target == TargetType.SELF and not effective_target_ids:
+            effective_target_ids = [actor_id]
 
         # Insight: amplified abilities consume stacks, others grant stacks
         insight_multiplier = 1.0
@@ -304,6 +313,25 @@ class EffectPipelineMixin:
         if ctx.insight_multiplier > 1.0:
             ctx.damage = int(ctx.damage * ctx.insight_multiplier)
             ctx.pre_def_damage = int(ctx.pre_def_damage * ctx.insight_multiplier)
+
+        # Communion: missing-HP scaled amplification for magical abilities (Sacrist innate)
+        communion_passive = self._get_passive(
+            ctx.actor, TriggerCondition.ON_DAMAGE_MODIFY, ctx.state,
+        )
+        if communion_passive:
+            for pe in communion_passive.effects:
+                if pe.missing_hp_damage_bonus <= 0.0:
+                    continue
+                # Stat filter: if the passive effect specifies stat_scaling, only
+                # amplify ability effects with matching stat_scaling.
+                if pe.stat_scaling is not None and ctx.effect.stat_scaling != pe.stat_scaling:
+                    continue
+                multiplier = calculate_communion_multiplier(
+                    ctx.actor.current_hp, ctx.actor.max_hp, max_bonus=pe.missing_hp_damage_bonus,
+                )
+                if multiplier > 1.0:
+                    ctx.damage = int(ctx.damage * multiplier)
+                    ctx.pre_def_damage = int(ctx.pre_def_damage * multiplier)
 
         # Frenzy damage amplification (ratchet: max of level vs chain exponential)
         frenzy_ability = self._get_passive(

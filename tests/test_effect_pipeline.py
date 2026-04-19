@@ -854,3 +854,111 @@ class TestAbilitySourceTracking:
             run = gl.equip_item(run, mc_id, "iron_blade", "WEAPON")
             updated_mc = run.party.characters[mc_id]
             assert learned_ability in updated_mc.abilities
+
+
+class TestActionTargetResolution:
+    """Dead-target retargeting must land the effect AND the log on the live target."""
+
+    def _setup(self, game_data: GameData) -> tuple[CombatEngine, CombatState]:
+        stat = StatBlock(STR=10, MAG=0, DEF=5, RES=0, SPD=5)
+        players = [
+            CombatantState(
+                id=f"p{i}", is_player=True, level=5, current_hp=50, max_hp=50,
+                base_stats=stat, equipment_stats=stat, effective_stats=stat,
+                ability_ids=["basic_attack"],
+            )
+            for i in range(3)
+        ]
+        engine = CombatEngine(
+            ability_registry=game_data.abilities,
+            item_registry=game_data.items,
+            job_registry=game_data.jobs,
+            rng=random.Random(42),
+        )
+        template = game_data.enemies["brute_oni"]
+        inst = engine.create_enemy_instance(template, enemy_level=5)
+        enemy = CombatantState(
+            id="Oni_0", is_player=False, level=inst.level,
+            current_hp=inst.current_hp, max_hp=inst.max_hp,
+            base_stats=inst.stats, equipment_stats=inst.stats,
+            effective_stats=inst.stats,
+            ability_ids=["arc_slash", "basic_attack"],
+        )
+        state = CombatState(player_combatants=players, enemy_combatants=[enemy])
+        return engine, state
+
+    def test_heal_redirects_to_living_ally_and_log_reflects_it(self, game_data: GameData):
+        """Heal on a dead ally must land on a living ally, and the declared
+        targets in the log must match the actual recipient."""
+        engine, state = self._setup(game_data)
+
+        # Add a support enemy next to the Oni, kill the Oni, then have support heal the Oni.
+        stat = StatBlock(STR=5, MAG=10, DEF=3, RES=5, SPD=5)
+        support = CombatantState(
+            id="support_0", is_player=False, level=5,
+            current_hp=30, max_hp=30,
+            base_stats=stat, equipment_stats=stat, effective_stats=stat,
+            ability_ids=["heal_ally"],
+        )
+        state.enemy_combatants.append(support)
+        oni = state.enemy_combatants[0]
+        oni.current_hp = 0
+        oni.is_alive = False
+
+        action = CombatAction(
+            actor_id="support_0", ability_id="heal_ally", target_ids=[oni.id],
+        )
+        state = engine._resolve_action(state, "support_0", action)
+
+        declared = next(
+            ev for ev in state.log if ev.event_type == CombatEventType.ACTION_DECLARED
+        )
+        # Log must show the LIVING redirect target, not the dead Oni
+        assert oni.id not in declared.details["targets"]
+        assert declared.details["targets"] == ["support_0"]
+
+        heals = [ev for ev in state.log if ev.event_type == CombatEventType.HEALING]
+        assert len(heals) == 1
+        assert heals[0].target_id == "support_0"
+
+    def test_aoe_hits_every_living_target(self, game_data: GameData):
+        """ALL_ENEMIES arc_slash must emit one DAMAGE_DEALT per living target."""
+        engine, state = self._setup(game_data)
+
+        action = CombatAction(
+            actor_id="Oni_0", ability_id="arc_slash",
+            target_ids=["p0", "p1", "p2"],
+        )
+        state = engine._resolve_action(state, "Oni_0", action)
+
+        damages = [ev for ev in state.log if ev.event_type == CombatEventType.DAMAGE_DEALT]
+        hit_ids = {ev.target_id for ev in damages}
+        assert hit_ids == {"p0", "p1", "p2"}
+        assert all(ev.value > 0 for ev in damages)
+        for p in state.player_combatants:
+            assert p.current_hp < p.max_hp
+
+    def test_aoe_skips_dead_targets_without_duplicate_replacement(
+        self, game_data: GameData,
+    ):
+        """If a pre-rolled AoE target is dead, it is dropped (not duplicated onto a living target)."""
+        engine, state = self._setup(game_data)
+        state.player_combatants[2].current_hp = 0
+        state.player_combatants[2].is_alive = False
+
+        action = CombatAction(
+            actor_id="Oni_0", ability_id="arc_slash",
+            target_ids=["p0", "p1", "p2"],
+        )
+        state = engine._resolve_action(state, "Oni_0", action)
+
+        declared = next(
+            ev for ev in state.log if ev.event_type == CombatEventType.ACTION_DECLARED
+        )
+        assert sorted(declared.details["targets"]) == ["p0", "p1"]
+
+        damages = [ev for ev in state.log if ev.event_type == CombatEventType.DAMAGE_DEALT]
+        hit_counts: dict[str, int] = {}
+        for ev in damages:
+            hit_counts[ev.target_id] = hit_counts.get(ev.target_id, 0) + 1
+        assert hit_counts == {"p0": 1, "p1": 1}

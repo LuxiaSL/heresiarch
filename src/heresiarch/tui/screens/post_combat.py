@@ -289,14 +289,28 @@ class PostCombatScreen(Screen):
         # Build selected loot and discarded stash item lists
         selected = [self._loot_keys[i] for i in sorted(self._selected_loot)]
         discarded = [self._stash_keys[i] for i in sorted(self._discarded_stash)]
+        offered = list(self._loot_keys)
+        skipped = [iid for i, iid in enumerate(self._loot_keys) if i not in self._selected_loot]
 
         # Apply loot (discards stash items first, then adds selected loot)
         run = self.app.game_loop.apply_loot(
             run, self._loot, selected, discarded or None
         )
 
-        # Advance zone
+        # Advance zone before logging so the macro event snapshot captures
+        # the updated is_cleared/current_encounter_index flags.
         run = self.app.game_loop.advance_zone(run)
+
+        run = run.record_macro(
+            "pick_loot",
+            {
+                "offered": offered,
+                "selected": selected,
+                "skipped": skipped,
+                "discarded_from_stash": discarded,
+                "money_gained": self._loot.money,
+            },
+        )
         self.app.run_state = run
 
         if run.zone_state and run.zone_state.is_cleared:

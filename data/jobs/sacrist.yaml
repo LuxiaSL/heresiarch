@@ -1,0 +1,22 @@
+id: sacrist
+name: Sacrist
+origin: Abrahamic
+description: "The one who pays. Bleeds light into wounds — each injury empowers the next sermon."
+growth:
+  STR: 0
+  MAG: 5
+  DEF: 1
+  RES: 0
+  SPD: 4
+base_hp: 30
+hp_growth: 5
+innate_ability_id: communion
+ability_unlocks:
+  - level: 1
+    ability_id: litany
+  - level: 4
+    ability_id: sanguine_rite
+  - level: 8
+    ability_id: crown_of_thorns
+  - level: 13
+    ability_id: passion

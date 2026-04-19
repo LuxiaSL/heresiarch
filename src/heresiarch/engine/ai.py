@@ -346,6 +346,7 @@ class EnemyAI:
                     repeat_penalty=w.repeat_penalty,
                     repeat_mode=w.repeat_mode,
                     recency_bonus=w.recency_bonus,
+                    use_first=w.use_first,
                 ))
         return adjusted
 

@@ -302,6 +302,14 @@ class ZoneSelectScreen(Screen):
             return
 
         run = self.app.game_loop.enter_zone(run, zone_id)
+        run = run.record_macro(
+            "enter_zone",
+            {
+                "zone_id": zone_id,
+                "already_cleared": zone_id in run.zones_completed,
+                "via": "zone_select",
+            },
+        )
         self.app.run_state = run
 
         try:
@@ -319,6 +327,10 @@ class ZoneSelectScreen(Screen):
             return
 
         run = self.app.game_loop.enter_town(run, town_id)
+        run = run.record_macro(
+            "enter_town",
+            {"town_id": town_id},
+        )
         self.app.run_state = run
 
         try:

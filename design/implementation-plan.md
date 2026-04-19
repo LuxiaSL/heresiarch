@@ -129,6 +129,23 @@ FastAPI app with runtime formula overrides. Mirrors sim.py functionality with st
 
 ---
 
+## Post-Run Report (planned)
+
+`BattleRecord` is populated by the TUI during every run but barely consumed — death and victory screens don't show structured run analytics. A dedicated Run Report would close that feedback loop and also provide structured input for the Phase 5 LLM death recap.
+
+### Scope
+- TUI "Run Report" screen surfaced from death.py and victory.py
+- `sim report <save-file>` CLI for post-hoc analysis of a run
+- Stats: peak DPR, Cheat:Survive:Normal ratio, biggest single hit, most-used ability, HP low-water mark, gold by source (drops / pilfer / shop-sale), rounds per zone, per-encounter result, character deaths timeline
+- Structured data ready to feed Phase 5 death-recap prompt
+
+### Architecture
+- `engine/run_report.py` — pure function: RunState + BattleRecord → RunReportSummary (pydantic)
+- TUI screen renders summary; CLI dumps JSON + pretty-printed table
+- Lives in engine (zero-I/O) so sim/dashboard can use it the same way
+
+---
+
 ## Remaining Polish / Balance
 
 - **CHA system** — mechanically wired but invisible to player. Needs meta-progression.

@@ -72,7 +72,20 @@ class HeresiarchApp(App):
         self.game_data = game_data or load_all(data_path or Path("data"))
         self.rng = rng or random.Random()
         self.game_loop = GameLoop(game_data=self.game_data, rng=self.rng)
-        self.save_manager = SaveManager(save_dir=save_path or Path("saves"))
+
+        # Analytics record DB: every autosaved run lands here.
+        # Failures are swallowed internally — never blocks the game.
+        from heresiarch.analytics.record_db import RecordDB
+        record_db: RecordDB | None = None
+        try:
+            record_db = RecordDB(Path("artifacts/run_records.db"))
+        except Exception:
+            record_db = None
+
+        self.save_manager = SaveManager(
+            save_dir=save_path or Path("saves"),
+            record_db=record_db,
+        )
 
         # Game state — set when a run starts or loads
         self.run_state: RunState | None = None
@@ -94,6 +107,19 @@ class HeresiarchApp(App):
     def action_quit(self) -> None:
         """Show confirmation modal instead of quitting immediately."""
         self.push_screen(QuitConfirmModal())
+
+    def persist_run(self) -> None:
+        """Autosave the current run, swallowing failures.
+
+        Called after every macro decision so a crash/quit never loses
+        progress. A no-op if there is no active run.
+        """
+        if self.run_state is None:
+            return
+        try:
+            self.save_manager.autosave(self.run_state)
+        except Exception:
+            pass
 
     def action_screenshot(self) -> None:
         """Save an SVG screenshot to screenshots/ for debugging."""
