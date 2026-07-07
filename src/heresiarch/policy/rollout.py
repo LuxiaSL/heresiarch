@@ -12,6 +12,7 @@ thrust), MAG jobs (bolt, litany), and DEF-scaling jobs (rebuke).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from heresiarch.engine.models.abilities import AbilityCategory, TargetType
@@ -25,7 +26,6 @@ from heresiarch.engine.models.combat_state import (
 from heresiarch.policy.predicates import (
     ability_damage,
     basic_attack_damage,
-    minimum_ap_to_kill_all,
     minimum_ap_to_kill_all_passive,
     projected_incoming_damage,
 )
@@ -39,6 +39,24 @@ if TYPE_CHECKING:
 BONUS_ACTION_SUPPLY: int = 4
 BASIC_ATTACK_ID: str = "basic_attack"
 POTION_ITEM_ID: str = "minor_potion"
+
+
+@dataclass
+class RolloutConfig:
+    """Tunable thresholds for the heuristic rollout policy.
+
+    Defaults reproduce the historical hardcoded behavior. The policy
+    optimizer searches over these alongside the macro config knobs.
+
+    ``kill_safety`` / ``heal_safety`` scale the projected incoming
+    damage in the end-battle and emergency-heal checks: values > 1.0
+    are more conservative (require a bigger HP cushion before
+    committing to a kill; heal earlier), values < 1.0 are greedier.
+    """
+
+    insight_dump_threshold: int = 6   # dump stacks if banked this many rounds
+    kill_safety: float = 1.0          # end-battle requires incoming*this < hp
+    heal_safety: float = 1.0          # emergency heal when incoming*this >= hp
 
 
 def best_attack_ability(
@@ -109,8 +127,9 @@ class HeuristicRolloutPolicy:
 
     name: str = "heuristic_rollout"
 
-    def __init__(self, game_data: GameData):
+    def __init__(self, game_data: GameData, config: RolloutConfig | None = None):
         self.game_data = game_data
+        self.config = config or RolloutConfig()
 
     def decide(
         self,
@@ -135,7 +154,7 @@ class HeuristicRolloutPolicy:
 
         # Rule 1: end battle if possible and safe (passive-aware)
         incoming = projected_incoming_damage(ctx)
-        if incoming < actor.current_hp:
+        if incoming * self.config.kill_safety < actor.current_hp:
             ap_needed = minimum_ap_to_kill_all_passive(
                 ctx, self.game_data, damage_fn=dmg_fn,
             )
@@ -145,7 +164,7 @@ class HeuristicRolloutPolicy:
                 )
 
         # Rule 2: heal if about to die
-        if incoming >= actor.current_hp:
+        if incoming * self.config.heal_safety >= actor.current_hp:
             if POTION_ITEM_ID in legal.available_consumable_ids:
                 return _build_heal(actor, bonus)
 
@@ -173,9 +192,10 @@ class HeuristicRolloutPolicy:
 
         # Rule 4: insight management — keep stacking until Rule 1 fires
         # (kill-all with passive-aware estimation already accounts for
-        # insight amplification). Safety valve: if stacked 6+ rounds and
-        # still can't kill all, dump on the strongest to make progress.
-        if actor.insight_stacks >= 6:
+        # insight amplification). Safety valve: if stacked past the
+        # threshold and still can't kill all, dump on the strongest to
+        # make progress.
+        if actor.insight_stacks >= self.config.insight_dump_threshold:
             strongest = max(enemies, key=lambda e: e.current_hp)
             ap = actor.action_points
             if ap > 0:

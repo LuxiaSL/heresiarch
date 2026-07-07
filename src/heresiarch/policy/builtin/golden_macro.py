@@ -42,7 +42,6 @@ if TYPE_CHECKING:
 POTION_ITEM_ID: str = "minor_potion"
 POTION_HEAL: int = 50   # minor_potion flat heal (data/items/consumables.yaml)
 MAX_RECRUIT_PARTY_SIZE: int = 4
-POTION_STASH_CAP: int = 5
 HEAL_EFFICIENCY_TOLERANCE: int = 10
 POTION_COMBAT_RESERVE: int = 0
 
@@ -54,12 +53,12 @@ class GoldenMacroConfig:
     preferred_weapon_stat: str = "STR"      # STR or MAG
     preferred_armor_stat: str = "DEF"       # DEF or RES (accessories can scale mixed)
     potion_stockpile_target: int = 3         # retreat floor (mid-zone bail-to-town)
-    potion_stash_buffer: int = 3             # shop extra beyond full-heal need
+    potion_stash_cap: int = 5                # shop: buy potions up to this count
     overstay_cap: int = 20                  # user: "20 overstay = always optimal"
     overstay_bail_hp_pct: float = 0.40      # bail overstay if mean HP% drops below
     heal_threshold_pct: float = 0.25        # between-encounter potion use threshold
     in_town_heal_target_pct: float = 1.00   # in-town: chain potions to this HP%
-    pre_boss_retreat_hp_pct: float = 0.90   # retreat if next encounter is boss and HP below
+    pre_boss_retreat_hp_pct: float = 0.90   # heal/retreat target when next encounter is a boss
     lodge_on: bool = False                   # einherjar style: no lodging
     lodge_hp_threshold: float = 0.30
     pit_level_buffer: int = 5               # grind endless zones until MC level >= next_zone_level + buffer
@@ -212,7 +211,7 @@ class GoldenMacroPolicy:
         # Potions: buy up to cap. If stash is full after sells above,
         # sell the least useful remaining items to make room.
         potion_count = _count_potions(run)
-        needed = max(0, POTION_STASH_CAP - potion_count)
+        needed = max(0, self.config.potion_stash_cap - potion_count)
         if needed > 0 and POTION_ITEM_ID in available_items:
             stash_headroom = STASH_LIMIT - len(run.party.stash)
             if stash_headroom < needed:
@@ -404,7 +403,22 @@ class GoldenMacroPolicy:
         Fires both pre-clear and during overstay. During overstay, the
         retreat → town → re-enter pattern is expected — ``decide_zone``
         routes us back to the same zone until overstay cap is hit.
+
+        Pre-boss check: if the next encounter is a boss and party HP is
+        below ``pre_boss_retreat_hp_pct`` after between-encounter potions
+        run dry, bail to town to heal up (the designer's TUI pattern:
+        never walk into a boss wounded). Guarded by "can we actually
+        heal in town" so a broke party doesn't loop the door.
         """
+        if self._next_encounter_is_boss(run):
+            if _mean_party_hp_pct(run) < self.config.pre_boss_retreat_hp_pct:
+                can_heal_in_town = (
+                    _count_potions(run) > 0
+                    or run.party.money >= self.config.town_visit_gold_threshold
+                )
+                if can_heal_in_town:
+                    return True
+
         potion_count = _count_potions(run)
         if potion_count >= self.config.potion_stockpile_target:
             return False
@@ -414,6 +428,18 @@ class GoldenMacroPolicy:
             return False
         return True
 
+    def _next_encounter_is_boss(self, run: RunState) -> bool:
+        """True when the upcoming encounter in the current zone is a boss."""
+        if not run.current_zone_id or not run.zone_state:
+            return False
+        zone = self.game_data.zones.get(run.current_zone_id)
+        if zone is None:
+            return False
+        idx = run.zone_state.current_encounter_index
+        if run.zone_state.is_cleared or idx >= len(zone.encounters):
+            return False
+        return zone.encounters[idx].is_boss
+
     def decide_between_encounter_items(self, run: RunState) -> list[ItemUse]:
         """Use potions to top up wounded characters.
 
@@ -421,6 +447,10 @@ class GoldenMacroPolicy:
         threshold, then move to the next. Efficiency guard: skip if the
         potion would mostly overheal (missing < heal amount - tolerance).
         Keep POTION_COMBAT_RESERVE potions for in-combat emergencies.
+
+        When the next encounter is a boss, heal toward the (higher)
+        pre-boss target instead — walking into a boss at the ordinary
+        threshold is how glass cannons die.
         """
         uses: list[ItemUse] = []
         stash_potions = [iid for iid in run.party.stash if iid == POTION_ITEM_ID]
@@ -437,6 +467,8 @@ class GoldenMacroPolicy:
         running_hp: dict[str, int] = {c.id: c.current_hp for c in active_chars}
         max_hp: dict[str, int] = {c.id: c.max_hp for c in active_chars}
         target_pct = self.config.heal_threshold_pct
+        if self._next_encounter_is_boss(run):
+            target_pct = max(target_pct, self.config.pre_boss_retreat_hp_pct)
 
         while len(stash_potions) > POTION_COMBAT_RESERVE:
             wounded = [
@@ -469,7 +501,7 @@ EINHERJAR_GOLDEN_CONFIG = GoldenMacroConfig(
     preferred_weapon_stat="STR",
     preferred_armor_stat="DEF",
     potion_stockpile_target=1,
-    potion_stash_buffer=5,
+    potion_stash_cap=5,
     overstay_cap=20,
     overstay_bail_hp_pct=0.25,
     heal_threshold_pct=0.55,
@@ -482,7 +514,7 @@ BERSERKER_GOLDEN_CONFIG = GoldenMacroConfig(
     preferred_weapon_stat="STR",
     preferred_armor_stat="DEF",
     potion_stockpile_target=3,
-    potion_stash_buffer=2,
+    potion_stash_cap=5,
     overstay_cap=20,
     overstay_bail_hp_pct=0.50,
     heal_threshold_pct=0.70,   # glass cannon: heal aggressively between encounters
@@ -497,7 +529,7 @@ ONMYOJI_GOLDEN_CONFIG = GoldenMacroConfig(
     preferred_weapon_stat="MAG",
     preferred_armor_stat="RES",
     potion_stockpile_target=2,
-    potion_stash_buffer=3,
+    potion_stash_cap=5,
     overstay_cap=20,
     overstay_bail_hp_pct=0.40,
     heal_threshold_pct=0.35,   # save potions for boss fights — survive action is the defense
@@ -512,7 +544,7 @@ SACRIST_GOLDEN_CONFIG = GoldenMacroConfig(
     preferred_weapon_stat="MAG",
     preferred_armor_stat="DEF",  # sacrist has DEF=1 growth, 0 RES
     potion_stockpile_target=2,
-    potion_stash_buffer=3,
+    potion_stash_cap=5,
     overstay_cap=20,
     overstay_bail_hp_pct=0.40,
     heal_threshold_pct=0.25,   # communion scales with missing HP — low HP = more damage
@@ -527,7 +559,7 @@ MARTYR_GOLDEN_CONFIG = GoldenMacroConfig(
     preferred_weapon_stat="STR",  # martyr has 0 STR but thorns/retaliate don't need weapon scaling
     preferred_armor_stat="DEF",
     potion_stockpile_target=1,
-    potion_stash_buffer=5,
+    potion_stash_cap=5,
     overstay_cap=20,
     overstay_bail_hp_pct=0.25,
     heal_threshold_pct=0.55,

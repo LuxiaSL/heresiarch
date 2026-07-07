@@ -12,7 +12,7 @@ for in the forward simulation.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from heresiarch.engine.combat import CombatEngine
@@ -28,7 +28,7 @@ from heresiarch.policy.predicates import (
     minimum_ap_to_kill_all_passive,
     projected_incoming_damage,
 )
-from heresiarch.policy.rollout import HeuristicRolloutPolicy
+from heresiarch.policy.rollout import HeuristicRolloutPolicy, RolloutConfig
 from heresiarch.policy.rule_engine import RuleContext
 from heresiarch.policy.snapshot import CombatSnapshot
 from heresiarch.policy.validation import compute_legal
@@ -73,10 +73,11 @@ class CombatSolver:
         self,
         game_data: GameData,
         config: SolverConfig | None = None,
+        rollout_config: RolloutConfig | None = None,
     ):
         self.game_data = game_data
         self.config = config or SolverConfig()
-        self.rollout = HeuristicRolloutPolicy(game_data)
+        self.rollout = HeuristicRolloutPolicy(game_data, config=rollout_config)
         self._stats = SolverStats()
         self._stash: list[str] = []
         self._enemy_templates: dict[str, EnemyTemplate] = {}
@@ -538,6 +539,9 @@ def _target_key(d: PlayerTurnDecision) -> str:
 def make_solver(
     game_data: GameData,
     config: SolverConfig | None = None,
+    rollout_config: RolloutConfig | None = None,
 ) -> CombatSolver:
     """Factory for CLI registration."""
-    return CombatSolver(game_data=game_data, config=config)
+    return CombatSolver(
+        game_data=game_data, config=config, rollout_config=rollout_config,
+    )

@@ -10,10 +10,9 @@ finds optimal play between fights — when to retreat, heal, restock.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.formulas import calculate_buy_price
 from heresiarch.engine.game_loop import GameLoop
 from heresiarch.engine.models.combat_state import (

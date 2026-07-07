@@ -1,0 +1,294 @@
+"""Tests for the policy optimizer and the knobs it searches over.
+
+Covers:
+  - boss-aware pre-boss retreat / heal targets in GoldenMacroPolicy
+  - RolloutConfig thresholds actually changing rollout behavior
+  - ParamSpec normalize/denormalize round-trips
+  - params_to_configs / preset_params mapping
+  - CEM refit moving toward elites
+  - score_result censoring semantics (alive-at-cap is not a win)
+"""
+
+import random
+from pathlib import Path
+
+import pytest
+
+from heresiarch.engine.data_loader import GameData, load_all
+from heresiarch.engine.game_loop import GameLoop
+from heresiarch.policy.builtin.golden_macro import (
+    GOLDEN_CONFIGS,
+    GoldenMacroConfig,
+    GoldenMacroPolicy,
+)
+from heresiarch.policy.rollout import HeuristicRolloutPolicy, RolloutConfig
+from heresiarch.tools.policy_opt import (
+    PARAM_SPECS,
+    CEMState,
+    FitnessWeights,
+    params_to_configs,
+    preset_params,
+    score_result,
+)
+
+ZONE_01_BOSS_INDEX = 4  # alpha_slime encounter in zone_01
+
+
+@pytest.fixture(scope="module")
+def game_data() -> GameData:
+    return load_all(Path("data"))
+
+
+def _run_at_boss(game_data: GameData, hp_pct: float, *, gold: int = 100):
+    """Build a RunState inside zone_01 with the boss up next."""
+    gl = GameLoop(game_data, random.Random(42))
+    run = gl.new_run("test", "mc", "einherjar")
+    run = gl.enter_zone(run, "zone_01")
+    zs = run.zone_state.model_copy(
+        update={"current_encounter_index": ZONE_01_BOSS_INDEX},
+    )
+    run = run.model_copy(update={"zone_state": zs})
+
+    mc = next(c for c in run.party.characters.values() if c.is_mc)
+    wounded = mc.model_copy(
+        update={"current_hp": max(1, int(mc.max_hp * hp_pct))},
+    )
+    party = run.party.model_copy(
+        update={
+            "characters": {**run.party.characters, wounded.id: wounded},
+            "money": gold,
+        },
+    )
+    return run.model_copy(update={"party": party})
+
+
+class TestPreBossRetreat:
+    def test_retreats_when_wounded_before_boss(self, game_data: GameData):
+        run = _run_at_boss(game_data, hp_pct=0.5)
+        macro = GoldenMacroPolicy(
+            GoldenMacroConfig(pre_boss_retreat_hp_pct=0.90,
+                              potion_stockpile_target=0),
+            game_data,
+        )
+        assert macro.decide_retreat_to_town(run) is True
+
+    def test_no_retreat_when_healthy_before_boss(self, game_data: GameData):
+        run = _run_at_boss(game_data, hp_pct=1.0)
+        macro = GoldenMacroPolicy(
+            GoldenMacroConfig(pre_boss_retreat_hp_pct=0.90,
+                              potion_stockpile_target=0),
+            game_data,
+        )
+        assert macro.decide_retreat_to_town(run) is False
+
+    def test_no_retreat_when_broke_and_potionless(self, game_data: GameData):
+        """A party that can't heal in town shouldn't loop the door."""
+        run = _run_at_boss(game_data, hp_pct=0.5, gold=0)
+        macro = GoldenMacroPolicy(
+            GoldenMacroConfig(pre_boss_retreat_hp_pct=0.90,
+                              potion_stockpile_target=0,
+                              town_visit_gold_threshold=50),
+            game_data,
+        )
+        assert macro.decide_retreat_to_town(run) is False
+
+    def test_non_boss_encounter_uses_normal_rules(self, game_data: GameData):
+        gl = GameLoop(game_data, random.Random(42))
+        run = gl.new_run("test", "mc", "einherjar")
+        run = gl.enter_zone(run, "zone_01")  # encounter 0: fodder, not boss
+        macro = GoldenMacroPolicy(
+            GoldenMacroConfig(pre_boss_retreat_hp_pct=0.90,
+                              potion_stockpile_target=0),
+            game_data,
+        )
+        # Full HP, no potion need → no retreat.
+        assert macro.decide_retreat_to_town(run) is False
+
+    def test_boss_raises_between_encounter_heal_target(
+        self, game_data: GameData,
+    ):
+        run = _run_at_boss(game_data, hp_pct=0.5)
+        # Stash a potion so the healer has something to work with.
+        party = run.party.model_copy(
+            update={"stash": ["minor_potion", "minor_potion"]},
+        )
+        run = run.model_copy(update={"party": party})
+
+        low_threshold = GoldenMacroPolicy(
+            GoldenMacroConfig(heal_threshold_pct=0.25,
+                              pre_boss_retreat_hp_pct=0.90),
+            game_data,
+        )
+        uses = low_threshold.decide_between_encounter_items(run)
+        # At 50% HP with an ordinary threshold of 25%, only the boss
+        # check justifies healing.
+        assert len(uses) >= 1
+
+
+class TestRolloutConfig:
+    def test_default_matches_legacy_thresholds(self):
+        cfg = RolloutConfig()
+        assert cfg.insight_dump_threshold == 6
+        assert cfg.kill_safety == 1.0
+        assert cfg.heal_safety == 1.0
+
+    def test_insight_dump_threshold_honored(self, game_data: GameData):
+        """Stacks below the threshold keep banking; at threshold, dump."""
+        from heresiarch.engine.combat import CombatEngine
+        from heresiarch.engine.models.combat_state import CheatSurviveChoice
+        from heresiarch.policy.validation import compute_legal
+        from tests.conftest import _make_character
+
+        player = _make_character(game_data, "onmyoji", 5, "spirit_lens")
+        engine = CombatEngine(
+            ability_registry=game_data.abilities,
+            item_registry=game_data.items,
+            job_registry=game_data.jobs,
+            rng=random.Random(42),
+            enemy_registry=game_data.enemies,
+        )
+        # Beefy enemy: no kill-all available, so rules 1/2 don't fire.
+        enemy_t = game_data.enemies["alpha_slime"]
+        enemy = engine.create_enemy_instance(enemy_t, 10)
+        state = engine.initialize_combat([player], [enemy])
+        actor = state.living_players[0]
+        actor.insight_stacks = 4
+        legal = compute_legal(state, actor, stash=[])
+
+        patient = HeuristicRolloutPolicy(
+            game_data, config=RolloutConfig(insight_dump_threshold=6),
+        )
+        eager = HeuristicRolloutPolicy(
+            game_data, config=RolloutConfig(insight_dump_threshold=4),
+        )
+
+        assert patient.decide(state, actor, legal).cheat_survive == (
+            CheatSurviveChoice.SURVIVE
+        )
+        assert eager.decide(state, actor, legal).cheat_survive != (
+            CheatSurviveChoice.SURVIVE
+        )
+
+
+class TestParamSpace:
+    def test_denormalize_bounds_and_types(self):
+        for spec in PARAM_SPECS:
+            lo_val = spec.denormalize(0.0)
+            hi_val = spec.denormalize(1.0)
+            if spec.kind == "bool":
+                assert lo_val is False and hi_val is True
+            elif spec.kind == "int":
+                assert lo_val == int(spec.lo) and hi_val == int(spec.hi)
+            else:
+                assert lo_val == pytest.approx(spec.lo)
+                assert hi_val == pytest.approx(spec.hi)
+            # Out-of-range samples clip instead of exploding.
+            assert spec.denormalize(-3.0) == lo_val
+            assert spec.denormalize(9.0) == hi_val
+
+    def test_normalize_roundtrip(self):
+        for spec in PARAM_SPECS:
+            for x in (0.0, 0.25, 0.75, 1.0):
+                value = spec.denormalize(x)
+                back = spec.denormalize(spec.normalize(value))
+                assert back == value
+
+    def test_preset_params_cover_every_spec(self):
+        for job_id in GOLDEN_CONFIGS:
+            params = preset_params(job_id)
+            assert set(params) == {s.name for s in PARAM_SPECS}
+
+    def test_params_to_configs_applies_both_groups(self):
+        params = preset_params("einherjar")
+        params["overstay_cap"] = 7
+        params["insight_dump_threshold"] = 3
+        macro, rollout = params_to_configs(params, "einherjar")
+        assert macro.overstay_cap == 7
+        assert rollout.insight_dump_threshold == 3
+        # Job identity fields untouched by the search.
+        assert macro.preferred_weapon_stat == (
+            GOLDEN_CONFIGS["einherjar"].preferred_weapon_stat
+        )
+
+
+class TestCEM:
+    def test_refit_moves_mean_toward_elites(self):
+        base = preset_params("einherjar")
+        cem = CEMState.from_params(base, init_std=0.2)
+        idx = next(
+            i for i, s in enumerate(PARAM_SPECS) if s.name == "overstay_cap"
+        )
+        before = cem.mean[idx]
+
+        elite = dict(base)
+        elite["overstay_cap"] = 0  # elites all say: stop grinding
+        cem.refit([elite, dict(elite)], smoothing=0.7, std_floor=0.05)
+
+        assert cem.mean[idx] < before
+        assert all(s >= 0.05 for s in cem.std)
+
+    def test_sample_respects_types(self):
+        cem = CEMState.from_params(preset_params("einherjar"), init_std=0.3)
+        rng = random.Random(0)
+        sample = cem.sample(rng)
+        for spec in PARAM_SPECS:
+            value = sample[spec.name]
+            if spec.kind == "bool":
+                assert isinstance(value, bool)
+            elif spec.kind == "int":
+                assert isinstance(value, int)
+                assert spec.lo <= value <= spec.hi
+
+
+class TestFitness:
+    class _FakeResult:
+        def __init__(self, **kw):
+            self.seed = kw.get("seed", 0)
+            self.zones_cleared = kw.get("zones_cleared", [])
+            self.encounters_cleared = kw.get("encounters_cleared", 0)
+            self.farthest_zone_level = kw.get("farthest_zone_level", 0)
+            self.is_dead = kw.get("is_dead", False)
+            self.termination_reason = kw.get("termination_reason", "clean_exit")
+            self.final_mc_level = kw.get("final_mc_level", 1)
+
+    def test_alive_at_cap_is_not_a_win(self):
+        weights = FitnessWeights()
+        censored = score_result(
+            self._FakeResult(
+                zones_cleared=["zone_01", "zone_02", "zone_03"],
+                encounters_cleared=200,
+                termination_reason="max_encounters",
+            ),
+            final_zone_ids={"zone_07"},
+            max_encounters=200,
+            weights=weights,
+        )
+        assert censored.won_region is False
+        assert censored.fitness == pytest.approx(
+            3 * weights.per_zone + weights.alive,
+        )
+
+    def test_finishing_early_beats_grinding(self):
+        weights = FitnessWeights()
+        fast = score_result(
+            self._FakeResult(
+                zones_cleared=["zone_%02d" % i for i in range(1, 8)],
+                encounters_cleared=120,
+                termination_reason="clean_exit",
+            ),
+            final_zone_ids={"zone_07"},
+            max_encounters=200,
+            weights=weights,
+        )
+        slow = score_result(
+            self._FakeResult(
+                zones_cleared=["zone_%02d" % i for i in range(1, 8)],
+                encounters_cleared=200,
+                termination_reason="max_encounters",
+            ),
+            final_zone_ids={"zone_07"},
+            max_encounters=200,
+            weights=weights,
+        )
+        assert fast.won_region and slow.won_region
+        assert fast.fitness > slow.fitness
