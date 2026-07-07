@@ -315,12 +315,28 @@ def _run_one_seed(args: tuple):
     from heresiarch.policy.solver import make_solver
     from heresiarch.tools.run_driver import simulate_run as _simulate_run
 
-    seed, job_id, policy_name, macro_name, data_path, max_enc, db_path, solver_depth, solver_prune, macro_lookahead = args
+    (
+        seed, job_id, policy_name, macro_name, data_path, max_enc, db_path,
+        solver_depth, solver_prune, macro_lookahead, macro_params_path,
+    ) = args
     gd = _load_all(Path(data_path))
 
     from heresiarch.policy.solver import SolverConfig
+
+    opt_rollout_cfg = None
+    opt_macro_policy = None
+    if macro_params_path:
+        from heresiarch.policy.builtin.golden_macro import GoldenMacroPolicy
+        from heresiarch.tools.policy_opt import load_params, params_to_configs
+
+        opt_params = load_params(Path(macro_params_path))
+        opt_macro_cfg, opt_rollout_cfg = params_to_configs(opt_params, job_id)
+        opt_macro_policy = GoldenMacroPolicy(
+            config=opt_macro_cfg, game_data=gd, name="opt_macro",
+        )
+
     solver_cfg = SolverConfig(search_depth=solver_depth, prune_after_ply=solver_prune)
-    solver = make_solver(gd, config=solver_cfg)
+    solver = make_solver(gd, config=solver_cfg, rollout_config=opt_rollout_cfg)
     combat_policies = {
         "floor": FloorCombatPolicy(),
         "floor_plus": FloorPlusCombatPolicy(),
@@ -335,6 +351,9 @@ def _run_one_seed(args: tuple):
         "golden_macro": make_golden_macro_for_job(gd, job_id),
         "macro_solver": make_macro_solver(gd, solver, config=macro_solver_cfg, job_id=job_id),
     }
+    if opt_macro_policy is not None:
+        macro_policies["opt_macro"] = opt_macro_policy
+        macro_name = "opt_macro"
 
     record_db = _RecordDB(Path(db_path)) if db_path else None
     try:
@@ -380,11 +399,25 @@ def cmd_run(args: argparse.Namespace) -> None:
         return
 
     from heresiarch.policy.solver import SolverConfig
+
+    macro_params_path = getattr(args, "macro_params", None)
+    opt_rollout_cfg = None
+    opt_macro_policy = None
+    if macro_params_path:
+        from heresiarch.policy.builtin.golden_macro import GoldenMacroPolicy
+        from heresiarch.tools.policy_opt import load_params, params_to_configs
+
+        opt_params = load_params(Path(macro_params_path))
+        opt_macro_cfg, opt_rollout_cfg = params_to_configs(opt_params, args.job)
+        opt_macro_policy = GoldenMacroPolicy(
+            config=opt_macro_cfg, game_data=gd, name="opt_macro",
+        )
+
     solver_config = SolverConfig(
         search_depth=args.solver_depth,
         prune_after_ply=args.solver_prune,
     )
-    solver = make_solver(gd, config=solver_config)
+    solver = make_solver(gd, config=solver_config, rollout_config=opt_rollout_cfg)
     macro_solver_cfg = MacroSolverConfig(
         lookahead_encounters=args.macro_lookahead,
     )
@@ -401,6 +434,9 @@ def cmd_run(args: argparse.Namespace) -> None:
         "golden_macro": make_golden_macro_for_job(gd, args.job),
         "macro_solver": make_macro_solver(gd, solver, config=macro_solver_cfg, job_id=args.job),
     }
+    if opt_macro_policy is not None:
+        macro_policies["opt_macro"] = opt_macro_policy
+        args.macro = "opt_macro"
 
     if args.policy not in combat_policies:
         print(
@@ -435,6 +471,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 args.record_db or "",
                 args.solver_depth, args.solver_prune,
                 args.macro_lookahead,
+                macro_params_path or "",
             )
             for i in range(args.n)
         ]
@@ -525,7 +562,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
             str(Path("data")),
             args.max_encounters, "",
             args.broad_depth, args.broad_prune,
-            macro_lookahead,
+            macro_lookahead, "",
         )
         for i in range(args.n)
     ]
@@ -541,7 +578,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
                 )
 
     broad_summary = summarize(broad_results)
-    print(f"\n--- Broad sweep results ---")
+    print("\n--- Broad sweep results ---")
     print(format_summary(broad_summary))
 
     # --- Identify worst seeds ---
@@ -552,7 +589,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
 
     print(f"\n=== Phase 2: Deep dive on {worst_n} worst seeds (depth={args.deep_depth}, prune={args.deep_prune}) ===", file=sys.stderr)
     print(f"  Seeds: {worst_seed_ids}", file=sys.stderr)
-    print(f"  Broad results for these seeds:", file=sys.stderr)
+    print("  Broad results for these seeds:", file=sys.stderr)
     for r in worst_seeds:
         print(f"    seed {r.seed:>4}: enc={r.encounters_cleared:>3}  lv={r.final_mc_level:>2}  killed_by={r.killed_by}", file=sys.stderr)
 
@@ -564,7 +601,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
             str(Path("data")),
             args.max_encounters, "",
             args.deep_depth, args.deep_prune,
-            macro_lookahead,
+            macro_lookahead, "",
         )
         for seed in worst_seed_ids
     ]
@@ -584,7 +621,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
     broad_by_seed = {r.seed: r for r in worst_seeds}
     deep_by_seed = {r.seed: r for r in deep_results}
 
-    print(f"\n--- Deep dive diff ---")
+    print("\n--- Deep dive diff ---")
     print(f"{'Seed':>6}  {'Broad enc':>9}  {'Deep enc':>8}  {'Delta':>6}  {'Broad killer':>16}  {'Deep killer':>16}")
     print("-" * 70)
     total_improvement = 0
@@ -831,6 +868,11 @@ def main() -> None:
     p.add_argument("--solver-depth", type=int, default=3, help="Solver search depth (default: 3)")
     p.add_argument("--solver-prune", type=int, default=20, help="Solver candidates kept per inner ply (default: 20)")
     p.add_argument("--macro-lookahead", type=int, default=3, help="Macro solver encounter lookahead (default: 3)")
+    p.add_argument(
+        "--macro-params", default=None,
+        help="Path to a policy_opt best.json (or raw params dict). Overrides "
+             "--macro with an optimized GoldenMacroConfig + RolloutConfig.",
+    )
     p.set_defaults(func=cmd_run)
 
     # deep-analyze — two-phase broad sweep + deep dive on worst seeds

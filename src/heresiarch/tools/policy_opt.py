@@ -150,6 +150,19 @@ def _spec_group(name: str) -> ParamGroup | None:
     return None
 
 
+def load_params(path: Path) -> dict[str, float | int | bool]:
+    """Load a parameter dict from a policy_opt artifact.
+
+    Accepts either a ``best.json`` (params under the "params" key) or a
+    raw params dict. Unknown keys are dropped so old artifacts survive
+    spec changes.
+    """
+    payload = json.loads(path.read_text())
+    params = payload.get("params", payload)
+    known = {s.name for s in PARAM_SPECS}
+    return {k: v for k, v in params.items() if k in known}
+
+
 # ---------------------------------------------------------------------------
 # Fitness
 # ---------------------------------------------------------------------------

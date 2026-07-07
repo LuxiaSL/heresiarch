@@ -314,11 +314,13 @@ class EffectPipelineMixin:
             ctx.damage = int(ctx.damage * ctx.insight_multiplier)
             ctx.pre_def_damage = int(ctx.pre_def_damage * ctx.insight_multiplier)
 
-        # Communion: missing-HP scaled amplification for magical abilities (Sacrist innate)
-        communion_passive = self._get_passive(
-            ctx.actor, TriggerCondition.ON_DAMAGE_MODIFY, ctx.state,
-        )
-        if communion_passive:
+        # Communion-style missing-HP amplification (Sacrist innate, plus any
+        # equipment-granted ON_DAMAGE_MODIFY passives). Multiple sources
+        # stack multiplicatively, matching every other trigger's
+        # all-passives dispatch.
+        for communion_passive in self._get_all_passives(
+            ctx.actor, TriggerCondition.ON_DAMAGE_MODIFY,
+        ):
             for pe in communion_passive.effects:
                 if pe.missing_hp_damage_bonus <= 0.0:
                     continue
