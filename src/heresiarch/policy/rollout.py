@@ -171,9 +171,11 @@ class HeuristicRolloutPolicy:
                 bonus_actions=bonus,
             )
 
-        # Rule 4: consume insight stacks — onmyoji banked stacks via
-        # survive; using them amplifies the next ability by 40% per stack.
-        if actor.insight_stacks > 0:
+        # Rule 4: insight management — keep stacking until Rule 1 fires
+        # (kill-all with passive-aware estimation already accounts for
+        # insight amplification). Safety valve: if stacked 6+ rounds and
+        # still can't kill all, dump on the strongest to make progress.
+        if actor.insight_stacks >= 6:
             strongest = max(enemies, key=lambda e: e.current_hp)
             ap = actor.action_points
             if ap > 0:
@@ -192,7 +194,7 @@ class HeuristicRolloutPolicy:
                 bonus_actions=bonus,
             )
 
-        # Rule 5: survive
+        # Rule 5: survive (builds AP + insight stacks for onmyoji)
         return _survive(actor, bonus)
 
 
