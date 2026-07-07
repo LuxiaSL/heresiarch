@@ -259,6 +259,7 @@ def _evaluate_one(task: tuple) -> tuple[int, SeedOutcome]:
     (
         cand_idx, seed, job_id, params,
         solver_depth, solver_prune, max_encounters, weights_dump,
+        adaptive,
     ) = task
     weights = FitnessWeights(**weights_dump)
     try:
@@ -276,6 +277,7 @@ def _evaluate_one(task: tuple) -> tuple[int, SeedOutcome]:
             gd,
             config=SolverConfig(
                 search_depth=solver_depth, prune_after_ply=solver_prune,
+                adaptive_depth=adaptive,
             ),
             rollout_config=rollout_cfg,
         )
@@ -379,6 +381,7 @@ def evaluate_population(
     weights: FitnessWeights,
     workers: int,
     data_path: str,
+    adaptive: bool = False,
 ) -> list[CandidateRecord]:
     """Evaluate every candidate on every seed, in parallel."""
     import multiprocessing
@@ -387,7 +390,7 @@ def evaluate_population(
         (
             idx, seed, job_id, params,
             solver_depth, solver_prune, max_encounters,
-            weights.model_dump(),
+            weights.model_dump(), adaptive,
         )
         for idx, params in enumerate(population)
         for seed in seeds
@@ -469,6 +472,7 @@ def optimize(args: argparse.Namespace) -> None:
             weights=weights,
             workers=args.workers,
             data_path=args.data,
+            adaptive=args.adaptive,
         )
 
         with gen_path.open("a") as fh:
@@ -526,6 +530,7 @@ def optimize(args: argparse.Namespace) -> None:
             weights=weights,
             workers=args.workers,
             data_path=args.data,
+            adaptive=args.adaptive,
         )
         preset_rec, best_rec = final_records[0], final_records[1]
         payload = {
@@ -561,6 +566,8 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=14)
     ap.add_argument("--solver-depth", type=int, default=1,
                     help="Combat solver depth during optimization (cheap)")
+    ap.add_argument("--adaptive", action="store_true",
+                    help="Adaptive solver depth: full depth on dangerous fights only")
     ap.add_argument("--solver-prune", type=int, default=20)
     ap.add_argument("--max-encounters", type=int, default=200)
     ap.add_argument("--seed-base", type=int, default=1000)
