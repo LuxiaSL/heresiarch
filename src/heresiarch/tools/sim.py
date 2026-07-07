@@ -318,6 +318,7 @@ def _run_one_seed(args: tuple):
     (
         seed, job_id, policy_name, macro_name, data_path, max_enc, db_path,
         solver_depth, solver_prune, macro_lookahead, macro_params_path,
+        adaptive,
     ) = args
     gd = _load_all(Path(data_path))
 
@@ -335,7 +336,10 @@ def _run_one_seed(args: tuple):
             config=opt_macro_cfg, game_data=gd, name="opt_macro",
         )
 
-    solver_cfg = SolverConfig(search_depth=solver_depth, prune_after_ply=solver_prune)
+    solver_cfg = SolverConfig(
+        search_depth=solver_depth, prune_after_ply=solver_prune,
+        adaptive_depth=adaptive,
+    )
     solver = make_solver(gd, config=solver_cfg, rollout_config=opt_rollout_cfg)
     combat_policies = {
         "floor": FloorCombatPolicy(),
@@ -416,6 +420,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     solver_config = SolverConfig(
         search_depth=args.solver_depth,
         prune_after_ply=args.solver_prune,
+        adaptive_depth=getattr(args, "adaptive", False),
     )
     solver = make_solver(gd, config=solver_config, rollout_config=opt_rollout_cfg)
     macro_solver_cfg = MacroSolverConfig(
@@ -472,6 +477,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 args.solver_depth, args.solver_prune,
                 args.macro_lookahead,
                 macro_params_path or "",
+                getattr(args, "adaptive", False),
             )
             for i in range(args.n)
         ]
@@ -562,7 +568,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
             str(Path("data")),
             args.max_encounters, "",
             args.broad_depth, args.broad_prune,
-            macro_lookahead, "",
+            macro_lookahead, "", False,
         )
         for i in range(args.n)
     ]
@@ -601,7 +607,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
             str(Path("data")),
             args.max_encounters, "",
             args.deep_depth, args.deep_prune,
-            macro_lookahead, "",
+            macro_lookahead, "", False,
         )
         for seed in worst_seed_ids
     ]
@@ -872,6 +878,10 @@ def main() -> None:
         "--macro-params", default=None,
         help="Path to a policy_opt best.json (or raw params dict). Overrides "
              "--macro with an optimized GoldenMacroConfig + RolloutConfig.",
+    )
+    p.add_argument(
+        "--adaptive", action="store_true",
+        help="Adaptive solver depth: full depth on dangerous fights only",
     )
     p.set_defaults(func=cmd_run)
 

@@ -292,3 +292,68 @@ class TestFitness:
         )
         assert fast.won_region and slow.won_region
         assert fast.fitness > slow.fitness
+
+
+class TestAdaptiveDepth:
+    def test_trash_fight_goes_shallow(self, game_data: GameData):
+        """A lone low-level fodder slime against a strong player is not
+        dangerous — adaptive depth should drop to 1-ply."""
+        from heresiarch.engine.combat import CombatEngine
+        from heresiarch.policy.solver import SolverConfig, make_solver
+        from heresiarch.policy.validation import compute_legal
+        from tests.conftest import _make_character
+
+        player = _make_character(game_data, "einherjar", 15, "iron_blade")
+        engine = CombatEngine(
+            ability_registry=game_data.abilities,
+            item_registry=game_data.items,
+            job_registry=game_data.jobs,
+            rng=random.Random(11),
+            enemy_registry=game_data.enemies,
+        )
+        enemy = engine.create_enemy_instance(
+            game_data.enemies["fodder_slime"], 2,
+        )
+        state = engine.initialize_combat([player], [enemy])
+        actor = state.living_players[0]
+
+        solver = make_solver(
+            game_data,
+            config=SolverConfig(search_depth=3, adaptive_depth=True),
+        )
+        solver.set_context(
+            stash=[], enemy_templates={"fodder_slime": game_data.enemies["fodder_slime"]},
+        )
+        legal = compute_legal(state, actor, stash=[])
+        assert solver._is_dangerous(state, actor, legal) is False
+
+    def test_boss_fight_stays_deep(self, game_data: GameData):
+        """A high-level alpha slime against a weak player is dangerous."""
+        from heresiarch.engine.combat import CombatEngine
+        from heresiarch.policy.solver import SolverConfig, make_solver
+        from heresiarch.policy.validation import compute_legal
+        from tests.conftest import _make_character
+
+        player = _make_character(game_data, "einherjar", 5, "iron_blade")
+        engine = CombatEngine(
+            ability_registry=game_data.abilities,
+            item_registry=game_data.items,
+            job_registry=game_data.jobs,
+            rng=random.Random(11),
+            enemy_registry=game_data.enemies,
+        )
+        enemy = engine.create_enemy_instance(
+            game_data.enemies["alpha_slime"], 8,
+        )
+        state = engine.initialize_combat([player], [enemy])
+        actor = state.living_players[0]
+
+        solver = make_solver(
+            game_data,
+            config=SolverConfig(search_depth=3, adaptive_depth=True),
+        )
+        solver.set_context(
+            stash=[], enemy_templates={"alpha_slime": game_data.enemies["alpha_slime"]},
+        )
+        legal = compute_legal(state, actor, stash=[])
+        assert solver._is_dangerous(state, actor, legal) is True

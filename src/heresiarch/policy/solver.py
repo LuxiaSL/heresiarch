@@ -49,6 +49,13 @@ class SolverConfig:
     max_rollout_rounds: int = DEFAULT_MAX_ROLLOUT_ROUNDS
     search_depth: int = 3
     prune_after_ply: int = 20
+    # Adaptive depth: full search_depth only when the fight is dangerous
+    # (meaningful incoming damage or a long boss-like fight); depth 1
+    # otherwise. Profiling shows trash fights at depth 3 evaluate 600+
+    # candidates per decision for the same move depth 1 picks.
+    adaptive_depth: bool = False
+    danger_hp_ratio: float = 0.25       # incoming/current_hp at or above → dangerous
+    danger_fight_rounds: float = 6.0    # est. rounds to clear at or above → dangerous
 
 
 @dataclass
@@ -58,6 +65,7 @@ class SolverStats:
     short_circuited: int = 0
     candidates_evaluated: int = 0
     rollout_rounds_total: int = 0
+    shallow_decides: int = 0   # adaptive depth dropped to 1-ply
 
 
 class CombatSolver:
@@ -130,6 +138,13 @@ class CombatSolver:
         if len(candidates) > self.config.max_candidates:
             candidates = candidates[: self.config.max_candidates]
 
+        # --- Adaptive depth: spend plies only on dangerous fights ---
+        effective_depth = self.config.search_depth
+        if self.config.adaptive_depth and effective_depth > 1:
+            if not self._is_dangerous(state, actor, legal):
+                effective_depth = 1
+                self._stats.shallow_decides += 1
+
         # --- Evaluate each via rollout ---
         best_score = -1.0
         best_decision = candidates[0]
@@ -150,6 +165,7 @@ class CombatSolver:
             branch_state, branch_rng = snap.restore()
             score = self._evaluate_candidate(
                 branch_state, branch_rng, actor.id, candidate,
+                search_depth=effective_depth,
             )
             ap_spend = candidate.cheat_actions
 
@@ -243,17 +259,50 @@ class CombatSolver:
 
         return None
 
+    def _is_dangerous(
+        self,
+        state: CombatState,
+        actor: CombatantState,
+        legal: LegalActionSet,
+    ) -> bool:
+        """Cheap danger check gating full-depth search.
+
+        Dangerous when this round's projected incoming damage is a real
+        fraction of current HP, or the fight is long enough (boss-like
+        HP pool relative to our damage) that multi-round planning pays.
+        """
+        from heresiarch.policy.rollout import make_damage_fn
+
+        enemies = state.living_enemies
+        if not enemies:
+            return False
+
+        ctx = RuleContext(
+            state=state, actor=actor, legal=legal, game_data=self.game_data,
+        )
+        incoming = projected_incoming_damage(ctx)
+        if incoming >= actor.current_hp * self.config.danger_hp_ratio:
+            return True
+
+        dmg_fn = make_damage_fn(actor, enemies, self.game_data)
+        weakest = min(enemies, key=lambda e: e.current_hp)
+        per_hit = max(1, dmg_fn(actor, weakest))
+        total_enemy_hp = sum(e.current_hp for e in enemies)
+        return total_enemy_hp / per_hit >= self.config.danger_fight_rounds
+
     def _evaluate_candidate(
         self,
         state: CombatState,
         rng,
         actor_id: str,
         candidate: PlayerTurnDecision,
+        search_depth: int | None = None,
     ) -> float:
         """Simulate the candidate decision then search deeper or rollout."""
+        depth = search_depth if search_depth is not None else self.config.search_depth
         return self._search_ply(
             state, rng, actor_id, candidate,
-            depth_remaining=self.config.search_depth - 1,
+            depth_remaining=depth - 1,
             stash=list(self._stash),
         )
 
