@@ -59,6 +59,7 @@ class HeresiarchApp(App):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("ctrl+s", "screenshot", "Screenshot"),
+        ("M", "toggle_music", "Music"),
     ]
 
     def __init__(
@@ -94,6 +95,10 @@ class HeresiarchApp(App):
         self.combat_state: CombatState | None = None
         self.current_enemies: list[EnemyInstance] | None = None
 
+        # Background music — failure-proof, toggled with M.
+        from heresiarch.tui.music import MusicPlayer
+        self.music = MusicPlayer()
+
     def compose(self) -> ComposeResult:
         yield Header()
         yield Footer()
@@ -102,7 +107,22 @@ class HeresiarchApp(App):
         """Push the title screen on startup."""
         from heresiarch.tui.screens.title import TitleScreen
 
+        if self.music.autostart_enabled():
+            self.music.start()
         self.push_screen(TitleScreen())
+
+    def on_unmount(self) -> None:
+        self.music.stop()
+
+    def action_toggle_music(self) -> None:
+        if not self.music.available:
+            self.notify(
+                "No audio backend found (need ffplay, paplay, or aplay)",
+                severity="warning",
+            )
+            return
+        playing = self.music.toggle()
+        self.notify("♪ music on" if playing else "music muted", timeout=2)
 
     def action_quit(self) -> None:
         """Show confirmation modal instead of quitting immediately."""
