@@ -59,12 +59,17 @@ class SolverConfig:
     danger_fight_rounds: float = 6.0    # est. rounds to clear at or above → dangerous
     # Runaway guards. Stall fights (nobody can kill anybody) make every
     # leaf rollout burn max_rollout_rounds and every ply multiply it —
-    # observed 2h+ on a single seed. The wall-clock budget returns the
-    # best candidate found so far once exceeded; the stall threshold
-    # drops to 1-ply search once a fight drags on (extra plies don't
-    # change forced moves). 0 disables either guard.
-    decide_time_budget_s: float = 3.0
-    stall_rounds_shallow: int = 25
+    # observed 2h+ on a single seed. Guard at the right layer:
+    # rollouts break after N rounds with no HP movement anywhere
+    # (productive long fights — einherjar survive/retaliate — always
+    # move HP, so they are never clipped). The wall-clock budget is a
+    # last-resort backstop only; aggressive values measurably degrade
+    # play (holdout: 3s budget + 25-round depth decay cost the preset
+    # 1.85 mean zones). stall_rounds_shallow is off by default for the
+    # same reason. 0 disables any guard.
+    decide_time_budget_s: float = 15.0
+    stall_rounds_shallow: int = 0
+    rollout_no_progress_rounds: int = 8
 
 
 @dataclass
@@ -479,11 +484,12 @@ class CombatSolver:
         remaining_stash = list(stash)
         rounds = 0
         max_rounds = self.config.max_rollout_rounds
+        no_progress_cap = self.config.rollout_no_progress_rounds
+        no_progress = 0
+        prev_hp = _hp_signature(state)
 
         while not state.is_finished and rounds < max_rounds:
-            # Budget guard: a stall fight burns max_rollout_rounds at
-            # EVERY leaf. Timed-out rollouts fall through to the
-            # partial-credit terminal evaluation.
+            # Backstop only — see SolverConfig notes on quality cost.
             if self._over_budget():
                 break
             state.log = []
@@ -499,6 +505,13 @@ class CombatSolver:
                 state, rollout_decisions, self._enemy_templates,
             )
             rounds += 1
+
+            if no_progress_cap > 0:
+                hp_now = _hp_signature(state)
+                no_progress = no_progress + 1 if hp_now == prev_hp else 0
+                prev_hp = hp_now
+                if no_progress >= no_progress_cap:
+                    break
 
             for item_id in state.consumed_items:
                 try:
@@ -537,6 +550,11 @@ def evaluate_terminal(state: CombatState) -> float:
         p.current_hp / max(1, p.max_hp) for p in players
     ) / len(players)
     return 0.5 * hp_ratio
+
+
+def _hp_signature(state: CombatState) -> tuple[int, ...]:
+    """Cheap fingerprint of combat progress: every combatant's HP."""
+    return tuple(c.current_hp for c in state.all_combatants)
 
 
 def _survive(actor: CombatantState) -> PlayerTurnDecision:
