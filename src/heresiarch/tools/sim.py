@@ -404,6 +404,13 @@ def cmd_run(args: argparse.Namespace) -> None:
 
     from heresiarch.policy.solver import SolverConfig
 
+    progress_file = getattr(args, "progress_file", None)
+    if progress_file:
+        import os as _os
+        from heresiarch.tools.progress import ENV_VAR as _PROGRESS_ENV
+        Path(progress_file).parent.mkdir(parents=True, exist_ok=True)
+        _os.environ[_PROGRESS_ENV] = str(Path(progress_file))
+
     macro_params_path = getattr(args, "macro_params", None)
     opt_rollout_cfg = None
     opt_macro_policy = None
@@ -882,6 +889,11 @@ def main() -> None:
     p.add_argument(
         "--adaptive", action="store_true",
         help="Adaptive solver depth: full depth on dangerous fights only",
+    )
+    p.add_argument(
+        "--progress-file", default=None,
+        help="Append per-encounter JSONL heartbeats here; watch live with "
+             "`python -m heresiarch.tools.watch <file>`",
     )
     p.set_defaults(func=cmd_run)
 

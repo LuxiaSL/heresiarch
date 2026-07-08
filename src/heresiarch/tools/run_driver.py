@@ -40,6 +40,7 @@ from heresiarch.policy.validation import (
     compute_legal,
     resolve_decision,
 )
+from heresiarch.tools.progress import ProgressEmitter
 
 if TYPE_CHECKING:
     from heresiarch.analytics.record_db import RecordDB
@@ -89,6 +90,10 @@ class _RunContext:
     metrics: _DriverMetrics = field(default_factory=_DriverMetrics)
     max_encounters: int = DEFAULT_MAX_ENCOUNTERS
     max_combat_rounds: int = DEFAULT_MAX_COMBAT_ROUNDS
+    seed: int = 0
+    emitter: ProgressEmitter = field(
+        default_factory=ProgressEmitter.from_env,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -153,9 +158,20 @@ def simulate_run(
         macro_policy=macro_policy,
         max_encounters=max_encounters,
         max_combat_rounds=max_combat_rounds,
+        seed=seed,
     )
+    ctx.emitter.emit("run_start", seed=seed, job=mc_job_id)
 
     run = _drive(run, ctx)
+
+    ctx.emitter.emit(
+        "run_end",
+        seed=seed,
+        zones=len(run.zones_completed),
+        enc=ctx.metrics.encounters_cleared,
+        dead=run.is_dead,
+        reason=ctx.metrics.termination_reason,
+    )
 
     if record_db is not None:
         from heresiarch.analytics.record_db import RunRecordMetadata
@@ -542,6 +558,7 @@ def _drive_zone(run: RunState, ctx: _RunContext) -> RunState:
             break
 
         run, victorious, final_state = _run_encounter(run, ctx, enemies)
+        _emit_encounter(run, ctx)
         if run.is_dead:
             # Defeat metrics already set inside _run_encounter.
             return run
@@ -555,6 +572,32 @@ def _drive_zone(run: RunState, ctx: _RunContext) -> RunState:
                 break
 
     return run
+
+
+def _emit_encounter(run: RunState, ctx: _RunContext) -> None:
+    """Heartbeat one line per finished encounter to the progress stream."""
+    if not ctx.emitter.enabled:
+        return
+    mc_level = 0
+    hp_total = 0
+    hp_max = 0
+    for cid in run.party.active:
+        char = run.party.characters.get(cid)
+        if char is None:
+            continue
+        hp_total += max(0, char.current_hp)
+        hp_max += max(1, char.max_hp)
+        if char.is_mc:
+            mc_level = char.level
+    ctx.emitter.emit(
+        "encounter",
+        seed=ctx.seed,
+        zone=run.current_zone_id or "",
+        enc=ctx.metrics.encounters_cleared,
+        level=mc_level,
+        hp_pct=round(hp_total / max(1, hp_max), 3),
+        gold=run.party.money,
+    )
 
 
 def _apply_between_encounter_items(

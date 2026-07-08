@@ -436,6 +436,16 @@ def optimize(args: argparse.Namespace) -> None:
     gen_path = out_dir / "generations.jsonl"
     best_path = out_dir / "best.json"
 
+    # Per-encounter heartbeats from every worker; watch live with
+    # `python -m heresiarch.tools.watch <out_dir>/progress.jsonl`.
+    import os
+
+    from heresiarch.tools.progress import ENV_VAR, ProgressEmitter
+    progress_path = out_dir / "progress.jsonl"
+    os.environ[ENV_VAR] = str(progress_path)
+    emitter = ProgressEmitter(progress_path)
+    print(f"Live view: uv run python -m heresiarch.tools.watch {progress_path}")
+
     weights = FitnessWeights()
     rng = random.Random(args.cem_seed)
 
@@ -503,6 +513,14 @@ def optimize(args: argparse.Namespace) -> None:
 
         dt = time.time() - t0
         mean_fit = sum(r.mean_fitness for r in records) / len(records)
+        emitter.emit(
+            "generation",
+            gen=gen,
+            best=round(gen_best.mean_fitness, 1),
+            pop_mean=round(mean_fit, 1),
+            best_ever=round(best_fitness, 1),
+            win_rate=round(gen_best.win_rate, 3),
+        )
         print(
             f"  gen {gen}: best={gen_best.mean_fitness:7.1f} "
             f"(win={gen_best.win_rate:.0%} zones={gen_best.mean_zones:.1f}) "
@@ -517,6 +535,7 @@ def optimize(args: argparse.Namespace) -> None:
     if args.final_seeds > 0:
         print(f"\nFinal holdout: {args.final_seeds} fresh seeds "
               f"at depth {args.final_depth} — best vs preset...")
+        emitter.emit("phase", label="holdout")
         holdout = [
             args.seed_base + 100_000 + i for i in range(args.final_seeds)
         ]

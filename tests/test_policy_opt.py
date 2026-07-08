@@ -357,3 +357,76 @@ class TestAdaptiveDepth:
         )
         legal = compute_legal(state, actor, stash=[])
         assert solver._is_dangerous(state, actor, legal) is True
+
+
+class TestProgressStream:
+    def test_emitter_and_reader_roundtrip(self, tmp_path):
+        from heresiarch.tools.progress import ProgressEmitter, read_events
+
+        path = tmp_path / "progress.jsonl"
+        em = ProgressEmitter(path)
+        em.emit("run_start", seed=7, job="einherjar")
+        em.emit("encounter", seed=7, zone="zone_01", enc=1,
+                level=2, hp_pct=0.85, gold=30)
+        em.emit("run_end", seed=7, zones=1, enc=5, dead=True, reason="dead")
+
+        events, offset = read_events(path, 0)
+        assert [e["kind"] for e in events] == ["run_start", "encounter", "run_end"]
+        # Incremental read from offset returns nothing new.
+        more, offset2 = read_events(path, offset)
+        assert more == [] and offset2 == offset
+
+    def test_disabled_emitter_is_noop(self):
+        from heresiarch.tools.progress import ProgressEmitter
+
+        em = ProgressEmitter(None)
+        em.emit("run_start", seed=1)  # must not raise
+        assert em.enabled is False
+
+    def test_reader_tolerates_torn_tail(self, tmp_path):
+        from heresiarch.tools.progress import ProgressEmitter, read_events
+
+        path = tmp_path / "progress.jsonl"
+        ProgressEmitter(path).emit("run_start", seed=1, job="x")
+        with path.open("a") as fh:
+            fh.write('{"kind": "encounter", "seed"')  # torn mid-write
+        events, _ = read_events(path, 0)
+        assert [e["kind"] for e in events] == ["run_start"]
+
+    def test_run_driver_emits_heartbeats(self, tmp_path, monkeypatch, game_data):
+        from heresiarch.policy.builtin.default_macro import DefaultMacroPolicy
+        from heresiarch.policy.builtin.floor import FloorCombatPolicy
+        from heresiarch.tools.progress import ENV_VAR, read_events
+        from heresiarch.tools.run_driver import simulate_run
+
+        path = tmp_path / "progress.jsonl"
+        monkeypatch.setenv(ENV_VAR, str(path))
+        simulate_run(
+            mc_job_id="einherjar",
+            combat_policy=FloorCombatPolicy(),
+            macro_policy=DefaultMacroPolicy(),
+            seed=0,
+            game_data=game_data,
+            max_encounters=3,
+        )
+        events, _ = read_events(path, 0)
+        kinds = [e["kind"] for e in events]
+        assert kinds[0] == "run_start"
+        assert kinds[-1] == "run_end"
+        assert "encounter" in kinds
+
+    def test_watch_state_applies_events(self):
+        from heresiarch.tools.watch import WatchState
+
+        st = WatchState()
+        st.apply({"kind": "run_start", "seed": 3, "job": "x", "ts": 1.0})
+        st.apply({"kind": "encounter", "seed": 3, "zone": "zone_01",
+                  "enc": 2, "level": 4, "hp_pct": 0.5, "gold": 10, "ts": 2.0})
+        assert st.seeds[3].zone == "zone_01"
+        assert st.seeds[3].dead is None
+        st.apply({"kind": "run_end", "seed": 3, "zones": 1, "enc": 9,
+                  "dead": True, "reason": "dead", "ts": 3.0})
+        assert st.seeds[3].dead is True
+        st.apply({"kind": "generation", "gen": 0, "best": 500.0,
+                  "pop_mean": 300.0, "best_ever": 500.0, "win_rate": 0.1})
+        assert len(st.gen_lines) == 1
