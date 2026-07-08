@@ -12,6 +12,7 @@ for in the forward simulation.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -56,6 +57,14 @@ class SolverConfig:
     adaptive_depth: bool = False
     danger_hp_ratio: float = 0.25       # incoming/current_hp at or above → dangerous
     danger_fight_rounds: float = 6.0    # est. rounds to clear at or above → dangerous
+    # Runaway guards. Stall fights (nobody can kill anybody) make every
+    # leaf rollout burn max_rollout_rounds and every ply multiply it —
+    # observed 2h+ on a single seed. The wall-clock budget returns the
+    # best candidate found so far once exceeded; the stall threshold
+    # drops to 1-ply search once a fight drags on (extra plies don't
+    # change forced moves). 0 disables either guard.
+    decide_time_budget_s: float = 3.0
+    stall_rounds_shallow: int = 25
 
 
 @dataclass
@@ -66,6 +75,7 @@ class SolverStats:
     candidates_evaluated: int = 0
     rollout_rounds_total: int = 0
     shallow_decides: int = 0   # adaptive depth dropped to 1-ply
+    budget_exhausted: int = 0  # decides cut short by the time budget
 
 
 class CombatSolver:
@@ -89,6 +99,7 @@ class CombatSolver:
         self._stats = SolverStats()
         self._stash: list[str] = []
         self._enemy_templates: dict[str, EnemyTemplate] = {}
+        self._deadline: float | None = None
 
     @property
     def stats(self) -> SolverStats:
@@ -138,12 +149,24 @@ class CombatSolver:
         if len(candidates) > self.config.max_candidates:
             candidates = candidates[: self.config.max_candidates]
 
+        # --- Arm the per-decision wall-clock budget ---
+        if self.config.decide_time_budget_s > 0:
+            self._deadline = time.monotonic() + self.config.decide_time_budget_s
+        else:
+            self._deadline = None
+
         # --- Adaptive depth: spend plies only on dangerous fights ---
         effective_depth = self.config.search_depth
         if self.config.adaptive_depth and effective_depth > 1:
             if not self._is_dangerous(state, actor, legal):
                 effective_depth = 1
                 self._stats.shallow_decides += 1
+
+        # --- Stall decay: long fights are forced-move territory ---
+        stall = self.config.stall_rounds_shallow
+        if stall > 0 and state.round_number >= stall and effective_depth > 1:
+            effective_depth = 1
+            self._stats.shallow_decides += 1
 
         # --- Evaluate each via rollout ---
         best_score = -1.0
@@ -162,6 +185,9 @@ class CombatSolver:
         snap = CombatSnapshot.take(state, base_rng)
 
         for candidate in candidates:
+            if self._over_budget() and best_score >= 0:
+                self._stats.budget_exhausted += 1
+                break
             branch_state, branch_rng = snap.restore()
             score = self._evaluate_candidate(
                 branch_state, branch_rng, actor.id, candidate,
@@ -258,6 +284,9 @@ class CombatSolver:
                 return _survive(actor)
 
         return None
+
+    def _over_budget(self) -> bool:
+        return self._deadline is not None and time.monotonic() > self._deadline
 
     def _is_dangerous(
         self,
@@ -426,6 +455,8 @@ class CombatSolver:
 
         best_score = -1.0
         for cand in candidates:
+            if self._over_budget() and best_score >= 0:
+                break
             branch_state, branch_rng = snap.restore()
             score = self._search_ply(
                 branch_state, branch_rng, actor_id, cand,
@@ -450,6 +481,11 @@ class CombatSolver:
         max_rounds = self.config.max_rollout_rounds
 
         while not state.is_finished and rounds < max_rounds:
+            # Budget guard: a stall fight burns max_rollout_rounds at
+            # EVERY leaf. Timed-out rollouts fall through to the
+            # partial-credit terminal evaluation.
+            if self._over_budget():
+                break
             state.log = []
 
             rollout_decisions: dict[str, PlayerTurnDecision] = {}
