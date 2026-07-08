@@ -812,7 +812,10 @@ class TestAbilitySourceTracking:
         party = run.party.model_copy(update={"stash": new_stash, "items": new_items})
         run = run.model_copy(update={"party": party})
 
-        run = gl.equip_item(run, mc_id, item.id, item.equip_type.value)
+        slot = item.equip_type.value
+        if slot == "ACCESSORY":
+            slot = "ACCESSORY_1"
+        run = gl.equip_item(run, mc_id, item.id, slot)
         updated_mc = run.party.characters[mc_id]
 
         # Should have ability_sources populated

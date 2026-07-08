@@ -88,3 +88,33 @@
   description: "Heals 8% of missing HP at the start of each turn."
   effects:
     - regen_missing_hp_percent: 0.08
+
+- id: verdant_graft
+  name: Verdant Graft
+  category: PASSIVE
+  target: SELF
+  trigger: ON_TURN_START
+  is_innate: false
+  description: "Heals 3% of missing HP at the start of each turn."
+  effects:
+    - regen_missing_hp_percent: 0.03
+
+- id: bramble_ward
+  name: Bramble Ward
+  category: PASSIVE
+  target: SELF
+  trigger: ON_HIT_RECEIVED
+  is_innate: false
+  description: "Reflects 20% of incoming pre-defense damage back to the attacker."
+  effects:
+    - reflect_percent: 0.20
+
+- id: blood_pact
+  name: Blood Pact
+  category: PASSIVE
+  target: SELF
+  trigger: ON_DAMAGE_MODIFY
+  is_innate: false
+  description: "All damage you deal grows with your wounds — up to +50% at half HP lost."
+  effects:
+    - missing_hp_damage_bonus: 0.5

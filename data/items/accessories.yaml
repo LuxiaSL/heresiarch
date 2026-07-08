@@ -375,3 +375,43 @@
   description: "Sparks from your MAG rejuvenate."
   base_price: 2000
   mag_leech_percent: 0.075
+
+# ===================================================================
+# Borrowed identities — equipment-granted passives (synergy wave 1)
+# ===================================================================
+
+- id: kodama_graft
+  name: Kodama Graft
+  equip_type: ACCESSORY
+  tier: 2
+  loot_category: utility_accessory
+  description: "A sapling rooted in your shoulder. It likes you."
+  base_price: 2500
+  granted_ability_id: verdant_graft
+
+- id: bramble_band
+  name: Bramble Band
+  equip_type: ACCESSORY
+  tier: 2
+  loot_category: utility_accessory
+  description: "Wear pain, return it."
+  base_price: 2500
+  granted_ability_id: bramble_ward
+
+- id: crimson_locket
+  name: Crimson Locket
+  equip_type: ACCESSORY
+  tier: 2
+  loot_category: utility_accessory
+  description: "It beats faster when you bleed."
+  base_price: 3000
+  granted_ability_id: blood_pact
+
+- id: hunters_chain
+  name: Hunter's Chain
+  equip_type: ACCESSORY
+  tier: 2
+  loot_category: utility_accessory
+  description: "Each trophy pulls the next strike forward."
+  base_price: 3000
+  granted_ability_id: momentum

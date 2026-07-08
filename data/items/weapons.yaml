@@ -63,3 +63,43 @@
     stat: MAG
     base: 15.0
     quadratic_coeff: 0.0069
+
+- id: temple_pillar
+  name: Temple Pillar
+  equip_type: WEAPON
+  loot_category: weapon
+  tier: 1
+  description: "A shrine column. The shrine objected; you insisted."
+  base_price: 120
+  scaling:
+    scaling_type: LINEAR
+    stat: DEF
+    base: 12.0
+    linear_coeff: 0.85
+
+- id: zephyr_fang
+  name: Zephyr Fang
+  equip_type: WEAPON
+  loot_category: weapon
+  tier: 2
+  description: "It finishes the swing before you start it."
+  base_price: 5000
+  scaling:
+    scaling_type: SUPERLINEAR
+    stat: SPD
+    base: 5.0
+    linear_coeff: 0.2
+    quadratic_coeff: 0.003
+
+- id: hollow_prism
+  name: Hollow Prism
+  equip_type: WEAPON
+  loot_category: weapon
+  tier: 3
+  description: "Focuses light that isn't there yet."
+  base_price: 20000
+  scaling:
+    scaling_type: DEGENERATE
+    stat: MAG
+    constant_offset: -154.5
+    quadratic_coeff: 0.007884
