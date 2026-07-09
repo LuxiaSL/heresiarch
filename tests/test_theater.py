@@ -15,8 +15,10 @@ from heresiarch.tools.theater import (
     PanelPlayer,
     _enemy_display_names,
     _macro_line,
+    _row_sig,
     build_timeline,
     load_run_encounters,
+    refresh_follow,
     render_panel,
     render_wall,
     select_runs,
@@ -137,6 +139,108 @@ def test_select_runs_filters(tmp_path: Path, game_data: GameData):
         run_ids=[one_id], job=None, source=None, limit=10,
     )
     assert [r["run_id"] for r in select_runs(db, args_ids)] == [one_id]
+    db.close()
+
+
+def test_live_timeline_is_strict_prefix(tmp_path: Path, game_data: GameData):
+    """Follow mode's cursor-safety contract: a live timeline built from
+    k encounters is a strict prefix of the timeline built from k+m
+    encounters (and of the final non-live build)."""
+    db = _seed_db(tmp_path, game_data, seeds=(7,))
+    row = _select_all(db)[0]
+    encounters = load_run_encounters(db, row["run_id"])
+    macro = db.macro_events_for_run(row["run_id"])
+    assert len(encounters) >= 2, "need a multi-encounter run for this test"
+
+    full = build_timeline(row, encounters, macro, game_data, live=False)
+    prev_len = -1
+    for k in range(1, len(encounters) + 1):
+        partial = build_timeline(
+            row, encounters[:k], macro, game_data, live=True,
+        )
+        assert len(partial) > prev_len
+        prev_len = len(partial)
+        assert full[: len(partial)] == partial, f"prefix broken at k={k}"
+
+    # The live build of ALL encounters is also a prefix of the final
+    # build (which appends trailing macros + the outcome banner).
+    live_all = build_timeline(row, encounters, macro, game_data, live=True)
+    assert len(full) > len(live_all)
+    assert full[: len(live_all)] == live_all
+    db.close()
+
+
+class _CountingDB(RecordDB):
+    """RecordDB that counts record_run calls (mid-run + final)."""
+
+    def __init__(self, path: Path):
+        super().__init__(path)
+        self.write_count = 0
+
+    def record_run(self, *args, **kwargs):  # type: ignore[override]
+        self.write_count += 1
+        return super().record_run(*args, **kwargs)
+
+
+def test_record_every_upserts_mid_run(tmp_path: Path, game_data: GameData):
+    """record_every triggers incremental upserts, final write still wins."""
+    db = _CountingDB(tmp_path / "live.db")
+    result = simulate_run(
+        mc_job_id="einherjar",
+        combat_policy=FloorCombatPolicy(),
+        macro_policy=FloorPlusMacroPolicy(),
+        seed=8,
+        max_encounters=30,
+        game_data=game_data,
+        record_db=db,
+        record_every=1,
+    )
+    # One write per encounter + the final authoritative write.
+    assert db.write_count >= 2
+    assert db.count_runs() == 1
+    row = _select_all(db)[0]
+    assert row["outcome"] == ("dead" if result.is_dead else "clean_exit")
+    db.close()
+
+
+def test_refresh_follow_attaches_and_extends(
+    tmp_path: Path, game_data: GameData,
+):
+    """Follow polling: attaches new runs, extends on signature change,
+    and preserves the playback cursor across a rebuild."""
+    db = _seed_db(tmp_path, game_data, seeds=(9,))
+    args = argparse.Namespace(
+        run_ids=None, job=None, source=None, limit=4, stale_after=1e9,
+    )
+    panels = refresh_follow(db, args, game_data, [])
+    assert len(panels) == 1
+    pp = panels[0]
+    assert pp.run_id and pp.sig == _row_sig(_select_all(db)[0])
+
+    # Play a bit, then force a "the run grew" rebuild by clearing sig.
+    pp.advance(30_000)
+    cursor_before = pp.cursor
+    assert cursor_before > 0
+    pp.sig = ()
+    panels = refresh_follow(db, args, game_data, panels)
+    assert panels[0] is pp
+    assert pp.cursor == cursor_before, "rebuild must not move the cursor"
+
+    # A second recorded run gets attached on the next poll.
+    simulate_run(
+        mc_job_id="einherjar",
+        combat_policy=FloorCombatPolicy(),
+        macro_policy=FloorPlusMacroPolicy(),
+        seed=10,
+        max_encounters=30,
+        game_data=game_data,
+        record_db=db,
+    )
+    panels = refresh_follow(db, args, game_data, panels)
+    assert len(panels) == 2
+    assert {p.run_id for p in panels} == {
+        r["run_id"] for r in _select_all(db)
+    }
     db.close()
 
 

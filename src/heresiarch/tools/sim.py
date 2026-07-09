@@ -318,7 +318,7 @@ def _run_one_seed(args: tuple):
     (
         seed, job_id, policy_name, macro_name, data_path, max_enc, db_path,
         solver_depth, solver_prune, macro_lookahead, macro_params_path,
-        adaptive,
+        adaptive, record_every,
     ) = args
     gd = _load_all(Path(data_path))
 
@@ -369,6 +369,7 @@ def _run_one_seed(args: tuple):
             game_data=gd,
             max_encounters=max_enc,
             record_db=record_db,
+            record_every=record_every,
         )
     finally:
         if record_db is not None:
@@ -485,6 +486,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 args.macro_lookahead,
                 macro_params_path or "",
                 getattr(args, "adaptive", False),
+                getattr(args, "record_every", 0),
             )
             for i in range(args.n)
         ]
@@ -514,6 +516,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 max_encounters=args.max_encounters,
                 game_data=gd,
                 record_db=record_db,
+                record_every=getattr(args, "record_every", 0),
             )
             results.append(r)
             if args.progress:
@@ -575,7 +578,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
             str(Path("data")),
             args.max_encounters, "",
             args.broad_depth, args.broad_prune,
-            macro_lookahead, "", False,
+            macro_lookahead, "", False, 0,
         )
         for i in range(args.n)
     ]
@@ -614,7 +617,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
             str(Path("data")),
             args.max_encounters, "",
             args.deep_depth, args.deep_prune,
-            macro_lookahead, "", False,
+            macro_lookahead, "", False, 0,
         )
         for seed in worst_seed_ids
     ]
@@ -868,6 +871,11 @@ def main() -> None:
         default=None,
         help="Path to SQLite DB. Each run's battle record is upserted for "
              "later mining (golden-path analysis, regressions).",
+    )
+    p.add_argument(
+        "--record-every", type=int, default=0,
+        help="With --record-db: also upsert mid-run every N encounters so "
+             "the run is watchable live (theater --follow). 0 = final only.",
     )
     p.add_argument(
         "--progress", action="store_true",

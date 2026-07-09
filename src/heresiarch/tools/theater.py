@@ -333,7 +333,7 @@ def _encounter_steps(
             if eid not in seen_enemies and cur.get(eid, 0) > 0:
                 cur[eid] = 0
                 resync[eid] = (0, maxes.get(eid, 1))
-        enemy_ids = list(seen_enemies)
+        enemy_ids = list(rnd.enemy_hp.keys())
         if resync or roster_add:
             steps.append(Step(
                 hp=resync or None,
@@ -359,8 +359,16 @@ def build_timeline(
     encounters: list[EncounterRecord],
     macro_events: list[dict[str, Any]],
     game_data: GameData,
+    *,
+    live: bool = False,
 ) -> list[Step]:
-    """Flatten a full recorded run into an ordered list of Steps."""
+    """Flatten a full recorded run into an ordered list of Steps.
+
+    ``live=True`` builds a *prefix* timeline for a run still being
+    recorded: macro events that trail the last known encounter and the
+    final outcome banner are held back, so a later rebuild with more
+    encounters strictly extends the previous step list (cursor-safe).
+    """
     player_names: dict[str, str] = {}
     try:
         run_state = json.loads(run_row.get("run_state_json") or "{}")
@@ -390,6 +398,11 @@ def build_timeline(
                 delay_ms=BANNER_DELAY_MS,
                 line=f"[dim red]⚠ unplayable encounter record #{enc_idx}[/dim red]",
             ))
+    if live:
+        # Hold back trailing macros + outcome banner: they'll be
+        # emitted once the run finishes (or more encounters land).
+        return steps
+
     # Trailing macro events (after the last recorded encounter).
     for seq in sorted(macro_by_seq):
         for evt in macro_by_seq[seq]:
@@ -433,6 +446,10 @@ class PanelPlayer:
 
     title: str
     steps: list[Step]
+    run_id: str = ""
+    sig: tuple = ()  # (rounds_total, encounters_cleared, outcome) change detector
+    live: bool = False  # run is still being recorded (follow mode)
+    stale: bool = False  # in_progress but no recent DB updates
     cursor: int = 0
     budget_ms: float = 0.0
     zone: str = ""
@@ -583,11 +600,18 @@ def render_panel(pp: PanelPlayer, width: int) -> Panel:
     else:
         border = "cyan"
     subtitle = pp.status or (f"{pp.zone} · enc {pp.enc}" if pp.zone else "")
+    sub_style = "dim" if not pp.final else border
+    if pp.final is None:
+        if pp.stale:
+            subtitle = f"⏳ {subtitle or 'stale'}"
+        elif pp.live:
+            subtitle = f"● {subtitle or 'live'}"
+            sub_style = "bold red" if pp.done else "red"
     header = f"{pp.title} · lv{pp.level} · {pp.gold}g"
     return Panel(
         Group(*rows),
         title=Text(header, style="bold"),
-        subtitle=Text(subtitle, style="dim" if not pp.final else border),
+        subtitle=Text(subtitle, style=sub_style),
         border_style=border if pp.final else "dim cyan",
         width=width,
         padding=(0, 1),
@@ -603,12 +627,17 @@ def render_wall(
 ) -> Group:
     width = max(30, (console.size.width - 2) // max(1, cols) - 1)
     rendered = [render_panel(pp, width) for pp in panels]
-    finished = sum(1 for pp in panels if pp.done)
+    finished = sum(1 for pp in panels if pp.done and pp.final is not None)
+    n_live = sum(1 for pp in panels if pp.live and not pp.stale and pp.final is None)
+    live_part = f" · [red]● {n_live} live[/red]" if n_live else ""
     state = "⏸ PAUSED" if paused else f"▶ ×{speed:g}"
     header = Text.from_markup(
-        f"[bold]⚔ THEATER[/bold] — {len(panels)} runs · {finished} finished · "
+        f"[bold]⚔ THEATER[/bold] — {len(panels)} runs · {finished} finished"
+        f"{live_part} · "
         f"{state}   [dim]\\[space] pause · +/- speed · r restart · q quit[/dim]"
     )
+    if not panels:
+        return Group(header, Text("  … waiting for runs to appear", style="dim"))
     return Group(header, Columns(rendered, padding=(0, 1)))
 
 
@@ -669,7 +698,7 @@ def select_runs(db: RecordDB, args: argparse.Namespace) -> list[dict[str, Any]]:
     sql = """
         SELECT run_id, source, mc_job_id, mc_name, seed, outcome,
                killed_by, killed_at_zone, encounters_cleared, rounds_total,
-               zones_cleared, run_state_json
+               zones_cleared, recorded_at, run_state_json
         FROM runs WHERE 1=1
     """
     params: list[Any] = []
@@ -688,6 +717,108 @@ def select_runs(db: RecordDB, args: argparse.Namespace) -> list[dict[str, Any]]:
     cur = db.conn.execute(sql, tuple(params))
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def _make_title(row: dict[str, Any]) -> str:
+    seed = row.get("seed")
+    tag = f" s{seed}" if seed is not None else ""
+    return f"{row['mc_job_id']}{tag} · {str(row['run_id'])[-8:]}"
+
+
+def _row_sig(row: dict[str, Any]) -> tuple:
+    return (
+        row.get("rounds_total"),
+        row.get("encounters_cleared"),
+        row.get("outcome"),
+    )
+
+
+def _is_stale(row: dict[str, Any], stale_after_s: float) -> bool:
+    """An in_progress run with no recent upserts (killed/abandoned)."""
+    if str(row.get("outcome")) != "in_progress":
+        return False
+    try:
+        from datetime import datetime, timezone
+
+        rec = datetime.fromisoformat(str(row.get("recorded_at")))
+        if rec.tzinfo is None:
+            rec = rec.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - rec).total_seconds()
+        return age > stale_after_s
+    except (ValueError, TypeError):
+        return True
+
+
+def _build_panel_steps(
+    db: RecordDB,
+    row: dict[str, Any],
+    game_data: GameData,
+    *,
+    live: bool,
+) -> list[Step]:
+    run_id = str(row["run_id"])
+    encounters = load_run_encounters(db, run_id)
+    macro = db.macro_events_for_run(run_id)
+    return build_timeline(row, encounters, macro, game_data, live=live)
+
+
+def refresh_follow(
+    db: RecordDB,
+    args: argparse.Namespace,
+    game_data: GameData,
+    panels: list[PanelPlayer],
+) -> list[PanelPlayer]:
+    """Poll the DB: extend changed runs' timelines, attach new runs.
+
+    Live timelines are strict prefixes of their later rebuilds (see
+    build_timeline), so replacing a panel's step list preserves its
+    cursor position.
+    """
+    try:
+        rows = select_runs(db, args)
+    except Exception:
+        return panels  # transient DB hiccup — keep playing what we have
+    by_id = {pp.run_id: pp for pp in panels}
+    for row in rows:
+        run_id = str(row["run_id"])
+        sig = _row_sig(row)
+        stale = _is_stale(row, args.stale_after)
+        live = str(row.get("outcome")) == "in_progress"
+        pp = by_id.get(run_id)
+        if pp is not None:
+            pp.stale = stale
+            if pp.sig == sig:
+                continue
+            try:
+                steps = _build_panel_steps(db, row, game_data, live=live)
+            except Exception:
+                continue
+            if len(steps) < pp.cursor:
+                pp.reset()  # record shrank (shouldn't happen) — replay
+            pp.steps = steps
+            pp.sig = sig
+            pp.live = live
+            continue
+        # New run — attach if there's room or a finished panel to bump.
+        try:
+            steps = _build_panel_steps(db, row, game_data, live=live)
+        except Exception:
+            continue
+        new_pp = PanelPlayer(
+            title=_make_title(row), steps=steps, run_id=run_id,
+            sig=sig, live=live, stale=stale,
+        )
+        if len(panels) < args.limit:
+            panels.append(new_pp)
+            by_id[run_id] = new_pp
+        else:
+            for i, old in enumerate(panels):
+                if old.done and not (old.live and not old.stale):
+                    by_id.pop(old.run_id, None)
+                    panels[i] = new_pp
+                    by_id[run_id] = new_pp
+                    break
+    return panels
 
 
 def load_run_encounters(db: RecordDB, run_id: str) -> list[EncounterRecord]:
@@ -748,6 +879,15 @@ def main() -> None:
                     help="Playback speed multiplier (default 1.0)")
     ap.add_argument("--loop", action="store_true",
                     help="Restart the wall when every run finishes")
+    ap.add_argument("--follow", action="store_true",
+                    help="Tail the DB: attach to in-flight runs (live "
+                         "recording via --record-every / policy_opt "
+                         "--record-db) and extend as they grow")
+    ap.add_argument("--poll", type=float, default=2.0,
+                    help="Follow mode: DB poll interval in seconds")
+    ap.add_argument("--stale-after", type=float, default=240.0,
+                    help="Follow mode: mark an in_progress run stale after "
+                         "this many seconds without DB updates")
     ap.add_argument("--list", action="store_true", dest="list_runs",
                     help="List recorded runs and exit")
     args = ap.parse_args()
@@ -755,9 +895,14 @@ def main() -> None:
     console = Console()
     db_path = Path(args.db)
     if not db_path.exists():
-        console.print(f"[red]No record DB at {db_path}[/red] — "
-                      "record runs first (TUI autosaves, or sim run --record-db).")
-        raise SystemExit(1)
+        if args.follow:
+            console.print(f"[dim]Waiting for {db_path} to appear…[/dim]")
+            while not db_path.exists():
+                time.sleep(1.0)
+        else:
+            console.print(f"[red]No record DB at {db_path}[/red] — "
+                          "record runs first (TUI autosaves, or sim run --record-db).")
+            raise SystemExit(1)
 
     db = RecordDB(db_path)
     try:
@@ -765,72 +910,83 @@ def main() -> None:
             list_runs(db, console)
             return
 
-        rows = select_runs(db, args)
-        if not rows:
-            console.print("[yellow]No matching runs in the DB.[/yellow] "
-                          "Try --list to see what's recorded.")
-            raise SystemExit(1)
-
-        console.print(f"[dim]Loading {len(rows)} runs…[/dim]")
         game_data = load_all(Path(args.data))
         panels: list[PanelPlayer] = []
-        for row in rows:
-            encounters = load_run_encounters(db, str(row["run_id"]))
-            macro = db.macro_events_for_run(str(row["run_id"]))
-            steps = build_timeline(row, encounters, macro, game_data)
-            seed = row.get("seed")
-            tag = f" s{seed}" if seed is not None else ""
-            title = f"{row['mc_job_id']}{tag} · {str(row['run_id'])[-8:]}"
-            panels.append(PanelPlayer(title=title, steps=steps))
-    finally:
-        db.close()
+        if args.follow:
+            panels = refresh_follow(db, args, game_data, panels)
+        else:
+            rows = select_runs(db, args)
+            if not rows:
+                console.print("[yellow]No matching runs in the DB.[/yellow] "
+                              "Try --list to see what's recorded.")
+                raise SystemExit(1)
+            console.print(f"[dim]Loading {len(rows)} runs…[/dim]")
+            for row in rows:
+                steps = _build_panel_steps(db, row, game_data, live=False)
+                panels.append(PanelPlayer(
+                    title=_make_title(row), steps=steps,
+                    run_id=str(row["run_id"]), sig=_row_sig(row),
+                ))
 
-    speed = max(0.1, args.speed)
-    paused = False
-    with KeyReader() as keys:
-        with Live(
-            render_wall(panels, console, args.cols, speed, paused),
-            console=console,
-            refresh_per_second=10,
-            screen=True,
-        ) as live:
-            last = time.monotonic()
-            all_done_at: float | None = None
-            try:
-                while True:
-                    key = keys.read()
-                    if key in ("q", "Q", "\x03"):
-                        break
-                    elif key == " ":
-                        paused = not paused
-                    elif key in ("+", "="):
-                        speed = min(64.0, speed * 2)
-                    elif key in ("-", "_"):
-                        speed = max(0.25, speed / 2)
-                    elif key in ("r", "R"):
-                        for pp in panels:
-                            pp.reset()
-                        all_done_at = None
+        speed = max(0.1, args.speed)
+        paused = False
+        with KeyReader() as keys:
+            with Live(
+                render_wall(panels, console, args.cols, speed, paused),
+                console=console,
+                refresh_per_second=10,
+                screen=True,
+            ) as live:
+                last = time.monotonic()
+                last_poll = time.monotonic()
+                all_done_at: float | None = None
+                try:
+                    while True:
+                        key = keys.read()
+                        if key in ("q", "Q", "\x03"):
+                            break
+                        elif key == " ":
+                            paused = not paused
+                        elif key in ("+", "="):
+                            speed = min(64.0, speed * 2)
+                        elif key in ("-", "_"):
+                            speed = max(0.25, speed / 2)
+                        elif key in ("r", "R"):
+                            for pp in panels:
+                                pp.reset()
+                            all_done_at = None
 
-                    now = time.monotonic()
-                    dt = now - last
-                    last = now
-                    if not paused:
-                        for pp in panels:
-                            pp.advance(dt * 1000.0 * speed)
+                        now = time.monotonic()
+                        dt = now - last
+                        last = now
+                        if not paused:
+                            for pp in panels:
+                                pp.advance(dt * 1000.0 * speed)
 
-                    if all(pp.done for pp in panels):
-                        if args.loop:
+                        if args.follow and now - last_poll >= args.poll:
+                            last_poll = now
+                            panels = refresh_follow(db, args, game_data, panels)
+
+                        if (
+                            args.loop
+                            and not args.follow
+                            and panels
+                            and all(pp.done for pp in panels)
+                        ):
                             if all_done_at is None:
                                 all_done_at = now
                             elif now - all_done_at > LOOP_PAUSE_S:
                                 for pp in panels:
                                     pp.reset()
                                 all_done_at = None
-                    live.update(render_wall(panels, console, args.cols, speed, paused))
-                    time.sleep(TICK_S)
-            except KeyboardInterrupt:
-                pass
+                        live.update(render_wall(
+                            panels, console, args.cols, speed, paused,
+                        ))
+                        time.sleep(TICK_S)
+                except KeyboardInterrupt:
+                    pass
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

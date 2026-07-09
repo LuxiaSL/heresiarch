@@ -128,6 +128,9 @@ class RecordDB:
         self.conn = sqlite3.connect(str(self.path))
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
+        # Multiple sim workers may upsert concurrently (live recording);
+        # wait for the write lock instead of failing fast.
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.executescript(_SCHEMA)
         self.conn.commit()
 

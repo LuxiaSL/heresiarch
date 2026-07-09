@@ -43,7 +43,7 @@ from heresiarch.policy.validation import (
 from heresiarch.tools.progress import ProgressEmitter
 
 if TYPE_CHECKING:
-    from heresiarch.analytics.record_db import RecordDB
+    from heresiarch.analytics.record_db import RecordDB, RunRecordMetadata
     from heresiarch.engine.models.enemies import EnemyInstance, EnemyTemplate
 
 # ---------------------------------------------------------------------------
@@ -94,6 +94,13 @@ class _RunContext:
     emitter: ProgressEmitter = field(
         default_factory=ProgressEmitter.from_env,
     )
+    # Live recording: upsert the run to record_db every N cleared
+    # encounters (0 = final-only). Lets viewers (theater --follow)
+    # tail a run while it is still being simulated.
+    record_db: RecordDB | None = None
+    record_meta: RunRecordMetadata | None = None
+    record_every: int = 0
+    encounters_since_record: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +120,7 @@ def simulate_run(
     data_path: Path | None = None,
     record_db: RecordDB | None = None,
     record_run_id: str | None = None,
+    record_every: int = 0,
 ) -> RunResult:
     """Simulate one full run and return structured results.
 
@@ -123,6 +131,11 @@ def simulate_run(
     ``record_db`` — if provided, the final RunState (including
     battle_record) is upserted to the DB under ``record_run_id`` (or a
     derived ``sim_{job}_{seed}_{policy}`` tag).
+
+    ``record_every`` — if > 0 (and ``record_db`` is set), also upsert
+    mid-run every N cleared encounters so the run can be watched live
+    (``theater --follow``). Upserts are idempotent; the final write
+    remains authoritative.
     """
     if game_data is None:
         game_data = load_all(data_path or Path("data"))
@@ -150,6 +163,16 @@ def simulate_run(
         {"mc_name": "sim_mc", "mc_job_id": mc_job_id, "seed": seed},
     )
 
+    record_meta = None
+    if record_db is not None:
+        from heresiarch.analytics.record_db import RunRecordMetadata
+        record_meta = RunRecordMetadata(
+            source="sim",
+            combat_policy=combat_policy.name,
+            macro_policy=macro_policy.name,
+            seed=seed,
+        )
+
     ctx = _RunContext(
         game_data=game_data,
         game_loop=gl,
@@ -159,6 +182,9 @@ def simulate_run(
         max_encounters=max_encounters,
         max_combat_rounds=max_combat_rounds,
         seed=seed,
+        record_db=record_db,
+        record_meta=record_meta,
+        record_every=max(0, record_every),
     )
     ctx.emitter.emit("run_start", seed=seed, job=mc_job_id)
 
@@ -173,17 +199,11 @@ def simulate_run(
         reason=ctx.metrics.termination_reason,
     )
 
-    if record_db is not None:
-        from heresiarch.analytics.record_db import RunRecordMetadata
+    if record_db is not None and record_meta is not None:
         try:
             record_db.record_run(
                 run,
-                RunRecordMetadata(
-                    source="sim",
-                    combat_policy=combat_policy.name,
-                    macro_policy=macro_policy.name,
-                    seed=seed,
-                ),
+                record_meta,
                 outcome="dead" if run.is_dead else "clean_exit",
             )
         except Exception:
@@ -559,6 +579,7 @@ def _drive_zone(run: RunState, ctx: _RunContext) -> RunState:
 
         run, victorious, final_state = _run_encounter(run, ctx, enemies)
         _emit_encounter(run, ctx)
+        _maybe_record_live(run, ctx)
         if run.is_dead:
             # Defeat metrics already set inside _run_encounter.
             return run
@@ -572,6 +593,26 @@ def _drive_zone(run: RunState, ctx: _RunContext) -> RunState:
                 break
 
     return run
+
+
+def _maybe_record_live(run: RunState, ctx: _RunContext) -> None:
+    """Mid-run DB upsert every ``record_every`` encounters (live viewing)."""
+    if (
+        ctx.record_db is None
+        or ctx.record_meta is None
+        or ctx.record_every <= 0
+    ):
+        return
+    ctx.encounters_since_record += 1
+    if ctx.encounters_since_record < ctx.record_every:
+        return
+    ctx.encounters_since_record = 0
+    try:
+        # Outcome inferred: 'dead' or 'in_progress' — the final
+        # authoritative write in simulate_run() overrides it.
+        ctx.record_db.record_run(run, ctx.record_meta)
+    except Exception:
+        pass  # live recording must never break the sim
 
 
 def _emit_encounter(run: RunState, ctx: _RunContext) -> None:

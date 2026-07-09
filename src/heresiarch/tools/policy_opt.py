@@ -259,7 +259,7 @@ def _evaluate_one(task: tuple) -> tuple[int, SeedOutcome]:
     (
         cand_idx, seed, job_id, params,
         solver_depth, solver_prune, max_encounters, weights_dump,
-        adaptive,
+        adaptive, record_db_path, record_every, record_run_id,
     ) = task
     weights = FitnessWeights(**weights_dump)
     try:
@@ -284,14 +284,34 @@ def _evaluate_one(task: tuple) -> tuple[int, SeedOutcome]:
         macro = GoldenMacroPolicy(
             config=macro_cfg, game_data=gd, name="opt_macro",
         )
-        result = simulate_run(
-            mc_job_id=job_id,
-            combat_policy=solver,
-            macro_policy=macro,
-            seed=seed,
-            game_data=gd,
-            max_encounters=max_encounters,
-        )
+
+        # Sampled live recording (theater --follow): only tasks tagged
+        # with a run_id record. DB failures must never fail the eval.
+        record_db = None
+        if record_db_path and record_run_id:
+            try:
+                from heresiarch.analytics.record_db import RecordDB
+                record_db = RecordDB(Path(record_db_path))
+            except Exception:
+                record_db = None
+        try:
+            result = simulate_run(
+                mc_job_id=job_id,
+                combat_policy=solver,
+                macro_policy=macro,
+                seed=seed,
+                game_data=gd,
+                max_encounters=max_encounters,
+                record_db=record_db,
+                record_run_id=record_run_id,
+                record_every=record_every,
+            )
+        finally:
+            if record_db is not None:
+                try:
+                    record_db.close()
+                except Exception:
+                    pass
         final_zone_ids = {
             zid for zid, z in gd.zones.items() if z.is_final
         }
@@ -382,15 +402,27 @@ def evaluate_population(
     workers: int,
     data_path: str,
     adaptive: bool = False,
+    record_db_path: str | None = None,
+    record_every: int = 5,
+    record_tags: dict[int, str] | None = None,
 ) -> list[CandidateRecord]:
-    """Evaluate every candidate on every seed, in parallel."""
+    """Evaluate every candidate on every seed, in parallel.
+
+    ``record_tags`` maps candidate index → run_id prefix; those
+    candidates' runs are live-recorded to ``record_db_path`` (run_id
+    ``{prefix}_s{seed}``) for theater --follow viewing.
+    """
     import multiprocessing
 
+    record_tags = record_tags or {}
     tasks = [
         (
             idx, seed, job_id, params,
             solver_depth, solver_prune, max_encounters,
             weights.model_dump(), adaptive,
+            record_db_path if idx in record_tags else None,
+            record_every,
+            f"{record_tags[idx]}_s{seed}" if idx in record_tags else None,
         )
         for idx, params in enumerate(population)
         for seed in seeds
@@ -446,6 +478,18 @@ def optimize(args: argparse.Namespace) -> None:
     emitter = ProgressEmitter(progress_path)
     print(f"Live view: uv run python -m heresiarch.tools.watch {progress_path}")
 
+    # Sampled live recording: the elitism candidate (preset in gen 0,
+    # best-so-far after) + both holdout arms land in a records DB that
+    # theater --follow can tail while the optimizer grinds.
+    record_db_path: str | None = None
+    if args.record_db:
+        record_db_path = (
+            str(out_dir / "records.db")
+            if args.record_db == "auto" else args.record_db
+        )
+        print(f"Theater:   uv run python -m heresiarch.tools.theater "
+              f"--follow --db {record_db_path}")
+
     weights = FitnessWeights()
     rng = random.Random(args.cem_seed)
 
@@ -483,6 +527,9 @@ def optimize(args: argparse.Namespace) -> None:
             workers=args.workers,
             data_path=args.data,
             adaptive=args.adaptive,
+            record_db_path=record_db_path,
+            record_every=args.record_every,
+            record_tags={0: f"opt_{args.job}_g{gen:02d}"},
         )
 
         with gen_path.open("a") as fh:
@@ -550,6 +597,12 @@ def optimize(args: argparse.Namespace) -> None:
             workers=args.workers,
             data_path=args.data,
             adaptive=args.adaptive,
+            record_db_path=record_db_path,
+            record_every=args.record_every,
+            record_tags={
+                0: f"holdout_{args.job}_preset",
+                1: f"holdout_{args.job}_best",
+            },
         )
         preset_rec, best_rec = final_records[0], final_records[1]
         payload = {
@@ -603,6 +656,12 @@ def main() -> None:
                     help="Solver depth for the holdout eval")
     ap.add_argument("--data", default="data")
     ap.add_argument("--out", default="")
+    ap.add_argument("--record-db", nargs="?", const="auto", default=None,
+                    help="Live-record the elitism candidate + holdout arms "
+                         "to a records DB for theater --follow. With no "
+                         "value: <out_dir>/records.db")
+    ap.add_argument("--record-every", type=int, default=5,
+                    help="Mid-run upsert cadence in encounters (default 5)")
     optimize(ap.parse_args())
 
 
