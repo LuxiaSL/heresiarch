@@ -430,3 +430,64 @@ class TestProgressStream:
         st.apply({"kind": "generation", "gen": 0, "best": 500.0,
                   "pop_mean": 300.0, "best_ever": 500.0, "win_rate": 0.1})
         assert len(st.gen_lines) == 1
+
+
+class TestStagedEvaluation:
+    """Successive halving inside evaluate_population."""
+
+    @staticmethod
+    def _fake_eval_factory(calls: list):
+        """Deterministic fitness = candidate index; logs every task."""
+        from heresiarch.tools.policy_opt import SeedOutcome
+
+        def fake_eval(task: tuple):
+            cand_idx, seed = task[0], task[1]
+            calls.append((cand_idx, seed))
+            return cand_idx, SeedOutcome(
+                seed=seed,
+                fitness=float(cand_idx * 100),
+                zones_cleared=cand_idx,
+                encounters_cleared=cand_idx,
+                farthest_zone_level=1,
+                is_dead=False,
+                won_region=False,
+                termination_reason="clean_exit",
+                final_mc_level=1,
+            )
+
+        return fake_eval
+
+    def _run(self, monkeypatch, *, stage_seeds: int, stage_keep: int):
+        import heresiarch.tools.policy_opt as po
+
+        calls: list = []
+        monkeypatch.setattr(po, "_evaluate_one", self._fake_eval_factory(calls))
+        monkeypatch.setattr(po, "_worker_init", lambda _: None)
+        population = [{"dummy": float(i)} for i in range(4)]
+        records = po.evaluate_population(
+            population, seeds=[10, 11, 12],
+            job_id="einherjar", generation=0,
+            solver_depth=1, solver_prune=20, max_encounters=5,
+            weights=po.FitnessWeights(), workers=1, data_path="data",
+            stage_seeds=stage_seeds, stage_keep=stage_keep,
+        )
+        return records, calls
+
+    def test_staging_off_runs_every_pair(self, monkeypatch):
+        records, calls = self._run(monkeypatch, stage_seeds=0, stage_keep=0)
+        assert len(calls) == 4 * 3
+        assert all(len(r.outcomes) == 3 for r in records)
+
+    def test_staging_culls_bottom_but_keeps_elitism_slot(self, monkeypatch):
+        # Fitness rises with candidate index, so candidate 0 is the
+        # WORST — it must still advance (elitism slot).
+        records, calls = self._run(monkeypatch, stage_seeds=1, stage_keep=2)
+        # Stage 1: all 4 candidates on seed 10.
+        assert [c for c in calls if c[1] == 10] == [(i, 10) for i in range(4)]
+        # Survivors: top-2 (3, 2) plus forced candidate 0. Candidate 1 culled.
+        full = {r.candidate_index for r in records if len(r.outcomes) == 3}
+        assert full == {0, 2, 3}
+        culled = [r for r in records if r.candidate_index == 1]
+        assert len(culled[0].outcomes) == 1  # partial fitness retained
+        # Mean fitness still computed for everyone.
+        assert all(r.mean_fitness == r.candidate_index * 100 for r in records)

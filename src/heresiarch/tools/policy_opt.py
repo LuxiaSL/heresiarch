@@ -405,18 +405,29 @@ def evaluate_population(
     record_db_path: str | None = None,
     record_every: int = 5,
     record_tags: dict[int, str] | None = None,
+    stage_seeds: int = 0,
+    stage_keep: int = 0,
 ) -> list[CandidateRecord]:
     """Evaluate every candidate on every seed, in parallel.
 
     ``record_tags`` maps candidate index → run_id prefix; those
     candidates' runs are live-recorded to ``record_db_path`` (run_id
     ``{prefix}_s{seed}``) for theater --follow viewing.
+
+    ``stage_seeds``/``stage_keep`` enable successive-halving: every
+    candidate first plays ``stage_seeds`` seeds; only the top
+    ``stage_keep`` (candidate 0 — the elitism slot — always survives)
+    play the remaining seeds. Culled candidates keep their partial
+    fitness; callers must rank full evaluations above partial ones.
+    Bad configs tend to be the *slowest* (grind-to-cap), so this cuts
+    disproportionate wall-clock, not just eval count.
     """
     import multiprocessing
 
     record_tags = record_tags or {}
-    tasks = [
-        (
+
+    def make_task(idx: int, params: dict, seed: int) -> tuple:
+        return (
             idx, seed, job_id, params,
             solver_depth, solver_prune, max_encounters,
             weights.model_dump(), adaptive,
@@ -424,9 +435,7 @@ def evaluate_population(
             record_every,
             f"{record_tags[idx]}_s{seed}" if idx in record_tags else None,
         )
-        for idx, params in enumerate(population)
-        for seed in seeds
-    ]
+
     records = [
         CandidateRecord(
             generation=generation, candidate_index=idx, params=params,
@@ -434,24 +443,62 @@ def evaluate_population(
         for idx, params in enumerate(population)
     ]
 
-    n_workers = min(workers, len(tasks))
-    if n_workers > 1:
-        with multiprocessing.Pool(
-            n_workers, initializer=_worker_init, initargs=(data_path,),
-        ) as pool:
-            for cand_idx, outcome in pool.imap_unordered(_evaluate_one, tasks):
+    def run_tasks(tasks: list[tuple]) -> None:
+        n_workers = min(workers, len(tasks))
+        if n_workers > 1:
+            with multiprocessing.Pool(
+                n_workers, initializer=_worker_init, initargs=(data_path,),
+            ) as pool:
+                for cand_idx, outcome in pool.imap_unordered(_evaluate_one, tasks):
+                    records[cand_idx].outcomes.append(outcome)
+        else:
+            _worker_init(data_path)
+            for task in tasks:
+                cand_idx, outcome = _evaluate_one(task)
                 records[cand_idx].outcomes.append(outcome)
-    else:
-        _worker_init(data_path)
-        for task in tasks:
-            cand_idx, outcome = _evaluate_one(task)
-            records[cand_idx].outcomes.append(outcome)
 
+    def refresh_stats() -> None:
+        for rec in records:
+            n = max(1, len(rec.outcomes))
+            rec.mean_fitness = sum(o.fitness for o in rec.outcomes) / n
+            rec.win_rate = sum(1 for o in rec.outcomes if o.won_region) / n
+            rec.mean_zones = sum(o.zones_cleared for o in rec.outcomes) / n
+
+    staged = (
+        0 < stage_seeds < len(seeds)
+        and 0 < stage_keep < len(population)
+    )
+    if staged:
+        run_tasks([
+            make_task(idx, params, seed)
+            for idx, params in enumerate(population)
+            for seed in seeds[:stage_seeds]
+        ])
+        refresh_stats()
+        ranked = sorted(
+            range(len(population)),
+            key=lambda i: records[i].mean_fitness,
+            reverse=True,
+        )
+        survivors = set(ranked[:stage_keep]) | {0}  # elitism slot always survives
+        culled = [i for i in range(len(population)) if i not in survivors]
+        print(f"    stage 1 ({stage_seeds} seeds): culled "
+              f"{len(culled)}/{len(population)} candidates "
+              f"({sorted(culled)})", flush=True)
+        run_tasks([
+            make_task(idx, population[idx], seed)
+            for idx in sorted(survivors)
+            for seed in seeds[stage_seeds:]
+        ])
+    else:
+        run_tasks([
+            make_task(idx, params, seed)
+            for idx, params in enumerate(population)
+            for seed in seeds
+        ])
+
+    refresh_stats()
     for rec in records:
-        n = max(1, len(rec.outcomes))
-        rec.mean_fitness = sum(o.fitness for o in rec.outcomes) / n
-        rec.win_rate = sum(1 for o in rec.outcomes if o.won_region) / n
-        rec.mean_zones = sum(o.zones_cleared for o in rec.outcomes) / n
         errors = [o.error for o in rec.outcomes if o.error]
         if errors:
             print(f"    [warn] candidate {rec.candidate_index}: "
@@ -494,7 +541,19 @@ def optimize(args: argparse.Namespace) -> None:
     rng = random.Random(args.cem_seed)
 
     baseline = preset_params(args.job)
-    cem = CEMState.from_params(baseline, init_std=args.init_std)
+    # Warm start: center the sampling distribution on a previous run's
+    # best params. The preset stays the gen-0 elitism candidate, so a
+    # bad warm start can't drag the floor below the designer baseline.
+    init_center = baseline
+    if args.init_from:
+        try:
+            init_center = load_params(Path(args.init_from))
+            print(f"Warm start: CEM mean from {args.init_from}")
+        except Exception as exc:
+            print(f"[warn] --init-from unreadable ({exc}); "
+                  f"starting from preset")
+            init_center = baseline
+    cem = CEMState.from_params(init_center, init_std=args.init_std)
 
     best_params: dict[str, float | int | bool] = dict(baseline)
     best_fitness = -1.0
@@ -530,13 +589,22 @@ def optimize(args: argparse.Namespace) -> None:
             record_db_path=record_db_path,
             record_every=args.record_every,
             record_tags={0: f"opt_{args.job}_g{gen:02d}"},
+            stage_seeds=args.stage_seeds,
+            stage_keep=args.stage_keep,
         )
 
         with gen_path.open("a") as fh:
             for rec in records:
                 fh.write(rec.model_dump_json() + "\n")
 
-        ranked = sorted(records, key=lambda r: r.mean_fitness, reverse=True)
+        # Full evaluations rank above stage-culled partials: a lucky
+        # 2-seed fitness must not leapfrog into the elite set.
+        full_n = max(len(r.outcomes) for r in records)
+        ranked = sorted(
+            records,
+            key=lambda r: (len(r.outcomes) >= full_n, r.mean_fitness),
+            reverse=True,
+        )
         gen_best = ranked[0]
         if gen_best.mean_fitness > best_fitness:
             best_fitness = gen_best.mean_fitness
@@ -662,6 +730,16 @@ def main() -> None:
                          "value: <out_dir>/records.db")
     ap.add_argument("--record-every", type=int, default=5,
                     help="Mid-run upsert cadence in encounters (default 5)")
+    ap.add_argument("--init-from", default=None,
+                    help="Warm-start the CEM mean from a previous run's "
+                         "best.json (preset remains the gen-0 elitism "
+                         "candidate)")
+    ap.add_argument("--stage-seeds", type=int, default=0,
+                    help="Successive halving: seeds for the cheap first "
+                         "stage every candidate plays (0 = off)")
+    ap.add_argument("--stage-keep", type=int, default=0,
+                    help="Successive halving: candidates advancing to the "
+                         "full seed set (elitism slot always survives)")
     optimize(ap.parse_args())
 
 
