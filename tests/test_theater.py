@@ -244,6 +244,55 @@ def test_refresh_follow_attaches_and_extends(
     db.close()
 
 
+def test_refresh_follow_backfills_and_rotates(
+    tmp_path: Path, game_data: GameData,
+):
+    """A finished panel gets backfilled with unwatched runs, then cycles
+    replays once everything has been seen — the wall never goes dark."""
+    db = _seed_db(tmp_path, game_data, seeds=(11, 12, 13))
+    args = argparse.Namespace(
+        run_ids=None, job=None, source=None, limit=1,
+        stale_after=1e9, rotate_linger=0.0, no_rotate=False,
+    )
+    watched: dict[str, float] = {}
+    panels = refresh_follow(db, args, game_data, [], watched)
+    assert len(panels) == 1
+
+    seen: list[str] = []
+    for _ in range(4):  # 3 distinct runs + 1 replay
+        pp = panels[0]
+        while not pp.done:
+            pp.advance(60_000)
+        seen.append(pp.run_id)
+        panels = refresh_follow(db, args, game_data, panels, watched)
+        assert panels[0].run_id != pp.run_id, "idle panel must be backfilled"
+
+    # First three playbacks covered every distinct run...
+    assert len(set(seen[:3])) == 3
+    # ...and the fourth panel is a replay of the least-recently-watched.
+    assert panels[0].run_id in set(seen)
+    db.close()
+
+
+def test_refresh_follow_no_rotate_goes_idle(
+    tmp_path: Path, game_data: GameData,
+):
+    db = _seed_db(tmp_path, game_data, seeds=(14,))
+    args = argparse.Namespace(
+        run_ids=None, job=None, source=None, limit=1,
+        stale_after=1e9, rotate_linger=0.0, no_rotate=True,
+    )
+    watched: dict[str, float] = {}
+    panels = refresh_follow(db, args, game_data, [], watched)
+    pp = panels[0]
+    while not pp.done:
+        pp.advance(60_000)
+    panels = refresh_follow(db, args, game_data, panels, watched)
+    # Only one run exists and rotation is off: the panel stays put.
+    assert panels[0] is pp
+    db.close()
+
+
 def test_render_wall_smoke(tmp_path: Path, game_data: GameData):
     """A mid-playback frame renders without touching a real terminal."""
     db = _seed_db(tmp_path, game_data, seeds=(6,))

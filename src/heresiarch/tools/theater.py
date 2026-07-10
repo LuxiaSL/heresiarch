@@ -52,6 +52,8 @@ TICK_S = 0.1
 LOG_LINES = 7
 PARTY_ROWS = 3  # HP-bar slots for the party (overflow collapses to "+k more")
 ENEMY_ROWS = 4  # HP-bar slots for enemies
+ROTATE_LINGER_S = 6.0  # how long a finished panel lingers before backfill
+POOL_FACTOR = 8  # backfill pool: how many × limit runs to consider
 MAX_STEPS_PER_TICK = 400
 MACRO_DELAY_MS = 450
 BANNER_DELAY_MS = 700
@@ -450,6 +452,7 @@ class PanelPlayer:
     sig: tuple = ()  # (rounds_total, encounters_cleared, outcome) change detector
     live: bool = False  # run is still being recorded (follow mode)
     stale: bool = False  # in_progress but no recent DB updates
+    finished_at: float | None = None  # monotonic ts when playback completed
     cursor: int = 0
     budget_ms: float = 0.0
     zone: str = ""
@@ -469,6 +472,7 @@ class PanelPlayer:
     def reset(self) -> None:
         self.cursor = 0
         self.budget_ms = 0.0
+        self.finished_at = None
         self.zone, self.enc, self.level, self.gold = "", 0, 0, 0
         self.status, self.final = "", None
         self.players.clear()
@@ -762,17 +766,39 @@ def _build_panel_steps(
     return build_timeline(row, encounters, macro, game_data, live=live)
 
 
+def _make_panel(
+    db: RecordDB, row: dict[str, Any], game_data: GameData,
+) -> PanelPlayer | None:
+    run_id = str(row["run_id"])
+    live = str(row.get("outcome")) == "in_progress"
+    try:
+        steps = _build_panel_steps(db, row, game_data, live=live)
+    except Exception:
+        return None
+    return PanelPlayer(
+        title=_make_title(row), steps=steps, run_id=run_id,
+        sig=_row_sig(row), live=live,
+    )
+
+
 def refresh_follow(
     db: RecordDB,
     args: argparse.Namespace,
     game_data: GameData,
     panels: list[PanelPlayer],
+    watched: dict[str, float] | None = None,
 ) -> list[PanelPlayer]:
-    """Poll the DB: extend changed runs' timelines, attach new runs.
+    """Poll the DB: extend changed runs, attach new ones, backfill idle.
 
     Live timelines are strict prefixes of their later rebuilds (see
     build_timeline), so replacing a panel's step list preserves its
     cursor position.
+
+    ``watched`` (run_id → monotonic ts of last full playback) drives the
+    backfill: a finished panel that has lingered ROTATE_LINGER_S gets
+    replaced with the newest run the wall hasn't shown yet — and, once
+    everything has been seen, with the least-recently-watched replay —
+    so the aquarium never goes dark between recording bursts.
     """
     try:
         rows = select_runs(db, args)
@@ -798,16 +824,17 @@ def refresh_follow(
             pp.steps = steps
             pp.sig = sig
             pp.live = live
+            pp.finished_at = None
             continue
         # New run — attach if there's room or a finished panel to bump.
-        try:
-            steps = _build_panel_steps(db, row, game_data, live=live)
-        except Exception:
+        # Finished runs the wall already played go through the backfill
+        # queue instead (unwatched-first, then LRU replays).
+        if watched is not None and not live and run_id in watched:
             continue
-        new_pp = PanelPlayer(
-            title=_make_title(row), steps=steps, run_id=run_id,
-            sig=sig, live=live, stale=stale,
-        )
+        new_pp = _make_panel(db, row, game_data)
+        if new_pp is None:
+            continue
+        new_pp.stale = stale
         if len(panels) < args.limit:
             panels.append(new_pp)
             by_id[run_id] = new_pp
@@ -818,6 +845,63 @@ def refresh_follow(
                     panels[i] = new_pp
                     by_id[run_id] = new_pp
                     break
+
+    if watched is None:
+        return panels
+
+    # ---- Backfill: keep the wall full and moving -----------------------
+    now = time.monotonic()
+    linger = getattr(args, "rotate_linger", ROTATE_LINGER_S)
+    for pp in panels:
+        if pp.done and pp.final is not None:
+            if pp.finished_at is None:
+                pp.finished_at = now
+            watched[pp.run_id] = watched.get(pp.run_id) or now
+    idle = [
+        i for i, pp in enumerate(panels)
+        if pp.done and pp.final is not None
+        and pp.finished_at is not None
+        and now - pp.finished_at >= linger
+    ]
+    room = args.limit - len(panels)
+    if not idle and room <= 0:
+        return panels
+
+    try:
+        pool = select_runs(db, argparse.Namespace(
+            run_ids=args.run_ids, job=args.job, source=args.source,
+            limit=max(args.limit * POOL_FACTOR, 40),
+        ))
+    except Exception:
+        return panels
+    on_wall = {pp.run_id for pp in panels}
+    fresh = [
+        r for r in pool
+        if str(r["run_id"]) not in watched and str(r["run_id"]) not in on_wall
+    ]
+    queue = list(fresh)
+    if not getattr(args, "no_rotate", False):
+        replays = sorted(
+            (r for r in pool
+             if str(r["run_id"]) in watched
+             and str(r["run_id"]) not in on_wall),
+            key=lambda r: watched[str(r["run_id"])],
+        )
+        queue += replays
+    while room > 0 and queue:
+        new_pp = _make_panel(db, queue.pop(0), game_data)
+        if new_pp is not None:
+            panels.append(new_pp)
+            on_wall.add(new_pp.run_id)
+            room -= 1
+    for i in idle:
+        if not queue:
+            break
+        new_pp = _make_panel(db, queue.pop(0), game_data)
+        if new_pp is not None:
+            watched[panels[i].run_id] = now
+            panels[i] = new_pp
+            on_wall.add(new_pp.run_id)
     return panels
 
 
@@ -888,6 +972,10 @@ def main() -> None:
     ap.add_argument("--stale-after", type=float, default=240.0,
                     help="Follow mode: mark an in_progress run stale after "
                          "this many seconds without DB updates")
+    ap.add_argument("--no-rotate", action="store_true",
+                    help="Follow mode: don't cycle already-watched replays "
+                         "while waiting for fresh runs (fresh runs still "
+                         "attach; the wall may go idle)")
     ap.add_argument("--list", action="store_true", dest="list_runs",
                     help="List recorded runs and exit")
     args = ap.parse_args()
@@ -912,8 +1000,9 @@ def main() -> None:
 
         game_data = load_all(Path(args.data))
         panels: list[PanelPlayer] = []
+        watched: dict[str, float] = {}
         if args.follow:
-            panels = refresh_follow(db, args, game_data, panels)
+            panels = refresh_follow(db, args, game_data, panels, watched)
         else:
             rows = select_runs(db, args)
             if not rows:
@@ -965,7 +1054,9 @@ def main() -> None:
 
                         if args.follow and now - last_poll >= args.poll:
                             last_poll = now
-                            panels = refresh_follow(db, args, game_data, panels)
+                            panels = refresh_follow(
+                                db, args, game_data, panels, watched,
+                            )
 
                         if (
                             args.loop
