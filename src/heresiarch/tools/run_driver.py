@@ -10,6 +10,7 @@ This is the Phase 1 deliverable from design/policy-sim-spec.md.
 
 from __future__ import annotations
 
+import logging
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,11 +41,15 @@ from heresiarch.policy.validation import (
     compute_legal,
     resolve_decision,
 )
+from heresiarch.logutil import RateLimitedLogger
 from heresiarch.tools.progress import ProgressEmitter
 
 if TYPE_CHECKING:
     from heresiarch.analytics.record_db import RecordDB, RunRecordMetadata
     from heresiarch.engine.models.enemies import EnemyInstance, EnemyTemplate
+
+logger = logging.getLogger(__name__)
+_rate_limited = RateLimitedLogger()
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -623,8 +628,13 @@ def _maybe_record_live(run: RunState, ctx: _RunContext) -> None:
         # Outcome inferred: 'dead' or 'in_progress' — the final
         # authoritative write in simulate_run() overrides it.
         ctx.record_db.record_run(run, ctx.record_meta)
-    except Exception:
-        pass  # live recording must never break the sim
+    except Exception as exc:  # noqa: BLE001 — live recording must never break the sim
+        _rate_limited.warning(
+            logger, "live_record",
+            "Live run recording failed (%s: %s) — sim continues; the "
+            "theater view of run %s may go stale until the final write.",
+            type(exc).__name__, exc, run.run_id,
+        )
 
 
 def _emit_encounter(run: RunState, ctx: _RunContext) -> None:

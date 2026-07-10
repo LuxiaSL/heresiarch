@@ -6,6 +6,7 @@ This is the ONE module that does file I/O. Every other engine module is pure.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -13,9 +14,13 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 from heresiarch.engine.models.run_state import RunState
+from heresiarch.logutil import RateLimitedLogger
 
 if TYPE_CHECKING:
     from heresiarch.analytics.record_db import RecordDB
+
+logger = logging.getLogger(__name__)
+_rate_limited = RateLimitedLogger()
 
 
 class SaveSlot(BaseModel):
@@ -134,8 +139,13 @@ class SaveManager:
                     run,
                     RunRecordMetadata(source="tui"),
                 )
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — analytics must never block a save
+                _rate_limited.warning(
+                    logger, "autosave_record",
+                    "Analytics upsert on autosave failed (%s: %s) — save "
+                    "succeeded; run %s may be missing from the record DB.",
+                    type(exc).__name__, exc, run.run_id,
+                )
         return slot
 
     def _build_level_summary(self, run: RunState) -> str:

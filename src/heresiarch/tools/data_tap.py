@@ -12,24 +12,31 @@ Labels for combat rows deliberately mirror the solver's
 replacement for rollout leaf evaluation (see policy/solver.py).
 
 Failure-proof by contract: every hook swallows exceptions. A broken tap
-must never break a sim.
+must never break a sim — but it also must not fail silently: every
+swallow emits a rate-limited warning, because a quiet tap failure is
+lost training data.
 """
 
 from __future__ import annotations
 
 import gzip
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.models.combat_state import CombatState
 from heresiarch.engine.models.run_state import RunState
+from heresiarch.logutil import RateLimitedLogger
 from heresiarch.policy.features import (
     FEATURES_VERSION,
     combat_features,
     macro_features,
 )
+
+logger = logging.getLogger(__name__)
+_rate_limited = RateLimitedLogger()
 
 
 def _healing_item_ids(game_data: GameData) -> frozenset[str]:
@@ -87,8 +94,13 @@ class DataTap:
                 "y": {},  # labeled at run end
             })
             self._zones_at.append(len(run.zones_completed))
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — tap must never break a sim
+            _rate_limited.warning(
+                logger, "tap_encounter_start",
+                "DataTap.on_encounter_start failed (%s: %s) — a macro "
+                "training row was lost (seed=%s).",
+                type(exc).__name__, exc, self.seed,
+            )
 
     def on_combat_round(self, state: CombatState) -> None:
         try:
@@ -102,8 +114,13 @@ class DataTap:
                 "x": combat_features(state, self.mc_job_id),
                 "y": {},
             })
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — tap must never break a sim
+            _rate_limited.warning(
+                logger, "tap_combat_round",
+                "DataTap.on_combat_round failed (%s: %s) — a combat "
+                "training row was lost (seed=%s).",
+                type(exc).__name__, exc, self.seed,
+            )
 
     def on_encounter_end(self, state: CombatState, victorious: bool) -> None:
         try:
@@ -129,8 +146,15 @@ class DataTap:
                 }
                 self._done_rows.append(row)
             self._pending_combat = []
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — tap must never break a sim
+            n_lost = len(self._pending_combat)
             self._pending_combat = []
+            _rate_limited.warning(
+                logger, "tap_encounter_end",
+                "DataTap.on_encounter_end failed (%s: %s) — %d pending "
+                "combat training row(s) dropped unlabeled (seed=%s).",
+                type(exc).__name__, exc, n_lost, self.seed,
+            )
 
     def on_run_end(self, run: RunState, won_region: bool) -> None:
         try:
@@ -144,8 +168,15 @@ class DataTap:
                 self._done_rows.append(row)
             self._macro_rows = []
             self._flush()
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — tap must never break a sim
+            # Worst swallow of the four: the whole shard may be lost.
+            _rate_limited.warning(
+                logger, "tap_run_end",
+                "DataTap.on_run_end failed (%s: %s) — the training-data "
+                "shard %s may be incomplete or missing entirely "
+                "(seed=%s).",
+                type(exc).__name__, exc, self.out_path, self.seed,
+            )
 
     # -- output ----------------------------------------------------------
 
