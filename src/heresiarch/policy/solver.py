@@ -77,10 +77,13 @@ class SolverConfig:
     # Leaf evaluation: "rollout" plays out remaining rounds with the
     # heuristic policy; "model" asks a trained value function (rung 1,
     # design/learned-value-spec.md). Model leaves require a value_fn on
-    # the solver — without one the solver warns and falls back. Known
-    # v1 gap: model leaves don't reason about stash items (search plies
-    # still do).
+    # the solver — without one the solver warns and falls back.
     leaf_eval: str = "rollout"
+    # Hybrid leaf: with leaf_eval="model", play this many heuristic
+    # rounds before the model scores the settled state. 0 = pure model.
+    # Exists because banked-resource jobs (onmyoji insight) pay off a
+    # turn or two beyond what a bare leaf snapshot can see.
+    model_leaf_rollout_rounds: int = 0
 
 
 @dataclass
@@ -514,34 +517,25 @@ class CombatSolver:
 
         With ``leaf_eval == "model"`` and a value_fn, the state is
         scored by one model prediction on the same [0, 2] scale
-        ``evaluate_terminal`` uses. Any model failure downgrades to
+        ``evaluate_terminal`` uses. ``model_leaf_rollout_rounds`` first
+        plays K heuristic rounds so the leaf sees the immediate
+        consequences (a burst resolving, a kill confirming) before the
+        model judges the settled position — the designer's onmyoji
+        diagnosis: banked insight pays off a turn or two beyond where
+        a bare leaf can see. Any model failure downgrades to full
         rollout for the rest of the process (warn once, never crash).
         """
-        if (
+        model_mode = (
             self.value_fn is not None
             and self.config.leaf_eval == "model"
             and not self._model_failed
-        ):
-            if state.is_finished:
-                return evaluate_terminal(state)
-            try:
-                potions = sum(1 for i in stash if i in self._heal_item_ids)
-                value = self.value_fn(
-                    state, self._mc_job_id, potions, len(stash),
-                )
-            except Exception as exc:  # noqa: BLE001 — model must never kill a sim
-                self._model_failed = True
-                logger.warning(
-                    "Combat value model failed (%s: %s) — falling back "
-                    "to heuristic rollout leaves.", type(exc).__name__, exc,
-                )
-            else:
-                self._stats.model_leaf_evals += 1
-                return value
-
+        )
         remaining_stash = list(stash)
         rounds = 0
-        max_rounds = self.config.max_rollout_rounds
+        if model_mode:
+            max_rounds = self.config.model_leaf_rollout_rounds
+        else:
+            max_rounds = self.config.max_rollout_rounds
         no_progress_cap = self.config.rollout_no_progress_rounds
         no_progress = 0
         prev_hp = _hp_signature(state)
@@ -579,6 +573,29 @@ class CombatSolver:
             state.consumed_items = []
 
         self._stats.rollout_rounds_total += rounds
+
+        if model_mode:
+            if state.is_finished:
+                return evaluate_terminal(state)
+            try:
+                potions = sum(
+                    1 for i in remaining_stash if i in self._heal_item_ids
+                )
+                value = self.value_fn(
+                    state, self._mc_job_id, potions, len(remaining_stash),
+                )
+            except Exception as exc:  # noqa: BLE001 — model must never kill a sim
+                self._model_failed = True
+                logger.warning(
+                    "Combat value model failed (%s: %s) — falling back "
+                    "to heuristic rollout leaves.", type(exc).__name__, exc,
+                )
+                # Finish this leaf honestly with a full rollout.
+                return self._rollout_to_end(state, engine, remaining_stash)
+            else:
+                self._stats.model_leaf_evals += 1
+                return value
+
         return evaluate_terminal(state)
 
 

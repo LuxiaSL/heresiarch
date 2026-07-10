@@ -510,49 +510,64 @@ EINHERJAR_GOLDEN_CONFIG = GoldenMacroConfig(
     lodge_on=False,
 )
 
+# Glass-frame preset (berserker/onmyoji/sacrist): validated 2026-07-10
+# on 48-seed A/Bs — the zone-1 enc-4 triple pack is a deliberate potion
+# skill check (designer), and these values encode the intended answer:
+# shop early, stockpile 3, drink to 75% between fights, bail at 35%.
+# Tripled onmyoji encounters vs the old values; unlocked sacrist to
+# 2.4 zones. Retreat gates must stay BELOW what early gold can fund or
+# the macro town-thrashes into the stuck detector.
 BERSERKER_GOLDEN_CONFIG = GoldenMacroConfig(
     preferred_weapon_stat="STR",
     preferred_armor_stat="DEF",
     potion_stockpile_target=3,
-    potion_stash_cap=5,
+    potion_stash_cap=6,
     overstay_cap=20,
-    overstay_bail_hp_pct=0.50,
-    heal_threshold_pct=0.70,   # glass cannon: heal aggressively between encounters
+    overstay_bail_hp_pct=0.35,
+    heal_threshold_pct=0.75,
     in_town_heal_target_pct=1.00,
     pre_boss_retreat_hp_pct=0.90,
     lodge_on=False,
-    town_visit_gold_threshold=30,
-    town_visit_hp_threshold=0.60,
+    town_visit_gold_threshold=40,
+    town_visit_hp_threshold=0.35,
 )
 
 ONMYOJI_GOLDEN_CONFIG = GoldenMacroConfig(
     preferred_weapon_stat="MAG",
     preferred_armor_stat="RES",
-    potion_stockpile_target=2,
-    potion_stash_cap=5,
+    potion_stockpile_target=3,
+    potion_stash_cap=6,
     overstay_cap=20,
-    overstay_bail_hp_pct=0.40,
-    heal_threshold_pct=0.35,   # save potions for boss fights — survive action is the defense
+    overstay_bail_hp_pct=0.35,
+    # Old value (0.35, "save potions for bosses") sent a 40-HP frame
+    # into the enc-4 pack at 55% with nothing — 3x fewer encounters
+    # on holdout. Boss potion management is real but survives this.
+    heal_threshold_pct=0.75,
     in_town_heal_target_pct=1.00,
     pre_boss_retreat_hp_pct=0.90,
     lodge_on=False,
-    town_visit_gold_threshold=30,
-    town_visit_hp_threshold=0.50,
+    town_visit_gold_threshold=40,
+    town_visit_hp_threshold=0.35,
 )
 
 SACRIST_GOLDEN_CONFIG = GoldenMacroConfig(
     preferred_weapon_stat="MAG",
     preferred_armor_stat="DEF",  # sacrist has DEF=1 growth, 0 RES
-    potion_stockpile_target=2,
-    potion_stash_cap=5,
+    potion_stockpile_target=3,
+    potion_stash_cap=6,
     overstay_cap=20,
-    overstay_bail_hp_pct=0.40,
-    heal_threshold_pct=0.25,   # communion scales with missing HP — low HP = more damage
-    in_town_heal_target_pct=0.80,  # don't heal to full — communion benefits from missing HP
+    overstay_bail_hp_pct=0.35,
+    # Tension with old intent ("stay hurt for communion", heal 0.25 /
+    # town target 0.80): holdout says heal-to-75% wins 5x more zones.
+    # The combat layer (golden_sacrist descend rule / sanguine_rite)
+    # re-enters the communion window in-fight for free — entering the
+    # fight healthy and descending on purpose beats arriving broken.
+    heal_threshold_pct=0.75,
+    in_town_heal_target_pct=1.00,
     pre_boss_retreat_hp_pct=0.90,
     lodge_on=False,
-    town_visit_gold_threshold=30,
-    town_visit_hp_threshold=0.50,
+    town_visit_gold_threshold=40,
+    town_visit_hp_threshold=0.35,
 )
 
 MARTYR_GOLDEN_CONFIG = GoldenMacroConfig(

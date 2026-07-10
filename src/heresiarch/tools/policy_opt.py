@@ -260,7 +260,7 @@ def _evaluate_one(task: tuple) -> tuple[int, SeedOutcome]:
         cand_idx, seed, job_id, params,
         solver_depth, solver_prune, max_encounters, weights_dump,
         adaptive, record_db_path, record_every, record_run_id,
-        leaf_eval, model_path,
+        leaf_eval, model_path, leaf_rollout,
     ) = task
     weights = FitnessWeights(**weights_dump)
     try:
@@ -287,6 +287,7 @@ def _evaluate_one(task: tuple) -> tuple[int, SeedOutcome]:
             config=SolverConfig(
                 search_depth=solver_depth, prune_after_ply=solver_prune,
                 adaptive_depth=adaptive, leaf_eval=leaf_eval,
+                model_leaf_rollout_rounds=leaf_rollout,
             ),
             rollout_config=rollout_cfg,
             value_fn=value_fn,
@@ -419,6 +420,7 @@ def evaluate_population(
     stage_keep: int = 0,
     leaf_eval: str = "rollout",
     model_path: str = "",
+    leaf_rollout: int = 0,
 ) -> list[CandidateRecord]:
     """Evaluate every candidate on every seed, in parallel.
 
@@ -446,7 +448,7 @@ def evaluate_population(
             record_db_path if idx in record_tags else None,
             record_every,
             f"{record_tags[idx]}_s{seed}" if idx in record_tags else None,
-            leaf_eval, model_path,
+            leaf_eval, model_path, leaf_rollout,
         )
 
     records = [
@@ -625,6 +627,7 @@ def optimize(args: argparse.Namespace) -> None:
             stage_keep=args.stage_keep,
             leaf_eval=leaf_eval,
             model_path=model_path,
+            leaf_rollout=getattr(args, "leaf_rollout", 0),
         )
 
         with gen_path.open("a") as fh:
@@ -707,6 +710,7 @@ def optimize(args: argparse.Namespace) -> None:
             },
             leaf_eval=leaf_eval,
             model_path=model_path,
+            leaf_rollout=getattr(args, "leaf_rollout", 0),
         )
         preset_rec, best_rec = final_records[0], final_records[1]
         payload = {
@@ -776,7 +780,10 @@ def main() -> None:
                          "(default) or the trained combat value model")
     ap.add_argument("--model-path", default=None,
                     help="Combat value model artifact (default: "
-                         "artifacts/models/combat_value_v1.pkl)")
+                         "versioned path under artifacts/models/)")
+    ap.add_argument("--leaf-rollout", type=int, default=0,
+                    help="Hybrid model leaves: N heuristic rounds "
+                         "before the model scores (see SolverConfig)")
     ap.add_argument("--stage-seeds", type=int, default=0,
                     help="Successive halving: seeds for the cheap first "
                          "stage every candidate plays (0 = off)")

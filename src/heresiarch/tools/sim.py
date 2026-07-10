@@ -324,6 +324,7 @@ def _run_one_seed(args: tuple):
         seed, job_id, policy_name, macro_name, data_path, max_enc, db_path,
         solver_depth, solver_prune, macro_lookahead, macro_params_path,
         adaptive, record_every, tap_dir, leaf_eval, model_path,
+        leaf_rollout,
     ) = args
     gd = _load_all(Path(data_path))
 
@@ -352,6 +353,7 @@ def _run_one_seed(args: tuple):
     solver_cfg = SolverConfig(
         search_depth=solver_depth, prune_after_ply=solver_prune,
         adaptive_depth=adaptive, leaf_eval=leaf_eval,
+        model_leaf_rollout_rounds=leaf_rollout,
     )
     solver = make_solver(
         gd, config=solver_cfg, rollout_config=opt_rollout_cfg,
@@ -483,6 +485,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         prune_after_ply=args.solver_prune,
         adaptive_depth=getattr(args, "adaptive", False),
         leaf_eval=leaf_eval,
+        model_leaf_rollout_rounds=getattr(args, "leaf_rollout", 0),
     )
     solver = make_solver(
         gd, config=solver_config, rollout_config=opt_rollout_cfg,
@@ -574,6 +577,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 getattr(args, "tap_out", "") or "",
                 leaf_eval,
                 model_path,
+                getattr(args, "leaf_rollout", 0),
             )
             for seed in seeds
         ]
@@ -992,8 +996,14 @@ def main() -> None:
     )
     p.add_argument(
         "--model-path", default=None,
-        help="Combat value model artifact (default: "
-             "artifacts/models/combat_value_v1.pkl). Only with "
+        help="Combat value model artifact (default: versioned path "
+             "under artifacts/models/). Only with --leaf-eval model.",
+    )
+    p.add_argument(
+        "--leaf-rollout", type=int, default=0,
+        help="Hybrid model leaves: play N heuristic rounds before the "
+             "model scores the settled state (banked-resource jobs "
+             "pay off beyond a bare snapshot). Only with "
              "--leaf-eval model.",
     )
     p.add_argument(
