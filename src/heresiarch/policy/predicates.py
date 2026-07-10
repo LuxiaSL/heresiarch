@@ -446,13 +446,15 @@ def passive_multiplier(
         chain = actor.frenzy_chain + attack_index + 1
         mult *= calculate_frenzy_multiplier(chain)
 
-    # Insight: only the first attack in the sequence gets amplified
+    # Insight: the engine amplifies EVERY insight_amplified cast while
+    # stacks remain, consuming one per cast (effect_pipeline). The Nth
+    # attack in a sequence therefore sees (stacks - N) remaining.
+    remaining_stacks = actor.insight_stacks - attack_index
     if (
-        attack_index == 0
-        and actor.insight_stacks > 0
+        remaining_stacks > 0
         and _has_trigger_passive(actor, TriggerCondition.ON_NON_DAMAGE_ACTION, game_data)
     ):
-        mult *= calculate_insight_multiplier(actor.insight_stacks)
+        mult *= calculate_insight_multiplier(remaining_stacks)
 
     # Communion: MAG abilities amplified by missing HP fraction
     if _has_trigger_passive(actor, TriggerCondition.ON_DAMAGE_MODIFY, game_data):

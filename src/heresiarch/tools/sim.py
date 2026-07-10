@@ -307,6 +307,11 @@ def _run_one_seed(args: tuple):
         FloorPlusMacroPolicy,
     )
     from heresiarch.policy.builtin.golden_einherjar import make_golden_einherjar
+    from heresiarch.policy.builtin.golden_jobs import (
+        make_golden_berserker,
+        make_golden_onmyoji,
+        make_golden_sacrist,
+    )
     from heresiarch.policy.builtin.golden_macro import (
         make_golden_macro_einherjar,
         make_golden_macro_for_job,
@@ -356,6 +361,9 @@ def _run_one_seed(args: tuple):
         "floor": FloorCombatPolicy(),
         "floor_plus": FloorPlusCombatPolicy(),
         "golden_einherjar": make_golden_einherjar(gd),
+        "golden_onmyoji": make_golden_onmyoji(gd),
+        "golden_sacrist": make_golden_sacrist(gd),
+        "golden_berserker": make_golden_berserker(gd),
         "solver": solver,
     }
     macro_solver_cfg = MacroSolverConfig(lookahead_encounters=macro_lookahead)
@@ -408,6 +416,11 @@ def cmd_run(args: argparse.Namespace) -> None:
         FloorPlusMacroPolicy,
     )
     from heresiarch.policy.builtin.golden_einherjar import make_golden_einherjar
+    from heresiarch.policy.builtin.golden_jobs import (
+        make_golden_berserker,
+        make_golden_onmyoji,
+        make_golden_sacrist,
+    )
     from heresiarch.policy.builtin.golden_macro import (
         make_golden_macro_einherjar,
         make_golden_macro_for_job,
@@ -482,6 +495,9 @@ def cmd_run(args: argparse.Namespace) -> None:
         "floor": FloorCombatPolicy(),
         "floor_plus": FloorPlusCombatPolicy(),
         "golden_einherjar": make_golden_einherjar(gd),
+        "golden_onmyoji": make_golden_onmyoji(gd),
+        "golden_sacrist": make_golden_sacrist(gd),
+        "golden_berserker": make_golden_berserker(gd),
         "solver": solver,
     }
     macro_policies: dict[str, MacroPolicy] = {
