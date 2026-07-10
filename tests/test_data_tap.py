@@ -77,6 +77,43 @@ def test_value_label_matches_terminal_semantics(
             assert r["y"]["value"] == 0.0
 
 
+def test_tap_skip_existing_resumes(tmp_path: Path, monkeypatch, capsys):
+    """--tap-skip-existing runs only the seeds without a shard."""
+    import sys
+
+    from heresiarch.tools.sim import main
+
+    tap = tmp_path / "shards"
+    base = [
+        "sim", "run", "--job", "einherjar", "--policy", "floor",
+        "--macro", "floor_plus_macro", "--max-encounters", "3",
+        "--seed-start", "50", "--tap-out", str(tap), "--quiet",
+    ]
+    monkeypatch.setattr(sys, "argv", base + ["--n", "1"])
+    main()
+    first = tap / "tap_einherjar_floor_50.jsonl.gz"
+    assert first.exists()
+    rows_before = first.read_bytes()
+
+    monkeypatch.setattr(
+        sys, "argv", base + ["--n", "3", "--tap-skip-existing"],
+    )
+    main()
+    out = capsys.readouterr().out
+    assert "Resume: 1 of 3" in out
+    for seed in (50, 51, 52):
+        assert (tap / f"tap_einherjar_floor_{seed}.jsonl.gz").exists()
+    # The existing shard was skipped, not re-run (append would grow it).
+    assert first.read_bytes() == rows_before
+
+    # Third pass: everything present -> no work at all.
+    monkeypatch.setattr(
+        sys, "argv", base + ["--n", "3", "--tap-skip-existing"],
+    )
+    main()
+    assert "Nothing to do" in capsys.readouterr().out
+
+
 def test_tap_never_breaks_the_sim(tmp_path: Path, game_data: GameData):
     """A tap whose writer explodes must not affect the run result."""
 

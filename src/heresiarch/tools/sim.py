@@ -515,13 +515,37 @@ def cmd_run(args: argparse.Namespace) -> None:
     if args.record_db:
         record_db = RecordDB(Path(args.record_db))
 
+    # Resume support for data-generation fleets: a tap shard is written
+    # once, at run end (see DataTap._flush), so an existing shard always
+    # means that seed completed — skip it and only run the gaps.
+    seeds = list(range(args.seed_start, args.seed_start + args.n))
+    tap_out = getattr(args, "tap_out", "") or ""
+    if getattr(args, "tap_skip_existing", False):
+        if not tap_out:
+            print("--tap-skip-existing requires --tap-out")
+            return
+        remaining = [
+            s for s in seeds
+            if not (
+                Path(tap_out) / f"tap_{args.job}_{args.policy}_{s}.jsonl.gz"
+            ).exists()
+        ]
+        if len(remaining) < len(seeds):
+            print(f"  Resume: {len(seeds) - len(remaining)} of "
+                  f"{len(seeds)} seeds already have shards — "
+                  f"running {len(remaining)}")
+        seeds = remaining
+        if not seeds:
+            print("  Nothing to do: every seed already has a shard.")
+            return
+
     results = []
-    if args.workers > 1 and args.n > 1:
+    if args.workers > 1 and len(seeds) > 1:
         import multiprocessing
 
         worker_args = [
             (
-                args.seed_start + i, args.job,
+                seed, args.job,
                 args.policy, args.macro,
                 str(Path("data")),
                 args.max_encounters,
@@ -535,11 +559,12 @@ def cmd_run(args: argparse.Namespace) -> None:
                 leaf_eval,
                 model_path,
             )
-            for i in range(args.n)
+            for seed in seeds
         ]
-        n_workers = min(args.workers, args.n)
+        n_workers = min(args.workers, len(seeds))
         if args.progress:
-            print(f"  Running {args.n} seeds across {n_workers} workers...", file=sys.stderr)
+            print(f"  Running {len(seeds)} seeds across {n_workers} "
+                  f"workers...", file=sys.stderr)
         with multiprocessing.Pool(n_workers) as pool:
             for r in pool.imap_unordered(_run_one_seed, worker_args):
                 results.append(r)
@@ -553,8 +578,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                         file=sys.stderr,
                     )
     else:
-        for i in range(args.n):
-            seed = args.seed_start + i
+        for seed in seeds:
             data_tap = None
             if getattr(args, "tap_out", None):
                 from heresiarch.tools.data_tap import DataTap
@@ -938,6 +962,12 @@ def main() -> None:
         "--tap-out", default=None,
         help="Directory for training-data shards: one gzip JSONL per seed "
              "with labeled combat/macro feature rows (see tools/data_tap.py).",
+    )
+    p.add_argument(
+        "--tap-skip-existing", action="store_true",
+        help="With --tap-out: skip seeds whose shard file already exists "
+             "(shards are written once at run end, so an existing shard "
+             "means a completed run). Makes killed fleets resumable.",
     )
     p.add_argument(
         "--leaf-eval", choices=("rollout", "model"), default="rollout",
