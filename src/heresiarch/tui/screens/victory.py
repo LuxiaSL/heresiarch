@@ -55,6 +55,7 @@ class VictoryScreen(Screen):
             )
 
     def on_mount(self) -> None:
+        self.app.end_play_tap(won_region=True)
         self._render_recap()
         self.query_one("#btn-return", Button).focus()
 

@@ -405,6 +405,8 @@ class LoadScreen(Screen):
             )
             return
 
+        self.app.start_play_tap(self.app.run_state)
+
         if self.app.run_state.current_zone_id is not None:
             from heresiarch.tui.screens.zone import ZoneScreen
 

@@ -68,6 +68,7 @@ class DeathScreen(Screen):
             )
 
     def on_mount(self) -> None:
+        self.app.end_play_tap(won_region=False)
         self._render_recap()
         self._delete_saves()
         self.query_one("#btn-return", Button).focus()

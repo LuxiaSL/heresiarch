@@ -153,6 +153,19 @@ class DataTap:
 
     # -- output ----------------------------------------------------------
 
+    def flush(self) -> None:
+        """Write buffered labeled rows now (failure-proof).
+
+        Sim runs flush once at run end. Interactive (TUI) play flushes
+        after every encounter instead, so a quit or crash loses at most
+        the unlabeled macro rows of the current session — combat rows
+        are labeled at encounter end and land immediately.
+        """
+        try:
+            self._flush()
+        except Exception:
+            pass
+
     def _flush(self) -> None:
         if not self._done_rows:
             return

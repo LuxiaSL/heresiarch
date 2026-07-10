@@ -141,6 +141,7 @@ class JobSelectScreen(Screen):
             },
         )
         app.run_state = run
+        app.start_play_tap(run)
         app.persist_run()
 
         from heresiarch.tui.screens.zone_select import ZoneSelectScreen

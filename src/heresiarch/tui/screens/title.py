@@ -289,6 +289,7 @@ class TitleScreen(Screen):
             latest = max(slots, key=lambda s: s.saved_at or "")
             run_state = self.app.save_manager.load_run(run_id, latest.slot_id)
             self.app.run_state = self.app.game_loop.rehydrate_run(run_state)
+            self.app.start_play_tap(self.app.run_state)
 
             if self.app.run_state.current_zone_id is not None:
                 from heresiarch.tui.screens.zone import ZoneScreen

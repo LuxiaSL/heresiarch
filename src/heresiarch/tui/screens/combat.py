@@ -180,6 +180,9 @@ class CombatScreen(AutoBattleMixin, Screen):
         )
         app.combat_state = combat
 
+        if app.data_tap is not None:
+            app.data_tap.on_encounter_start(run, combat)
+
         # Build name mappings
         self._combatant_names = {}
         for c in combat.player_combatants:
@@ -1155,6 +1158,9 @@ class CombatScreen(AutoBattleMixin, Screen):
             if template_id in self.app.game_data.enemies:
                 enemy_templates[template_id] = self.app.game_data.enemies[template_id]
 
+        if self.app.data_tap is not None:
+            self.app.data_tap.on_combat_round(combat)
+
         combat = self.app.game_loop.combat_engine.process_round(
             combat, self._decisions, enemy_templates
         )
@@ -1281,6 +1287,12 @@ class CombatScreen(AutoBattleMixin, Screen):
                 self._auto_active = False
                 self._verbose = self._pre_auto_verbose
             self._phase = CombatPhase.COMBAT_OVER
+
+            if self.app.data_tap is not None:
+                self.app.data_tap.on_encounter_end(
+                    combat, bool(combat.player_won),
+                )
+                self.app.data_tap.flush()
 
             if self._encounter_record is not None:
                 self._encounter_record.result = "victory" if combat.player_won else "defeat"

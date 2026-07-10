@@ -95,6 +95,11 @@ class HeresiarchApp(App):
         self.combat_state: CombatState | None = None
         self.current_enemies: list[EnemyInstance] | None = None
 
+        # Training-data tap: human play becomes labeled feature rows
+        # (artifacts/tapdata_play/), same contract as sim shards.
+        # Failure-proof; disable with HERESIARCH_NO_PLAY_TAP=1.
+        self.data_tap = None
+
         # Background music — failure-proof, toggled with M.
         from heresiarch.tui.music import MusicPlayer
         self.music = MusicPlayer()
@@ -127,6 +132,43 @@ class HeresiarchApp(App):
     def action_quit(self) -> None:
         """Show confirmation modal instead of quitting immediately."""
         self.push_screen(QuitConfirmModal())
+
+    def start_play_tap(self, run: RunState) -> None:
+        """Open a training-data tap for this run's play session.
+
+        Called on new run and on load. Shards append across sessions
+        (stable filename per run_id); the seed field is derived from
+        the run_id so train/test splits stay leak-free.
+        """
+        self.data_tap = None
+        import os
+        if os.environ.get("HERESIARCH_NO_PLAY_TAP"):
+            return
+        try:
+            import zlib
+            from heresiarch.tools.data_tap import DataTap
+
+            self.data_tap = DataTap(
+                Path("artifacts/tapdata_play")
+                / f"tap_{run.mc_job_id}_human_{run.run_id}.jsonl.gz",
+                mc_job_id=run.mc_job_id,
+                seed=zlib.crc32(run.run_id.encode()) % 100_000_000,
+                game_data=self.game_data,
+                policy_name="human",
+            )
+        except Exception:
+            self.data_tap = None
+
+    def end_play_tap(self, won_region: bool) -> None:
+        """Label macro rows with the run's outcome and flush."""
+        tap, self.data_tap = self.data_tap, None
+        if tap is None or self.run_state is None:
+            return
+        try:
+            tap.on_run_end(self.run_state, won_region)
+            tap.flush()
+        except Exception:
+            pass
 
     def persist_run(self) -> None:
         """Autosave the current run, swallowing failures.
