@@ -627,7 +627,9 @@ def _maybe_record_live(run: RunState, ctx: _RunContext) -> None:
     try:
         # Outcome inferred: 'dead' or 'in_progress' — the final
         # authoritative write in simulate_run() overrides it.
-        ctx.record_db.record_run(run, ctx.record_meta)
+        # Incremental: only rows newer than the last upsert are written
+        # (full replace here is O(n²) over a long run).
+        ctx.record_db.record_run(run, ctx.record_meta, incremental=True)
     except Exception as exc:  # noqa: BLE001 — live recording must never break the sim
         _rate_limited.warning(
             logger, "live_record",

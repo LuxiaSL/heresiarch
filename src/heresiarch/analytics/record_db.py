@@ -27,6 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from heresiarch.engine.models.battle_record import EncounterRecord
+from heresiarch.engine.models.macro_log import MacroEvent
 from heresiarch.engine.models.run_state import RunState
 
 
@@ -153,12 +155,22 @@ class RecordDB:
         metadata: RunRecordMetadata,
         *,
         outcome: str | None = None,
+        incremental: bool = False,
     ) -> None:
         """Upsert a run + its encounters.
 
         ``outcome`` overrides the inferred status. Inference:
           - ``run.is_dead`` → 'dead'
           - else → 'in_progress'
+
+        ``incremental`` is the hot-loop mode for mid-run live recording
+        (run_driver record_every): the runs summary row is always
+        upserted, but only encounter/macro rows *newer* than what the
+        DB already holds are inserted — the default mode's
+        DELETE + re-INSERT of every row is O(n²) over a long run. If
+        the DB is ahead of the in-memory record (e.g. a reused
+        run_id), it falls back to a full replace. Final authoritative
+        writes should keep the default full replace.
         """
         now = datetime.now(timezone.utc).isoformat()
         mc = _find_mc(run)
@@ -229,60 +241,102 @@ class RecordDB:
             ),
         )
 
-        # Replace all encounter rows for this run — simpler than diffing
-        # and safe since we have the full authoritative record in memory.
-        self.conn.execute(
-            "DELETE FROM encounters WHERE run_id = ?", (run.run_id,),
-        )
-        for seq, enc in enumerate(run.battle_record.encounters):
-            self.conn.execute(
-                """
-                INSERT INTO encounters (
-                    run_id, encounter_seq, zone_id, encounter_index,
-                    enemy_template_ids, result, rounds_taken,
-                    total_damage_dealt, total_damage_taken, total_healing,
-                    character_deaths, encounter_json
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    run.run_id, seq, enc.zone_id, enc.encounter_index,
-                    json.dumps(enc.enemy_template_ids),
-                    enc.result, enc.rounds_taken,
-                    enc.total_damage_dealt, enc.total_damage_taken,
-                    enc.total_healing, json.dumps(enc.character_deaths),
-                    enc.model_dump_json(),
-                ),
-            )
+        encounters = run.battle_record.encounters
+        run_max_macro_seq = max((e.seq for e in run.macro_log), default=-1)
 
-        # Replace macro events in the same pattern.
-        self.conn.execute(
-            "DELETE FROM macro_events WHERE run_id = ?", (run.run_id,),
-        )
-        for evt in run.macro_log:
-            # payload_json stores ONLY the event-specific payload; the flat
-            # columns carry the snapshot context (zone, HP, gold, etc.) so
-            # queries don't have to parse JSON for quick filters.
+        # Incremental mode only holds when the DB is strictly behind the
+        # in-memory record on BOTH tables; otherwise resync wholesale so
+        # the DB never keeps rows the record no longer has.
+        enc_start = -1
+        macro_after = -1
+        if incremental:
+            db_max_enc = self._max_seq("encounters", "encounter_seq", run.run_id)
+            db_max_macro = self._max_seq("macro_events", "seq", run.run_id)
+            if db_max_enc < len(encounters) and db_max_macro <= run_max_macro_seq:
+                enc_start = db_max_enc + 1
+                macro_after = db_max_macro
+
+        if enc_start < 0:
+            # Replace all rows for this run — simpler than diffing and
+            # safe since we have the full authoritative record in memory.
             self.conn.execute(
-                """
-                INSERT INTO macro_events (
-                    run_id, seq, event_type, zone_id, town_id, in_town,
-                    encounter_seq_at_time, timestamp,
-                    mc_level, mc_hp_pct, party_gold,
-                    stash_used, stash_free, payload_json
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    run.run_id, evt.seq, evt.event_type,
-                    evt.zone_id, evt.town_id, 1 if evt.in_town else 0,
-                    evt.encounter_seq_at_time, evt.timestamp,
-                    evt.mc_level, evt.mc_hp_pct, evt.party_gold,
-                    evt.stash_used, evt.stash_free,
-                    json.dumps(evt.payload),
-                ),
+                "DELETE FROM encounters WHERE run_id = ?", (run.run_id,),
             )
+            self.conn.execute(
+                "DELETE FROM macro_events WHERE run_id = ?", (run.run_id,),
+            )
+            enc_start = 0
+            macro_after = -1
+
+        for seq in range(enc_start, len(encounters)):
+            self._insert_encounter(run.run_id, seq, encounters[seq])
+        for evt in run.macro_log:
+            if evt.seq > macro_after:
+                self._insert_macro_event(run.run_id, evt)
         self.conn.commit()
+
+    def _max_seq(self, table: str, column: str, run_id: str) -> int:
+        """Highest recorded sequence number for a run; -1 when none."""
+        # table/column come from a fixed internal allowlist, never user
+        # input — assert to keep it that way.
+        assert (table, column) in (
+            ("encounters", "encounter_seq"), ("macro_events", "seq"),
+        )
+        cur = self.conn.execute(
+            f"SELECT MAX({column}) FROM {table} WHERE run_id = ?",  # noqa: S608
+            (run_id,),
+        )
+        row = cur.fetchone()
+        return row[0] if row and row[0] is not None else -1
+
+    def _insert_encounter(
+        self, run_id: str, seq: int, enc: EncounterRecord,
+    ) -> None:
+        # OR REPLACE: harmless after the full-mode DELETE, and makes the
+        # incremental boundary row safe to rewrite.
+        self.conn.execute(
+            """
+            INSERT OR REPLACE INTO encounters (
+                run_id, encounter_seq, zone_id, encounter_index,
+                enemy_template_ids, result, rounds_taken,
+                total_damage_dealt, total_damage_taken, total_healing,
+                character_deaths, encounter_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id, seq, enc.zone_id, enc.encounter_index,
+                json.dumps(enc.enemy_template_ids),
+                enc.result, enc.rounds_taken,
+                enc.total_damage_dealt, enc.total_damage_taken,
+                enc.total_healing, json.dumps(enc.character_deaths),
+                enc.model_dump_json(),
+            ),
+        )
+
+    def _insert_macro_event(self, run_id: str, evt: MacroEvent) -> None:
+        # payload_json stores ONLY the event-specific payload; the flat
+        # columns carry the snapshot context (zone, HP, gold, etc.) so
+        # queries don't have to parse JSON for quick filters.
+        self.conn.execute(
+            """
+            INSERT OR REPLACE INTO macro_events (
+                run_id, seq, event_type, zone_id, town_id, in_town,
+                encounter_seq_at_time, timestamp,
+                mc_level, mc_hp_pct, party_gold,
+                stash_used, stash_free, payload_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id, evt.seq, evt.event_type,
+                evt.zone_id, evt.town_id, 1 if evt.in_town else 0,
+                evt.encounter_seq_at_time, evt.timestamp,
+                evt.mc_level, evt.mc_hp_pct, evt.party_gold,
+                evt.stash_used, evt.stash_free,
+                json.dumps(evt.payload),
+            ),
+        )
 
     def _existing_started_at(self, run_id: str) -> str | None:
         cur = self.conn.execute(
