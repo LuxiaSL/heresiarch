@@ -13,7 +13,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from heresiarch.engine.data_loader import GameData, load_all
 from heresiarch.engine.formulas import calculate_buy_price
@@ -101,6 +101,9 @@ class _RunContext:
     record_meta: RunRecordMetadata | None = None
     record_every: int = 0
     encounters_since_record: int = 0
+    # Optional training-data tap (tools/data_tap.py). Hooks are
+    # failure-proof on the tap side; a None tap costs nothing.
+    data_tap: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +124,7 @@ def simulate_run(
     record_db: RecordDB | None = None,
     record_run_id: str | None = None,
     record_every: int = 0,
+    data_tap: Any = None,
 ) -> RunResult:
     """Simulate one full run and return structured results.
 
@@ -185,10 +189,18 @@ def simulate_run(
         record_db=record_db,
         record_meta=record_meta,
         record_every=max(0, record_every),
+        data_tap=data_tap,
     )
     ctx.emitter.emit("run_start", seed=seed, job=mc_job_id)
 
     run = _drive(run, ctx)
+
+    if data_tap is not None:
+        won_region = any(
+            (z in game_data.zones and game_data.zones[z].is_final)
+            for z in run.zones_completed
+        )
+        data_tap.on_run_end(run, won_region)
 
     ctx.emitter.emit(
         "run_end",
@@ -718,8 +730,13 @@ def _run_encounter(
     # Track round-by-round records for BattleRecord persistence.
     encounter_rounds: list[RoundRecord] = []
 
+    if ctx.data_tap is not None:
+        ctx.data_tap.on_encounter_start(run, state)
+
     # Combat loop
     while not state.is_finished and state.round_number < ctx.max_combat_rounds:
+        if ctx.data_tap is not None:
+            ctx.data_tap.on_combat_round(state)
         decisions = _collect_decisions(state, ctx, run)
         pre_event_count = len(state.log)
         state = gl.combat_engine.process_round(state, decisions, enemy_templates)
@@ -744,6 +761,9 @@ def _run_encounter(
     m.rounds_total += state.round_number
 
     victorious = bool(state.player_won)
+
+    if ctx.data_tap is not None:
+        ctx.data_tap.on_encounter_end(state, victorious)
 
     # Append the encounter to the run's BattleRecord regardless of outcome,
     # then proceed with victory/defeat handling.

@@ -318,7 +318,7 @@ def _run_one_seed(args: tuple):
     (
         seed, job_id, policy_name, macro_name, data_path, max_enc, db_path,
         solver_depth, solver_prune, macro_lookahead, macro_params_path,
-        adaptive, record_every,
+        adaptive, record_every, tap_dir,
     ) = args
     gd = _load_all(Path(data_path))
 
@@ -360,6 +360,14 @@ def _run_one_seed(args: tuple):
         macro_name = "opt_macro"
 
     record_db = _RecordDB(Path(db_path)) if db_path else None
+    data_tap = None
+    if tap_dir:
+        from heresiarch.tools.data_tap import DataTap
+        data_tap = DataTap(
+            Path(tap_dir) / f"tap_{job_id}_{policy_name}_{seed}.jsonl.gz",
+            mc_job_id=job_id, seed=seed, game_data=gd,
+            policy_name=policy_name,
+        )
     try:
         return _simulate_run(
             mc_job_id=job_id,
@@ -370,6 +378,7 @@ def _run_one_seed(args: tuple):
             max_encounters=max_enc,
             record_db=record_db,
             record_every=record_every,
+            data_tap=data_tap,
         )
     finally:
         if record_db is not None:
@@ -487,6 +496,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 macro_params_path or "",
                 getattr(args, "adaptive", False),
                 getattr(args, "record_every", 0),
+                getattr(args, "tap_out", "") or "",
             )
             for i in range(args.n)
         ]
@@ -508,6 +518,15 @@ def cmd_run(args: argparse.Namespace) -> None:
     else:
         for i in range(args.n):
             seed = args.seed_start + i
+            data_tap = None
+            if getattr(args, "tap_out", None):
+                from heresiarch.tools.data_tap import DataTap
+                data_tap = DataTap(
+                    Path(args.tap_out)
+                    / f"tap_{args.job}_{args.policy}_{seed}.jsonl.gz",
+                    mc_job_id=args.job, seed=seed, game_data=gd,
+                    policy_name=args.policy,
+                )
             r = simulate_run(
                 mc_job_id=args.job,
                 combat_policy=combat_policy,
@@ -517,6 +536,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 game_data=gd,
                 record_db=record_db,
                 record_every=getattr(args, "record_every", 0),
+                data_tap=data_tap,
             )
             results.append(r)
             if args.progress:
@@ -578,7 +598,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
             str(Path("data")),
             args.max_encounters, "",
             args.broad_depth, args.broad_prune,
-            macro_lookahead, "", False, 0,
+            macro_lookahead, "", False, 0, "",
         )
         for i in range(args.n)
     ]
@@ -617,7 +637,7 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
             str(Path("data")),
             args.max_encounters, "",
             args.deep_depth, args.deep_prune,
-            macro_lookahead, "", False, 0,
+            macro_lookahead, "", False, 0, "",
         )
         for seed in worst_seed_ids
     ]
@@ -876,6 +896,11 @@ def main() -> None:
         "--record-every", type=int, default=0,
         help="With --record-db: also upsert mid-run every N encounters so "
              "the run is watchable live (theater --follow). 0 = final only.",
+    )
+    p.add_argument(
+        "--tap-out", default=None,
+        help="Directory for training-data shards: one gzip JSONL per seed "
+             "with labeled combat/macro feature rows (see tools/data_tap.py).",
     )
     p.add_argument(
         "--progress", action="store_true",
