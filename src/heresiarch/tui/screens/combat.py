@@ -484,9 +484,35 @@ class CombatScreen(AutoBattleMixin, Screen):
             self._choice_keys.append(f"item:{item_id}")
 
     def _populate_item_target_options(self, choices: OptionList) -> None:
-        """List party members to use an item on."""
+        """Target list for the selected item.
+
+        Heal items target party members. Cast scrolls target whatever
+        their ability targets — enemies for offensive scrolls (the
+        old ally-only list was half of the do-nothing scroll bug; the
+        engine now also side-corrects, but the UI should offer the
+        right list in the first place).
+        """
         combat = self.app.combat_state
         if combat is None:
+            return
+
+        cast_target = None
+        if self._selected_item_id is not None:
+            item = self.app.game_data.items.get(self._selected_item_id)
+            if item is not None and item.casts_ability_id:
+                ability = self.app.game_data.abilities.get(item.casts_ability_id)
+                if ability is not None:
+                    cast_target = ability.target
+
+        from heresiarch.engine.models.abilities import TargetType
+
+        if cast_target in (TargetType.SINGLE_ENEMY, TargetType.ALL_ENEMIES):
+            for e in combat.living_enemies:
+                name = self._combatant_names.get(e.id, e.id)
+                choices.add_option(
+                    Option(f"{name} [#cc4444]{e.current_hp}/{e.max_hp}[/#cc4444]")
+                )
+                self._choice_keys.append(f"item_target:{e.id}")
             return
 
         for p in combat.living_players:

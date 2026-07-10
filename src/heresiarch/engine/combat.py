@@ -341,6 +341,38 @@ class CombatEngine(EffectPipelineMixin):
         if item is None or not item.is_consumable:
             return state
 
+        # One-time cast scroll: the scroll IS the ability for one
+        # action. Wire straight through to normal ability resolution
+        # (damage pipeline, insight, cooldowns, passives) instead of
+        # the heal-item path — which silently did nothing and let the
+        # UI's ally-default targeting stick to the player's own team.
+        if item.casts_ability_id is not None:
+            ability = self.abilities.get(item.casts_ability_id)
+            if ability is not None:
+                targets = self._scroll_cast_targets(
+                    state, actor, ability, action.target_ids,
+                )
+                state.log.append(
+                    CombatEvent(
+                        event_type=CombatEventType.ITEM_USED,
+                        round_number=state.round_number,
+                        actor_id=actor_id,
+                        target_id=targets[0] if targets else actor_id,
+                        details={
+                            "item_id": item_id,
+                            "item_name": item.name,
+                            "casts_ability_id": ability.id,
+                        },
+                    )
+                )
+                state.consumed_items.append(item_id)
+                cast = CombatAction(
+                    actor_id=actor_id,
+                    ability_id=ability.id,
+                    target_ids=targets,
+                )
+                return self._resolve_action(state, actor_id, cast)
+
         target_id = action.target_ids[0] if action.target_ids else actor_id
         target = state.get_combatant(target_id)
         if target is None or not target.is_alive:
@@ -364,6 +396,48 @@ class CombatEngine(EffectPipelineMixin):
         state.consumed_items.append(item_id)
 
         return state
+
+    def _scroll_cast_targets(
+        self,
+        state: CombatState,
+        actor: CombatantState,
+        ability,
+        requested: list[str],
+    ) -> list[str]:
+        """Targets for a scroll-cast ability, forced onto the correct
+        side. The requester (UI/agent) may have targeted an ally out
+        of item-targeting habit; the ability's own target type is the
+        law here. The pipeline only retargets DEAD targets, so a
+        living wrong-side target would otherwise pass through (a bolt
+        scroll nuking your own healer).
+
+        ALL_* types return [] — the pipeline fills those itself.
+        """
+        if ability.target == TargetType.SELF:
+            return [actor.id]
+        if ability.target in (TargetType.ALL_ENEMIES, TargetType.ALL_ALLIES):
+            return []
+
+        if actor.is_player:
+            enemies = state.living_enemies
+            allies = state.living_players
+        else:
+            enemies = state.living_players
+            allies = state.living_enemies
+
+        if ability.target == TargetType.SINGLE_ENEMY:
+            pool = {e.id for e in enemies}
+            for tid in requested:
+                if tid in pool:
+                    return [tid]
+            return [enemies[0].id] if enemies else []
+
+        # SINGLE_ALLY
+        pool = {a.id for a in allies}
+        for tid in requested:
+            if tid in pool:
+                return [tid]
+        return [actor.id]
 
     # --- Turn Resolution ---
 
