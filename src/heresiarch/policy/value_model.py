@@ -31,7 +31,13 @@ logger = logging.getLogger(__name__)
 # the branch stash at the leaf; CombatState doesn't know the stash.
 CombatValueFn = Callable[["CombatState", str, int, int], float]
 
-DEFAULT_MODEL_PATH = Path("artifacts/models/combat_value_v1.pkl")
+# Tracks FEATURES_VERSION because the trainer stamps the version into
+# the artifact filename — a hardcoded name silently points at a stale
+# model after a version bump (the loader then rejects it and every
+# --leaf-eval model run fail-fasts).
+DEFAULT_MODEL_PATH = Path(
+    f"artifacts/models/combat_value_v{FEATURES_VERSION}.pkl"
+)
 
 # Per-process cache: multiprocessing workers each load the artifact
 # once instead of per (candidate, seed) task. None results are cached
