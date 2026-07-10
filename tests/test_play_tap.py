@@ -73,6 +73,14 @@ def test_play_tap_lifecycle(
     macro_rows = [r for r in rows if r["kind"] == "macro"]
     assert macro_rows and macro_rows[0]["y"]["survived"] in (True, False)
 
+    # The analytics DB got a final outcome (not 'in_progress').
+    import sqlite3
+    con = sqlite3.connect(tmp_path / "artifacts" / "run_records.db")
+    outcome = con.execute(
+        "select outcome from runs where run_id='run_test123'",
+    ).fetchone()[0]
+    assert outcome == "clean_exit"
+
 
 def test_play_tap_env_optout(
     tmp_path: Path, monkeypatch, game_data: GameData,

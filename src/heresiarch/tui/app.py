@@ -160,12 +160,30 @@ class HeresiarchApp(App):
             self.data_tap = None
 
     def end_play_tap(self, won_region: bool) -> None:
-        """Label macro rows with the run's outcome and flush."""
+        """Close out a finished run: label + flush the tap, and give
+        the analytics DB its final outcome. Death and victory skip
+        autosave (death even deletes saves), so without this the
+        records DB keeps the last mid-run snapshot marked
+        'in_progress' forever."""
+        run = self.run_state
+        if run is not None and self.save_manager.record_db is not None:
+            try:
+                from heresiarch.analytics.record_db import RunRecordMetadata
+
+                outcome = "won" if won_region else (
+                    "dead" if run.is_dead else "clean_exit"
+                )
+                self.save_manager.record_db.record_run(
+                    run, RunRecordMetadata(source="tui"), outcome=outcome,
+                )
+            except Exception:
+                pass
+
         tap, self.data_tap = self.data_tap, None
-        if tap is None or self.run_state is None:
+        if tap is None or run is None:
             return
         try:
-            tap.on_run_end(self.run_state, won_region)
+            tap.on_run_end(run, won_region)
             tap.flush()
         except Exception:
             pass
