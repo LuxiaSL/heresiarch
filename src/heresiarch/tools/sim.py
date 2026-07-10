@@ -460,14 +460,31 @@ def cmd_run(args: argparse.Namespace) -> None:
             config=opt_macro_cfg, game_data=gd, name="opt_macro",
         )
 
-    leaf_eval = getattr(args, "leaf_eval", "rollout")
+    from heresiarch.policy.value_model import (
+        DEFAULT_MODEL_PATH,
+        job_leaf_defaults,
+        load_combat_value_fn,
+    )
+
+    leaf_eval = getattr(args, "leaf_eval", "auto")
+    leaf_rollout = getattr(args, "leaf_rollout", None)
     model_path = getattr(args, "model_path", "") or ""
     value_fn = None
-    if leaf_eval == "model":
-        from heresiarch.policy.value_model import (
-            DEFAULT_MODEL_PATH,
-            load_combat_value_fn,
-        )
+    if leaf_eval == "auto":
+        # Per-job validated defaults (JOB_LEAF_DEFAULTS). Soft intent:
+        # a missing model degrades to rollout with a warning instead
+        # of failing — plain `sim run` must work without artifacts.
+        leaf_eval, job_k = job_leaf_defaults(args.job)
+        if leaf_rollout is None:
+            leaf_rollout = job_k
+        if leaf_eval == "model":
+            model_path = model_path or str(DEFAULT_MODEL_PATH)
+            value_fn = load_combat_value_fn(model_path)
+            if value_fn is None:
+                print(f"[warn] no usable value model at {model_path} — "
+                      f"using rollout leaves")
+                leaf_eval = "rollout"
+    elif leaf_eval == "model":
         model_path = model_path or str(DEFAULT_MODEL_PATH)
         value_fn = load_combat_value_fn(model_path)
         if value_fn is None:
@@ -479,13 +496,14 @@ def cmd_run(args: argparse.Namespace) -> None:
                 f"Train one with: uv run python -m heresiarch.tools.train_value"
             )
             return
+    leaf_rollout = leaf_rollout or 0
 
     solver_config = SolverConfig(
         search_depth=args.solver_depth,
         prune_after_ply=args.solver_prune,
         adaptive_depth=getattr(args, "adaptive", False),
         leaf_eval=leaf_eval,
-        model_leaf_rollout_rounds=getattr(args, "leaf_rollout", 0),
+        model_leaf_rollout_rounds=leaf_rollout,
     )
     solver = make_solver(
         gd, config=solver_config, rollout_config=opt_rollout_cfg,
@@ -577,7 +595,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 getattr(args, "tap_out", "") or "",
                 leaf_eval,
                 model_path,
-                getattr(args, "leaf_rollout", 0),
+                leaf_rollout,
             )
             for seed in seeds
         ]
@@ -990,9 +1008,11 @@ def main() -> None:
              "means a completed run). Makes killed fleets resumable.",
     )
     p.add_argument(
-        "--leaf-eval", choices=("rollout", "model"), default="rollout",
-        help="Solver leaf evaluation: heuristic rollout (default) or the "
-             "trained combat value model (rung 1).",
+        "--leaf-eval", choices=("auto", "rollout", "model"),
+        default="auto",
+        help="Solver leaf evaluation. auto (default): per-job validated "
+             "config (JOB_LEAF_DEFAULTS), degrading to rollout if no "
+             "model artifact exists. model: fail-fast if unloadable.",
     )
     p.add_argument(
         "--model-path", default=None,
@@ -1000,7 +1020,7 @@ def main() -> None:
              "under artifacts/models/). Only with --leaf-eval model.",
     )
     p.add_argument(
-        "--leaf-rollout", type=int, default=0,
+        "--leaf-rollout", type=int, default=None,
         help="Hybrid model leaves: play N heuristic rounds before the "
              "model scores the settled state (banked-resource jobs "
              "pay off beyond a bare snapshot). Only with "

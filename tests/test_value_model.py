@@ -297,3 +297,11 @@ class TestTrainer:
         state, _ = _make_combat(game_data, random.Random(42))
         value = fn(state, "einherjar")
         assert 0.0 <= value <= 2.0
+
+
+def test_job_leaf_defaults_table():
+    from heresiarch.policy.value_model import job_leaf_defaults
+    assert job_leaf_defaults("berserker") == ("model", 0)
+    assert job_leaf_defaults("onmyoji") == ("model", 2)
+    assert job_leaf_defaults("sacrist") == ("rollout", 0)
+    assert job_leaf_defaults("unknown_job") == ("rollout", 0)

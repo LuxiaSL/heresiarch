@@ -31,6 +31,29 @@ logger = logging.getLogger(__name__)
 # the branch stash at the leaf; CombatState doesn't know the stash.
 CombatValueFn = Callable[["CombatState", str, int, int], float]
 
+# Per-job leaf configuration, validated on 48-seed A/Bs (2026-07-10,
+# node1 artifacts/ab_hybrid/). (leaf_eval, model_leaf_rollout_rounds):
+# - tanks: model leaves + 2-round lookahead (best arms ever measured)
+# - berserker: pure model BEATS rollout; K>0 hurts (the heuristic
+#   rollout plays frenzy rounds badly, degrading the judged state)
+# - onmyoji: model + 2 rounds = rollout parity (banked insight must
+#   resolve before evaluation — designer's horizon diagnosis)
+# - sacrist: rollout — its communion line isn't in the model's
+#   horizon yet; the target for the next data iteration
+JOB_LEAF_DEFAULTS: dict[str, tuple[str, int]] = {
+    "einherjar": ("model", 2),
+    "martyr": ("model", 2),
+    "berserker": ("model", 0),
+    "onmyoji": ("model", 2),
+    "sacrist": ("rollout", 0),
+}
+
+
+def job_leaf_defaults(job_id: str) -> tuple[str, int]:
+    """(leaf_eval, leaf_rollout_rounds) for --leaf-eval auto."""
+    return JOB_LEAF_DEFAULTS.get(job_id, ("rollout", 0))
+
+
 # Tracks FEATURES_VERSION because the trainer stamps the version into
 # the artifact filename — a hardcoded name silently points at a stale
 # model after a version bump (the loader then rejects it and every
