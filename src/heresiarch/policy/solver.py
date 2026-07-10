@@ -12,6 +12,7 @@ for in the forward simulation.
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -38,7 +39,10 @@ if TYPE_CHECKING:
     from heresiarch.engine.data_loader import GameData
     from heresiarch.engine.models.enemies import EnemyTemplate
     from heresiarch.policy.protocols import LegalActionSet
+    from heresiarch.policy.value_model import CombatValueFn
 
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_ROLLOUT_ROUNDS: int = 100
 
@@ -70,6 +74,13 @@ class SolverConfig:
     decide_time_budget_s: float = 15.0
     stall_rounds_shallow: int = 0
     rollout_no_progress_rounds: int = 8
+    # Leaf evaluation: "rollout" plays out remaining rounds with the
+    # heuristic policy; "model" asks a trained value function (rung 1,
+    # design/learned-value-spec.md). Model leaves require a value_fn on
+    # the solver — without one the solver warns and falls back. Known
+    # v1 gap: model leaves don't reason about stash items (search plies
+    # still do).
+    leaf_eval: str = "rollout"
 
 
 @dataclass
@@ -81,6 +92,7 @@ class SolverStats:
     rollout_rounds_total: int = 0
     shallow_decides: int = 0   # adaptive depth dropped to 1-ply
     budget_exhausted: int = 0  # decides cut short by the time budget
+    model_leaf_evals: int = 0  # leaves scored by the value model
 
 
 class CombatSolver:
@@ -97,14 +109,23 @@ class CombatSolver:
         game_data: GameData,
         config: SolverConfig | None = None,
         rollout_config: RolloutConfig | None = None,
+        value_fn: CombatValueFn | None = None,
     ):
         self.game_data = game_data
         self.config = config or SolverConfig()
         self.rollout = HeuristicRolloutPolicy(game_data, config=rollout_config)
+        self.value_fn = value_fn
         self._stats = SolverStats()
         self._stash: list[str] = []
         self._enemy_templates: dict[str, EnemyTemplate] = {}
+        self._mc_job_id: str = ""
         self._deadline: float | None = None
+        self._model_failed = False
+        if self.config.leaf_eval == "model" and value_fn is None:
+            logger.warning(
+                "SolverConfig.leaf_eval='model' but no value_fn was "
+                "provided — falling back to heuristic rollout leaves.",
+            )
 
     @property
     def stats(self) -> SolverStats:
@@ -114,15 +135,19 @@ class CombatSolver:
         self,
         stash: list[str],
         enemy_templates: dict[str, EnemyTemplate],
+        mc_job_id: str = "",
     ) -> None:
         """Set per-encounter context the solver needs for simulation.
 
         Called by the driver before each encounter. The stash tracks
         available consumables; enemy_templates are needed by
-        process_round().
+        process_round(); mc_job_id feeds the learned value function
+        (model leaves only — rollout leaves ignore it).
         """
         self._stash = list(stash)
         self._enemy_templates = dict(enemy_templates)
+        if mc_job_id:
+            self._mc_job_id = mc_job_id
 
     def decide(
         self,
@@ -480,7 +505,32 @@ class CombatSolver:
         engine: CombatEngine,
         stash: list[str],
     ) -> float:
-        """Play out remaining rounds with the heuristic rollout policy."""
+        """Score a leaf state: learned value model or heuristic rollout.
+
+        With ``leaf_eval == "model"`` and a value_fn, the state is
+        scored by one model prediction on the same [0, 2] scale
+        ``evaluate_terminal`` uses. Any model failure downgrades to
+        rollout for the rest of the process (warn once, never crash).
+        """
+        if (
+            self.value_fn is not None
+            and self.config.leaf_eval == "model"
+            and not self._model_failed
+        ):
+            if state.is_finished:
+                return evaluate_terminal(state)
+            try:
+                value = self.value_fn(state, self._mc_job_id)
+            except Exception as exc:  # noqa: BLE001 — model must never kill a sim
+                self._model_failed = True
+                logger.warning(
+                    "Combat value model failed (%s: %s) — falling back "
+                    "to heuristic rollout leaves.", type(exc).__name__, exc,
+                )
+            else:
+                self._stats.model_leaf_evals += 1
+                return value
+
         remaining_stash = list(stash)
         rounds = 0
         max_rounds = self.config.max_rollout_rounds
@@ -643,8 +693,10 @@ def make_solver(
     game_data: GameData,
     config: SolverConfig | None = None,
     rollout_config: RolloutConfig | None = None,
+    value_fn: CombatValueFn | None = None,
 ) -> CombatSolver:
     """Factory for CLI registration."""
     return CombatSolver(
         game_data=game_data, config=config, rollout_config=rollout_config,
+        value_fn=value_fn,
     )

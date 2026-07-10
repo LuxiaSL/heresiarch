@@ -260,6 +260,7 @@ def _evaluate_one(task: tuple) -> tuple[int, SeedOutcome]:
         cand_idx, seed, job_id, params,
         solver_depth, solver_prune, max_encounters, weights_dump,
         adaptive, record_db_path, record_every, record_run_id,
+        leaf_eval, model_path,
     ) = task
     weights = FitnessWeights(**weights_dump)
     try:
@@ -272,14 +273,23 @@ def _evaluate_one(task: tuple) -> tuple[int, SeedOutcome]:
             from heresiarch.engine.data_loader import load_all
             gd = load_all(Path("data"))
 
+        value_fn = None
+        if leaf_eval == "model":
+            # Cached per worker process. optimize() fail-fasted on an
+            # unloadable model, so None here only happens on worker-
+            # local surprises — the solver then warns and falls back.
+            from heresiarch.policy.value_model import load_combat_value_fn
+            value_fn = load_combat_value_fn(model_path)
+
         macro_cfg, rollout_cfg = params_to_configs(params, job_id)
         solver = make_solver(
             gd,
             config=SolverConfig(
                 search_depth=solver_depth, prune_after_ply=solver_prune,
-                adaptive_depth=adaptive,
+                adaptive_depth=adaptive, leaf_eval=leaf_eval,
             ),
             rollout_config=rollout_cfg,
+            value_fn=value_fn,
         )
         macro = GoldenMacroPolicy(
             config=macro_cfg, game_data=gd, name="opt_macro",
@@ -407,6 +417,8 @@ def evaluate_population(
     record_tags: dict[int, str] | None = None,
     stage_seeds: int = 0,
     stage_keep: int = 0,
+    leaf_eval: str = "rollout",
+    model_path: str = "",
 ) -> list[CandidateRecord]:
     """Evaluate every candidate on every seed, in parallel.
 
@@ -434,6 +446,7 @@ def evaluate_population(
             record_db_path if idx in record_tags else None,
             record_every,
             f"{record_tags[idx]}_s{seed}" if idx in record_tags else None,
+            leaf_eval, model_path,
         )
 
     records = [
@@ -537,6 +550,25 @@ def optimize(args: argparse.Namespace) -> None:
         print(f"Theater:   uv run python -m heresiarch.tools.theater "
               f"--follow --db {record_db_path}")
 
+    # Learned combat value leaves (rung 1). Fail fast: hours of CEM on
+    # silently-fallback rollout leaves would be a corrupted experiment.
+    leaf_eval = getattr(args, "leaf_eval", "rollout")
+    model_path = getattr(args, "model_path", "") or ""
+    if leaf_eval == "model":
+        from heresiarch.policy.value_model import (
+            DEFAULT_MODEL_PATH,
+            load_combat_value_fn,
+        )
+        model_path = model_path or str(DEFAULT_MODEL_PATH)
+        if load_combat_value_fn(model_path) is None:
+            raise SystemExit(
+                f"Could not load combat value model from {model_path} "
+                f"(missing file, ml deps, or feature-version mismatch). "
+                f"Train one with tools/train_value.py or drop "
+                f"--leaf-eval model."
+            )
+        print(f"Leaf eval: model ({model_path})")
+
     weights = FitnessWeights()
     rng = random.Random(args.cem_seed)
 
@@ -591,6 +623,8 @@ def optimize(args: argparse.Namespace) -> None:
             record_tags={0: f"opt_{args.job}_g{gen:02d}"},
             stage_seeds=args.stage_seeds,
             stage_keep=args.stage_keep,
+            leaf_eval=leaf_eval,
+            model_path=model_path,
         )
 
         with gen_path.open("a") as fh:
@@ -671,6 +705,8 @@ def optimize(args: argparse.Namespace) -> None:
                 0: f"holdout_{args.job}_preset",
                 1: f"holdout_{args.job}_best",
             },
+            leaf_eval=leaf_eval,
+            model_path=model_path,
         )
         preset_rec, best_rec = final_records[0], final_records[1]
         payload = {
@@ -734,6 +770,13 @@ def main() -> None:
                     help="Warm-start the CEM mean from a previous run's "
                          "best.json (preset remains the gen-0 elitism "
                          "candidate)")
+    ap.add_argument("--leaf-eval", choices=("rollout", "model"),
+                    default="rollout",
+                    help="Solver leaf evaluation: heuristic rollout "
+                         "(default) or the trained combat value model")
+    ap.add_argument("--model-path", default=None,
+                    help="Combat value model artifact (default: "
+                         "artifacts/models/combat_value_v1.pkl)")
     ap.add_argument("--stage-seeds", type=int, default=0,
                     help="Successive halving: seeds for the cheap first "
                          "stage every candidate plays (0 = off)")

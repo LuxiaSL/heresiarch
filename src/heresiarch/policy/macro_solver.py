@@ -111,7 +111,9 @@ class MacroSolver:
             config=SolverConfig(
                 search_depth=self.solver_config.eval_solver_depth,
                 prune_after_ply=self.solver_config.eval_solver_prune,
+                leaf_eval=combat_policy.config.leaf_eval,
             ),
+            value_fn=combat_policy.value_fn,
         )
 
     @property
@@ -379,6 +381,7 @@ class MacroSolver:
             solver.set_context(
                 stash=list(run.party.stash),
                 enemy_templates=enemy_templates,
+                mc_job_id=run.mc_job_id,
             )
 
             # Run combat loop

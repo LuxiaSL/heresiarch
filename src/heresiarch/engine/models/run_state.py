@@ -88,3 +88,9 @@ class RunState(BaseModel):
             if getattr(char, "is_mc", False):
                 return char
         return None
+
+    @property
+    def mc_job_id(self) -> str:
+        """Job of the main character ('' if the MC is gone)."""
+        mc = self._find_mc()
+        return mc.job_id if mc is not None else ""

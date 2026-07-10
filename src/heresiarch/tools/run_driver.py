@@ -725,6 +725,7 @@ def _run_encounter(
         ctx.combat_policy.set_context(
             stash=list(run.party.stash),
             enemy_templates=enemy_templates,
+            mc_job_id=run.mc_job_id,
         )
 
     # Track round-by-round records for BattleRecord persistence.

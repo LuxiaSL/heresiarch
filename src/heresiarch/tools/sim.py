@@ -318,7 +318,7 @@ def _run_one_seed(args: tuple):
     (
         seed, job_id, policy_name, macro_name, data_path, max_enc, db_path,
         solver_depth, solver_prune, macro_lookahead, macro_params_path,
-        adaptive, record_every, tap_dir,
+        adaptive, record_every, tap_dir, leaf_eval, model_path,
     ) = args
     gd = _load_all(Path(data_path))
 
@@ -336,11 +336,22 @@ def _run_one_seed(args: tuple):
             config=opt_macro_cfg, game_data=gd, name="opt_macro",
         )
 
+    value_fn = None
+    if leaf_eval == "model":
+        # Cached per worker process; the parent already fail-fasted on
+        # an unloadable model, so None here (a worker-local surprise)
+        # falls back to rollout with a logged warning.
+        from heresiarch.policy.value_model import load_combat_value_fn
+        value_fn = load_combat_value_fn(model_path)
+
     solver_cfg = SolverConfig(
         search_depth=solver_depth, prune_after_ply=solver_prune,
-        adaptive_depth=adaptive,
+        adaptive_depth=adaptive, leaf_eval=leaf_eval,
     )
-    solver = make_solver(gd, config=solver_cfg, rollout_config=opt_rollout_cfg)
+    solver = make_solver(
+        gd, config=solver_cfg, rollout_config=opt_rollout_cfg,
+        value_fn=value_fn,
+    )
     combat_policies = {
         "floor": FloorCombatPolicy(),
         "floor_plus": FloorPlusCombatPolicy(),
@@ -434,12 +445,36 @@ def cmd_run(args: argparse.Namespace) -> None:
             config=opt_macro_cfg, game_data=gd, name="opt_macro",
         )
 
+    leaf_eval = getattr(args, "leaf_eval", "rollout")
+    model_path = getattr(args, "model_path", "") or ""
+    value_fn = None
+    if leaf_eval == "model":
+        from heresiarch.policy.value_model import (
+            DEFAULT_MODEL_PATH,
+            load_combat_value_fn,
+        )
+        model_path = model_path or str(DEFAULT_MODEL_PATH)
+        value_fn = load_combat_value_fn(model_path)
+        if value_fn is None:
+            # Fail fast: silently falling back would corrupt any
+            # model-vs-rollout comparison the user is running.
+            print(
+                f"Could not load combat value model from {model_path} "
+                f"(missing file, ml deps, or version mismatch). "
+                f"Train one with: uv run python -m heresiarch.tools.train_value"
+            )
+            return
+
     solver_config = SolverConfig(
         search_depth=args.solver_depth,
         prune_after_ply=args.solver_prune,
         adaptive_depth=getattr(args, "adaptive", False),
+        leaf_eval=leaf_eval,
     )
-    solver = make_solver(gd, config=solver_config, rollout_config=opt_rollout_cfg)
+    solver = make_solver(
+        gd, config=solver_config, rollout_config=opt_rollout_cfg,
+        value_fn=value_fn,
+    )
     macro_solver_cfg = MacroSolverConfig(
         lookahead_encounters=args.macro_lookahead,
     )
@@ -497,6 +532,8 @@ def cmd_run(args: argparse.Namespace) -> None:
                 getattr(args, "adaptive", False),
                 getattr(args, "record_every", 0),
                 getattr(args, "tap_out", "") or "",
+                leaf_eval,
+                model_path,
             )
             for i in range(args.n)
         ]
@@ -901,6 +938,17 @@ def main() -> None:
         "--tap-out", default=None,
         help="Directory for training-data shards: one gzip JSONL per seed "
              "with labeled combat/macro feature rows (see tools/data_tap.py).",
+    )
+    p.add_argument(
+        "--leaf-eval", choices=("rollout", "model"), default="rollout",
+        help="Solver leaf evaluation: heuristic rollout (default) or the "
+             "trained combat value model (rung 1).",
+    )
+    p.add_argument(
+        "--model-path", default=None,
+        help="Combat value model artifact (default: "
+             "artifacts/models/combat_value_v1.pkl). Only with "
+             "--leaf-eval model.",
     )
     p.add_argument(
         "--progress", action="store_true",
