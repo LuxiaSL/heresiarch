@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from heresiarch.engine.combat import CombatEngine
-from heresiarch.engine.data_loader import GameData, load_all
+from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.models.combat_state import CombatState
 from heresiarch.policy.features import (
     FEATURES_VERSION,
@@ -20,11 +20,6 @@ from heresiarch.policy.solver import CombatSolver, SolverConfig
 from heresiarch.policy.validation import compute_legal
 from heresiarch.policy.value_model import _CACHE, load_combat_value_fn
 from tests.conftest import _make_character
-
-
-@pytest.fixture
-def game_data() -> GameData:
-    return load_all(Path("data"))
 
 
 @pytest.fixture(autouse=True)
@@ -270,7 +265,9 @@ class TestTrainer:
         assert sidecar is not None
         assert sidecar["target"] == "zones_ahead"
 
-    def test_trained_model_scores_real_combat_state(self, tmp_path: Path):
+    def test_trained_model_scores_real_combat_state(
+        self, tmp_path: Path, game_data: GameData,
+    ):
         """The full plumbing: synthetic model → loader → real CombatState."""
         pytest.importorskip("sklearn")
         from heresiarch.tools.train_value import train_kind
@@ -288,7 +285,6 @@ class TestTrainer:
         )
         assert fn is not None
 
-        game_data = load_all(Path("data"))
         state, _ = _make_combat(game_data, random.Random(42))
         value = fn(state, "einherjar")
         assert 0.0 <= value <= 2.0

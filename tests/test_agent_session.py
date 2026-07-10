@@ -1,17 +1,11 @@
 """Tests for the agent player interface: GameSession + StateSummarizer."""
 
 import random
-from pathlib import Path
 
 import pytest
 
-from heresiarch.engine.data_loader import GameData, load_all
+from heresiarch.engine.data_loader import GameData
 from heresiarch.agent.session import AgentError, GameSession, Phase
-
-
-@pytest.fixture
-def game_data() -> GameData:
-    return load_all(Path("data"))
 
 
 @pytest.fixture

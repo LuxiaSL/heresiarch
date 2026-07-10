@@ -1,11 +1,7 @@
 """Tests for the macro solver: delegation, retreat search, integration."""
 
 import random
-from pathlib import Path
-
-import pytest
-
-from heresiarch.engine.data_loader import GameData, load_all
+from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.game_loop import GameLoop
 from heresiarch.policy.builtin.golden_macro import (
     GoldenMacroPolicy,
@@ -19,11 +15,6 @@ from heresiarch.policy.macro_solver import (
     make_macro_solver,
 )
 from heresiarch.policy.solver import CombatSolver, SolverConfig, make_solver
-
-
-@pytest.fixture
-def game_data() -> GameData:
-    return load_all(Path("data"))
 
 
 def _make_macro_solver(

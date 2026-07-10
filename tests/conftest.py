@@ -13,9 +13,16 @@ from heresiarch.engine.models.jobs import CharacterInstance
 from heresiarch.engine.models.stats import StatBlock
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def game_data() -> GameData:
-    """Load all game data from YAML files."""
+    """Load all game data from YAML files.
+
+    Session-scoped: the YAML load costs ~0.4s and the returned GameData
+    is treated as immutable by every consumer (verified audit — tests
+    copy registries/models via dict()/model_copy() before modifying).
+    If a test must mutate registry contents, hand it a copy:
+    ``dict(game_data.abilities)`` / ``item.model_copy(deep=True)``.
+    """
     return load_all(Path("data"))
 
 

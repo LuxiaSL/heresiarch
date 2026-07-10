@@ -10,11 +10,10 @@ Covers:
 """
 
 import random
-from pathlib import Path
 
 import pytest
 
-from heresiarch.engine.data_loader import GameData, load_all
+from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.game_loop import GameLoop
 from heresiarch.policy.builtin.golden_macro import (
     GOLDEN_CONFIGS,
@@ -32,11 +31,6 @@ from heresiarch.tools.policy_opt import (
 )
 
 ZONE_01_BOSS_INDEX = 4  # alpha_slime encounter in zone_01
-
-
-@pytest.fixture(scope="module")
-def game_data() -> GameData:
-    return load_all(Path("data"))
 
 
 def _run_at_boss(game_data: GameData, hp_pct: float, *, gold: int = 100):
