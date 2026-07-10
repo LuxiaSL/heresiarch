@@ -100,7 +100,8 @@ class TestModelLeaves:
         """With leaf_eval=model, leaves call value_fn instead of rollout."""
         calls: list[str] = []
 
-        def stub_value(state: CombatState, mc_job_id: str) -> float:
+        def stub_value(state: CombatState, mc_job_id: str,
+                       stash_potions: int = 0, stash_size: int = 0) -> float:
             calls.append(mc_job_id)
             return 1.5
 
@@ -129,7 +130,9 @@ class TestModelLeaves:
 
     def test_rollout_default_ignores_value_fn(self, game_data: GameData):
         """leaf_eval=rollout (default) never touches a provided value_fn."""
-        def exploding_value(state: CombatState, mc_job_id: str) -> float:
+        def exploding_value(state: CombatState, mc_job_id: str,
+                            stash_potions: int = 0,
+                            stash_size: int = 0) -> float:
             raise AssertionError("must not be called")
 
         solver = CombatSolver(
@@ -148,7 +151,9 @@ class TestModelLeaves:
 
     def test_broken_model_falls_back_to_rollout(self, game_data: GameData):
         """A value_fn that raises downgrades to rollout, never crashes."""
-        def broken_value(state: CombatState, mc_job_id: str) -> float:
+        def broken_value(state: CombatState, mc_job_id: str,
+                         stash_potions: int = 0,
+                         stash_size: int = 0) -> float:
             raise RuntimeError("model on fire")
 
         solver = CombatSolver(

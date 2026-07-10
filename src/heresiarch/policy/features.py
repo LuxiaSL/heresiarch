@@ -20,9 +20,28 @@ from __future__ import annotations
 from heresiarch.engine.models.combat_state import CombatantState, CombatState
 from heresiarch.engine.models.run_state import RunState
 
-FEATURES_VERSION = 1
+FEATURES_VERSION = 2
 
 JOB_IDS = ["berserker", "einherjar", "martyr", "onmyoji", "sacrist"]
+
+
+def healing_item_ids(game_data) -> frozenset[str]:
+    """Item ids with any healing effect — behavioral, not name-matched.
+
+    Lives here (not data_tap) because both the tap and the solver's
+    value-fn call site need it to count stash potions for v2 features.
+    """
+    out = set()
+    for item_id, item in game_data.items.items():
+        effect = (
+            getattr(item, "consumable_effect", None)
+            or getattr(item, "effect", None)
+        )
+        for attr in ("heal_amount", "heal_percent", "heal_flat"):
+            if getattr(effect, attr, 0):
+                out.add(item_id)
+                break
+    return frozenset(out)
 
 PARTY_SLOTS = 3
 ENEMY_SLOTS = 5
@@ -102,11 +121,27 @@ def combat_feature_names() -> list[str]:
                   ("n", "hp_mean", "hp_min", "hp_pool", "threats")]
         for i in range(count):
             names += [f"{prefix}{i}_{f}" for f in _SLOT_FEATS]
+    # v2: economy context. Iteration-1 evidence: identical combat
+    # positions diverge (death vs deep run) based on whether the run
+    # carries potions — variance a state-only vector cannot explain,
+    # while rollout leaves simulate item use from the actual stash.
+    names += ["stash_potions_n", "stash_size_n", "party_gold_n"]
     return names
 
 
-def combat_features(state: CombatState, mc_job_id: str) -> list[float]:
-    """Fixed-length vector describing a mid-combat position."""
+def combat_features(
+    state: CombatState,
+    mc_job_id: str,
+    *,
+    stash_potions: int = 0,
+    stash_size: int = 0,
+) -> list[float]:
+    """Fixed-length vector describing a mid-combat position.
+
+    ``stash_potions``/``stash_size`` come from the caller because
+    CombatState doesn't know the stash: the tap counts the run's real
+    stash; the solver counts the branch stash at the leaf.
+    """
     players = sorted(
         state.player_combatants, key=lambda c: c.max_hp, reverse=True,
     )[:PARTY_SLOTS]
@@ -125,6 +160,11 @@ def combat_features(state: CombatState, mc_job_id: str) -> list[float]:
         out += _side_aggregates(full)
         for i in range(slots):
             out += _slot_features(side[i] if i < len(side) else None)
+    out += [
+        _norm_count(stash_potions, 6.0),
+        _norm_count(stash_size, 12.0),
+        _norm_count(state.party_gold, 500.0),
+    ]
     return out
 
 

@@ -28,20 +28,13 @@ from heresiarch.engine.models.run_state import RunState
 from heresiarch.policy.features import (
     FEATURES_VERSION,
     combat_features,
+    healing_item_ids,
     macro_features,
 )
 
-
-def _healing_item_ids(game_data: GameData) -> frozenset[str]:
-    """Item ids with any healing effect — behavioral, not name-matched."""
-    out = set()
-    for item_id, item in game_data.items.items():
-        effect = getattr(item, "consumable_effect", None) or getattr(item, "effect", None)
-        for attr in ("heal_amount", "heal_percent", "heal_flat"):
-            if getattr(effect, attr, 0):
-                out.add(item_id)
-                break
-    return frozenset(out)
+# Backward-compat alias; the shared implementation lives in features.py
+# because the solver's value-fn call site needs it too (v2 features).
+_healing_item_ids = healing_item_ids
 
 
 class DataTap:
@@ -87,6 +80,13 @@ class DataTap:
                 "y": {},  # labeled at run end
             })
             self._zones_at.append(len(run.zones_completed))
+            # Stash context for v2 combat features. run.party.stash is
+            # stable within an encounter (mid-fight consumption lands
+            # on the run afterwards), so caching here is exact.
+            self._stash_potions = sum(
+                1 for i in run.party.stash if i in self.healing_ids
+            )
+            self._stash_size = len(run.party.stash)
         except Exception:
             pass
 
@@ -99,7 +99,11 @@ class DataTap:
                 "seed": self.seed,
                 "policy": self.policy_name,
                 "round": state.round_number,
-                "x": combat_features(state, self.mc_job_id),
+                "x": combat_features(
+                    state, self.mc_job_id,
+                    stash_potions=getattr(self, "_stash_potions", 0),
+                    stash_size=getattr(self, "_stash_size", 0),
+                ),
                 "y": {},
             })
         except Exception:

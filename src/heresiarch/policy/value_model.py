@@ -26,8 +26,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# (state, mc_job_id) -> predicted terminal value in [0, 2]
-CombatValueFn = Callable[["CombatState", str], float]
+# (state, mc_job_id, stash_potions, stash_size) -> value in [0, 2].
+# Stash context comes from the caller (v2 features): the solver counts
+# the branch stash at the leaf; CombatState doesn't know the stash.
+CombatValueFn = Callable[["CombatState", str, int, int], float]
 
 DEFAULT_MODEL_PATH = Path("artifacts/models/combat_value_v1.pkl")
 
@@ -99,8 +101,14 @@ def _load_uncached(path: Path) -> CombatValueFn | None:
 
     model = payload["model"]
 
-    def value_fn(state: CombatState, mc_job_id: str) -> float:
-        x = combat_features(state, mc_job_id)
+    def value_fn(
+        state: CombatState, mc_job_id: str,
+        stash_potions: int = 0, stash_size: int = 0,
+    ) -> float:
+        x = combat_features(
+            state, mc_job_id,
+            stash_potions=stash_potions, stash_size=stash_size,
+        )
         v = float(model.predict([x])[0])
         if not math.isfinite(v):
             raise ValueError(f"model predicted non-finite value {v!r}")

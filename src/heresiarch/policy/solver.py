@@ -121,6 +121,11 @@ class CombatSolver:
         self._mc_job_id: str = ""
         self._deadline: float | None = None
         self._model_failed = False
+        if value_fn is not None:
+            from heresiarch.policy.features import healing_item_ids
+            self._heal_item_ids = healing_item_ids(game_data)
+        else:
+            self._heal_item_ids = frozenset()
         if self.config.leaf_eval == "model" and value_fn is None:
             logger.warning(
                 "SolverConfig.leaf_eval='model' but no value_fn was "
@@ -520,7 +525,10 @@ class CombatSolver:
             if state.is_finished:
                 return evaluate_terminal(state)
             try:
-                value = self.value_fn(state, self._mc_job_id)
+                potions = sum(1 for i in stash if i in self._heal_item_ids)
+                value = self.value_fn(
+                    state, self._mc_job_id, potions, len(stash),
+                )
             except Exception as exc:  # noqa: BLE001 — model must never kill a sim
                 self._model_failed = True
                 logger.warning(
