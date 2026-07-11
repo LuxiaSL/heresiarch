@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0d0d12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Heresiarch</title>
+<style>
+  :root {
+    --bg: #0d0d12; --card: #17171f; --card2: #1f1f2a; --line: #2c2c3a;
+    --fg: #e8e4d8; --dim: #8a8698; --gold: #d4af37; --accent: #7c5cff;
+    --green: #4caf7d; --yellow: #d4b937; --red: #e05555; --blue: #5aa0e0;
+  }
+  * { box-sizing: border-box; touch-action: manipulation; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 15px; -webkit-text-size-adjust: 100%; }
+  body { padding: env(safe-area-inset-top) 10px calc(90px + env(safe-area-inset-bottom)) 10px; }
+  h1 { font-size: 26px; letter-spacing: 6px; text-align: center; color: var(--gold);
+    margin: 24px 0 4px; font-weight: 600; }
+  .sub { text-align: center; color: var(--dim); font-size: 12px; margin-bottom: 20px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 2px 8px; position: sticky; top: 0; background: var(--bg); z-index: 5; }
+  .topbar .brand { color: var(--gold); letter-spacing: 3px; font-size: 13px; }
+  .topbar .gold { color: var(--gold); font-size: 14px; }
+  .phase { color: var(--dim); font-size: 11px; letter-spacing: 1px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px; margin: 8px 0; }
+  .card.tappable:active { background: var(--card2); }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .grow { flex: 1; min-width: 0; }
+  .name { font-weight: 600; }
+  .dim { color: var(--dim); font-size: 12px; }
+  .small { font-size: 12px; }
+  button { font: inherit; color: var(--fg); background: var(--card2);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    min-height: 44px; cursor: pointer; }
+  button:active { filter: brightness(1.3); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff;
+    font-weight: 600; width: 100%; font-size: 16px; }
+  button.gold { background: #3a3010; border-color: var(--gold); color: var(--gold); }
+  button.danger { border-color: var(--red); color: var(--red); }
+  button:disabled { opacity: 0.35; }
+  .hpbar { height: 8px; border-radius: 4px; background: #2a2a35; overflow: hidden; margin-top: 4px; }
+  .hpbar > div { height: 100%; border-radius: 4px; transition: width .25s; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { padding: 9px 12px; border-radius: 18px; border: 1px solid var(--line);
+    background: var(--card2); font-size: 13px; min-height: 38px; }
+  .chip.sel { border-color: var(--accent); background: #2b2050; color: #fff; }
+  .chip.cd { opacity: 0.35; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-top: 8px; }
+  .seg button { flex: 1; border: 0; border-radius: 0; background: var(--card); min-height: 40px; font-size: 13px; }
+  .seg button.sel { background: var(--accent); color: #fff; font-weight: 600; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 9px; font-size: 11px;
+    border: 1px solid var(--line); color: var(--dim); margin-left: 4px; }
+  .badge.ap { color: var(--blue); border-color: var(--blue); }
+  .badge.ins { color: var(--accent); border-color: var(--accent); }
+  .badge.frz { color: var(--red); border-color: var(--red); }
+  .badge.debt { color: var(--yellow); border-color: var(--yellow); }
+  .log { background: #101016; border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px; font-size: 12px; line-height: 1.55; max-height: 34vh;
+    overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+  pre.text { background: #101016; border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px; font-size: 12px; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; }
+  .sticky-bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px
+    calc(10px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg) 30%); z-index: 10; }
+  input[type=text] { font: inherit; font-size: 16px; width: 100%; padding: 12px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--card2); color: var(--fg); }
+  #toast { position: fixed; top: 12px; left: 12px; right: 12px; z-index: 100;
+    background: #3a1520; border: 1px solid var(--red); color: #ffd8d8; padding: 12px;
+    border-radius: 10px; font-size: 13px; display: none; }
+  details summary { cursor: pointer; color: var(--dim); font-size: 13px; padding: 6px 0; }
+  .charge { color: var(--yellow); font-size: 12px; }
+  .status { color: var(--blue); font-size: 11px; }
+  .section { color: var(--dim); font-size: 11px; letter-spacing: 2px; margin: 14px 2px 4px; }
+  .stepper { display: flex; align-items: center; gap: 10px; }
+  .stepper button { min-width: 44px; }
+  .slotrow { border-top: 1px dashed var(--line); padding: 8px 0 4px; margin-top: 8px; }
+  .slotrow b { font-weight: 600; }
+  .slotedit { margin: 8px 0 4px; padding: 8px; background: #12121a; border-radius: 8px;
+    border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<div id="toast"></div>
+<div id="app"><div class="sub" style="margin-top:40vh">loading…</div></div>
+
+<script>
+"use strict";
+let S = null;                 // last StatePayload
+const ui = {
+  selJob: null, D: {}, lastRound: -1, lastPhase: "",
+  pickUse: null, lootSel: new Set(), busy: false,
+  confirm: null,       // pending destructive-action key ("rest", "dismiss:<id>", …)
+  equipPreview: null,  // {cid, item_id, data: EquipPreview}
+};
+
+function esc(s) {
+  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast._h); toast._h = setTimeout(() => t.style.display = "none", 4000);
+}
+async function api(path, body) {
+  if (ui.busy) return; ui.busy = true;
+  try {
+    const res = await fetch(path, body ? {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
+    } : undefined);
+    const payload = await res.json();
+    onPayload(payload);
+  } catch (e) {
+    toast("Connection lost: " + e.message);
+  } finally { ui.busy = false; }
+}
+const act = (tool, args) => api("/api/action", {tool, args: args || {}});
+
+function onPayload(p) {
+  S = p;
+  ui.confirm = null; ui.equipPreview = null;
+  if (p.error) toast(p.error);
+  if (p.phase !== ui.lastPhase) {
+    ui.pickUse = null;
+    if (p.phase === "POST_COMBAT") ui.lootSel = new Set((p.loot?.items || []).map((_, i) => i));
+    ui.lastPhase = p.phase;
+  }
+  if (p.combat && p.combat.round_number !== ui.lastRound) {
+    rebuildDecisions(); ui.lastRound = p.combat.round_number;
+  }
+  render();
+}
+async function fetchEquipPreview(cid, itemId) {
+  try {
+    const res = await fetch("/api/preview_equip", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({character_id: cid, item_id: itemId}),
+    });
+    const p = await res.json();
+    if (!p.ok) { toast(p.error || "Preview failed"); return; }
+    ui.equipPreview = {cid, item_id: itemId, data: p};
+    ui.pickUse = null;
+    render();
+  } catch (e) { toast("Connection lost: " + e.message); }
+}
+
+// ---------- decision state ----------
+// Each character's turn is a queue: primary action + one slot per cheat
+// AP + one slot per speed-bonus action. Slots default to mirroring the
+// primary (fast path = zero extra taps) but each can be edited to its
+// own ability + target, or Wait (windup push); bonus slots can be
+// skipped.
+function defaultAbility(p) {
+  const ok = p.abilities.filter(a => a.cooldown_remaining === 0);
+  const off = ok.find(a => a.category === "OFFENSIVE");
+  return (off || ok[0] || p.abilities[0] || {id: null}).id;
+}
+function newSlot() { return {ability: null, target: null}; }
+function rebuildDecisions() {
+  const D = {};
+  for (const p of (S.combat?.players || []).filter(p => p.is_alive)) {
+    const prev = ui.D[p.id] || {};
+    const abil = p.abilities.some(a => a.id === prev.ability && a.cooldown_remaining === 0)
+      ? prev.ability : defaultAbility(p);
+    D[p.id] = {
+      mode: "normal", ability: abil, target: null, useItem: false,
+      item: null, itemTarget: p.id, ap: Math.min(1, p.ap) || 1,
+      extras: [newSlot()],
+      bonus: Array.from({length: p.speed_bonus}, newSlot),
+      editSlot: null,
+    };
+  }
+  ui.D = D;
+}
+function abilityOf(p, id) { return p.abilities.find(a => a.id === id); }
+function livingEnemies() { return (S.combat?.enemies || []).filter(e => e.is_alive); }
+function livingPlayers() { return (S.combat?.players || []).filter(p => p.is_alive); }
+function combatantName(id) {
+  const all = [...(S.combat?.players || []), ...(S.combat?.enemies || [])];
+  return (all.find(c => c.id === id) || {name: id}).name;
+}
+function resolveTargetFor(p, abilityId, wanted) {
+  const ab = abilityOf(p, abilityId);
+  if (!ab) return null;
+  if (ab.target === "SINGLE_ENEMY") {
+    const es = livingEnemies();
+    return es.some(e => e.id === wanted) ? wanted : (es[0]?.id ?? null);
+  }
+  if (ab.target === "SINGLE_ALLY") {
+    const ps = livingPlayers();
+    return ps.some(x => x.id === wanted) ? wanted : p.id;
+  }
+  return null; // SELF / ALL_* — engine fills
+}
+function getSlot(d, key) {
+  return key[0] === "x" ? d.extras[+key.slice(1)] : d.bonus[+key.slice(1)];
+}
+function slotAbility(p, d, slot) {
+  if (slot.ability) return slot.ability;
+  // Mirror the primary; if the primary is an item, fall back to the
+  // default ability (an item can't be echoed by extra/bonus slots here).
+  return d.useItem ? defaultAbility(p) : d.ability;
+}
+function slotAction(p, d, slot) {
+  const aid = slotAbility(p, d, slot);
+  if (aid === "__wait__") return {action: "wait"};
+  const t = resolveTargetFor(p, aid, slot.target);
+  return t ? {ability: aid, target: t} : {ability: aid};
+}
+function buildDecisions() {
+  const out = {};
+  for (const p of livingPlayers()) {
+    const d = ui.D[p.id];
+    if (!d) return null;
+    if (d.mode === "survive") { out[p.id] = {mode: "survive"}; continue; }
+    const e = {mode: d.mode === "cheat" ? "cheat" : "normal"};
+    if (d.useItem) {
+      if (!d.item) { toast(p.name + ": pick an item"); return null; }
+      e.action = "use_item"; e.item_id = d.item; e.target = d.itemTarget || p.id;
+    } else {
+      if (!d.ability) { toast(p.name + ": pick an ability"); return null; }
+      e.action = d.ability;
+      const t = resolveTargetFor(p, d.ability, d.target);
+      if (t) e.target = t;
+    }
+    if (d.mode === "cheat") {
+      e.ap_spend = d.ap;
+      e.cheat_extras = d.extras.map(s => slotAction(p, d, s));
+    }
+    const bonus = d.bonus.filter(s => s !== null).map(s => slotAction(p, d, s));
+    if (bonus.length) e.bonus_actions = bonus;
+    out[p.id] = e;
+  }
+  return out;
+}
+
+// ---------- shared render helpers ----------
+function hpbar(hp, max) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, 100 * hp / max)) : 0;
+  const color = pct > 50 ? "var(--green)" : pct > 25 ? "var(--yellow)" : "var(--red)";
+  return `<div class="hpbar"><div style="width:${pct}%;background:${color}"></div></div>`;
+}
+function partyStrip() {
+  if (!S.party) return "";
+  return S.party.characters.filter(c => c.is_active).map(c => `
+    <div class="card">
+      <div class="row">
+        <div class="grow"><span class="name">${esc(c.name)}</span>
+          <span class="dim">${esc(c.job_name)} Lv${c.level}${c.is_mc ? " ★" : ""}</span></div>
+        <div class="small">${c.hp}/${c.max_hp}</div>
+      </div>
+      ${hpbar(c.hp, c.max_hp)}
+    </div>`).join("");
+}
+function itemDetail(it) {
+  const bits = [esc(it.type)];
+  if (it.heal_amount) bits.push(`heals ${it.heal_amount}`);
+  if (it.heal_percent) bits.push(`heals ${Math.round(it.heal_percent * 100)}%`);
+  if (it.hp_bonus) bits.push(`+${it.hp_bonus} HP`);
+  for (const [k, v] of Object.entries(it.flat_stat_bonus || {}))
+    bits.push(`${v >= 0 ? "+" : ""}${v} ${k}`);
+  if (it.scaling_desc) bits.push(esc(it.scaling_desc));
+  if (it.granted_ability) bits.push(`grants ${esc(it.granted_ability)}`);
+  if (it.teaches_ability) bits.push(`teaches ${esc(it.teaches_ability)}`);
+  if (it.casts_ability) bits.push(`casts ${esc(it.casts_ability)} (combat)`);
+  for (const [k, v] of Object.entries(it.combat_stat_buff || {}))
+    bits.push(`+${v} ${k} for one fight`);
+  return bits.join(" · ");
+}
+function confirmRow(key, label, action, extra) {
+  // Two-step destructive button: first tap arms, second confirms.
+  if (ui.confirm === key) {
+    return `<button class="danger" data-a="${action}" ${extra || ""}>Confirm</button>
+      <button data-a="confirm-cancel">✕</button>`;
+  }
+  return `<button data-a="confirm-arm" data-key="${esc(key)}">${label}</button>`;
+}
+function equipPreviewPanel() {
+  const ep = ui.equipPreview;
+  if (!ep) return "";
+  const d = ep.data;
+  const ch = S.party.characters.find(c => c.id === ep.cid) || {name: ep.cid};
+  const it = S.party.stash.find(x => x.id === ep.item_id) || {name: ep.item_id};
+  const rows = Object.keys(d.current).map(k => {
+    const a = d.current[k], b = d.preview[k];
+    const color = b > a ? "var(--green)" : b < a ? "var(--red)" : "var(--dim)";
+    return `<div class="row small"><span class="dim grow">${k}</span>
+      <span>${a} → <b style="color:${color}">${b}</b></span></div>`;
+  }).join("");
+  const hpColor = d.preview_max_hp > d.current_max_hp ? "var(--green)"
+    : d.preview_max_hp < d.current_max_hp ? "var(--red)" : "var(--dim)";
+  return `<div class="card" style="border-color:var(--accent)">
+    <div class="name small">${esc(it.name)} → ${esc(ch.name)} <span class="dim">(${esc(d.slot)})</span></div>
+    ${d.replacing ? `<div class="dim small">replaces ${esc(d.replacing)}</div>` : ""}
+    <div style="margin-top:6px">${rows}
+      <div class="row small"><span class="dim grow">Max HP</span>
+        <span>${d.current_max_hp} → <b style="color:${hpColor}">${d.preview_max_hp}</b></span></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="primary grow" data-a="equip-confirm">Equip</button>
+      <button data-a="equip-cancel">Cancel</button>
+    </div></div>`;
+}
+function stashPanel(opts) {
+  if (!S.party) return "";
+  const canUse = !!(opts && opts.use), canSell = !!(opts && opts.sell);
+  const chars = S.party.characters;
+  const header = `Stash (${S.party.stash_used}/${S.party.stash_limit})`;
+  if (!S.party.stash.length) return `<details><summary>${header}</summary><div class="dim small" style="padding:6px 2px">empty</div></details>`;
+  const rows = S.party.stash.map((it, i) => {
+    let actions = "";
+    if (ui.pickUse === i) {
+      const verb = it.kind === "equip" ? "equip-pick" : it.kind === "teach" ? "teach-on" : "use-on";
+      const icon = it.kind === "equip" ? "→" : it.kind === "teach" ? "✎" : "♥";
+      actions = `<div class="chips">` + chars.map(c =>
+        `<button class="chip" data-a="${verb}" data-i="${i}" data-c="${esc(c.id)}">${icon} ${esc(c.name)}</button>`).join("") +
+        `<button class="chip" data-a="pick-cancel">✕</button></div>`;
+    } else {
+      const bits = [];
+      if (canUse && it.kind === "heal") bits.push(`<button data-a="pick-use" data-i="${i}">Use</button>`);
+      if (canUse && it.kind === "teach") bits.push(`<button data-a="pick-use" data-i="${i}">Teach</button>`);
+      if (canUse && it.kind === "equip") bits.push(`<button data-a="pick-use" data-i="${i}">Equip</button>`);
+      if (canSell) bits.push(`<button data-a="sell" data-id="${esc(it.id)}">Sell ${it.sell_price ?? "?"}g</button>`);
+      bits.push(confirmRow(`drop:${i}`, "🗑", "drop-item", `data-id="${esc(it.id)}"`));
+      actions = bits.join(" ");
+    }
+    return `<div class="card"><div class="row">
+      <div class="grow"><span class="name small">${esc(it.name)}</span>
+        <div class="dim">${itemDetail(it)}</div></div>
+      <div class="row">${actions}</div></div></div>`;
+  }).join("");
+  return `<details open><summary>${header}</summary>${equipPreviewPanel()}${rows}</details>`;
+}
+function statGrid(c) {
+  return `<div style="margin-top:6px">` + Object.keys(c.base_stats).map(k => {
+    const b = c.base_stats[k], e = c.effective_stats[k];
+    const color = e > b ? "var(--green)" : e < b ? "var(--red)" : "var(--fg)";
+    return `<div class="row small"><span class="dim grow">${k}</span>
+      <span>${b}${e !== b ? ` → <b style="color:${color}">${e}</b>` : ""}</span></div>`;
+  }).join("") + `</div>`;
+}
+function partyDetails() {
+  if (!S.party) return "";
+  const mcJobs = new Set(S.party.characters.filter(c => !c.is_mc).map(c => c.job_id));
+  return `<details><summary>Party details</summary>` + S.party.characters.map(c => {
+    const roster = [];
+    if (!c.is_mc) {
+      if (c.is_active) roster.push(`<button class="small" data-a="bench" data-c="${esc(c.id)}">Bench</button>`);
+      else roster.push(`<button class="small" data-a="promote" data-c="${esc(c.id)}">Promote</button>`);
+      roster.push(confirmRow(`dismiss:${c.id}`, "Dismiss", "dismiss-char", `data-c="${esc(c.id)}"`));
+    }
+    let mimic = "";
+    if (c.is_mc && mcJobs.size) {
+      const options = [...mcJobs].filter(j => j !== c.job_id);
+      if (options.length) {
+        mimic = `<div class="dim small" style="margin-top:8px">mimic job:</div><div class="chips">` +
+          options.map(j => {
+            const job = S.jobs.find(x => x.id === j) || {name: j};
+            return ui.confirm === `mimic:${j}`
+              ? `<button class="chip danger" data-a="mimic-confirm" data-id="${esc(j)}">Confirm ${esc(job.name)}</button>
+                 <button class="chip" data-a="confirm-cancel">✕</button>`
+              : `<button class="chip" data-a="confirm-arm" data-key="mimic:${esc(j)}">${esc(job.name)}</button>`;
+          }).join("") + `</div>`;
+      }
+    }
+    return `
+    <div class="card">
+      <div class="row"><div class="grow"><span class="name">${esc(c.name)}</span>
+        <span class="dim">${esc(c.job_name)} Lv${c.level}${c.is_mc ? " ★" : ""}${c.is_active ? "" : " (reserve)"}</span></div>
+        <div class="row">${roster.join(" ")}</div></div>
+      ${hpbar(c.hp, c.max_hp)}
+      <div class="dim small" style="margin-top:6px">HP ${c.hp}/${c.max_hp} · XP ${c.xp}/${c.xp_next}</div>
+      ${statGrid(c)}
+      <div class="small" style="margin-top:6px">${Object.entries(c.equipment).map(([slot, n]) =>
+        `<div class="row"><span class="dim grow">${esc(slot)}</span><span>${esc(n || "—")}</span>
+         ${n ? `<button class="small" data-a="unequip" data-c="${esc(c.id)}" data-slot="${esc(slot)}">✕</button>` : ""}</div>`).join("")}
+      </div>
+      <div class="dim small" style="margin-top:6px">${c.abilities.map(esc).join(" · ")}</div>
+      ${mimic}
+    </div>`;
+  }).join("") + `</details>`;
+}
+function topbar() {
+  const gold = S.party ? `${S.party.gold}g` : "";
+  return `<div class="topbar"><span class="brand">HERESIARCH</span>
+    <span class="phase">${esc(S.phase)}</span><span class="gold">${gold}</span></div>`;
+}
+
+// ---------- screens ----------
+function screenSetup(headerHtml) {
+  const jobs = S.jobs.map(j => `
+    <button class="chip ${ui.selJob === j.id ? "sel" : ""}" data-a="sel-job" data-id="${esc(j.id)}">
+      ${esc(j.name)}</button>`).join("");
+  return `
+    ${headerHtml || `<h1>HERESIARCH</h1><div class="sub">a roguelike heresy</div>`}
+    <div class="card">
+      <div class="dim small">NAME</div>
+      <input type="text" id="mc-name" value="Wanderer" autocomplete="off">
+      <div class="dim small" style="margin-top:10px">JOB</div>
+      <div class="chips">${jobs}</div>
+      <div style="margin-top:14px"><button class="primary" data-a="start-run">Begin Run</button></div>
+    </div>
+    <div class="card"><button style="width:100%" data-a="load-save">Load autosave</button></div>`;
+}
+function screenZoneSelect() {
+  const zs = S.zone_select || {zones: [], towns: []};
+  const towns = zs.towns.map(t =>
+    `<button class="gold" style="width:100%" data-a="enter-town" data-id="${esc(t.id)}">⌂ ${esc(t.name)}</button>`).join("");
+  const zones = zs.zones.map(z => `
+    <div class="card tappable" data-a="enter-zone" data-id="${esc(z.id)}">
+      <div class="row"><div class="grow"><span class="name">${esc(z.name)}</span>
+        ${z.cleared ? '<span class="badge">cleared</span>' : ""}${z.is_final ? '<span class="badge frz">FINAL</span>' : ""}${z.is_endless ? '<span class="badge">endless</span>' : ""}</div>
+      <span class="dim">Lv${z.zone_level}</span></div>
+      <div class="dim small">${z.n_encounters} fights${z.recruitment_chance > 0 ? ` · recruit ${Math.round(z.recruitment_chance * 100)}%` : ""}</div>
+    </div>`).join("");
+  return topbar() + partyStrip() +
+    (towns ? `<div class="section">TOWN</div>${towns}` : "") +
+    `<div class="section">ZONES</div>${zones}` +
+    stashPanel({use: true}) + partyDetails() +
+    `<div class="card"><button style="width:100%" data-a="save">Save run</button></div>`;
+}
+function screenTown() {
+  const t = S.town || {shop_items: []};
+  const shop = t.shop_items.map(it => {
+    const afford = S.party && S.party.gold >= (it.price ?? 0);
+    return `<div class="card"><div class="row">
+      <div class="grow"><span class="name small">${esc(it.name)}</span>
+        <div class="dim">${esc(it.type)}${it.description ? " · " + esc(it.description) : ""}</div></div>
+      <button ${afford ? "" : "disabled"} data-a="buy" data-id="${esc(it.id)}">${it.price}g</button>
+    </div></div>`;
+  }).join("");
+  return topbar() + `
+    <div class="card"><div class="name">⌂ ${esc(t.name || "Town")}</div></div>
+    ${partyStrip()}
+    <div class="card"><div class="row">
+      <div class="grow">Lodge — full heal<div class="dim small">resets progress in uncleared zones</div></div>
+      ${ui.confirm === "rest"
+        ? `<button class="danger" data-a="rest">Rest — ${t.lodge_cost != null ? t.lodge_cost + "g" : "?"}</button>
+           <button data-a="confirm-cancel">✕</button>`
+        : `<button class="gold" data-a="confirm-arm" data-key="rest">${t.lodge_cost != null ? t.lodge_cost + "g" : "rest"}</button>`}
+    </div></div>
+    <div class="section">SHOP</div>${shop}
+    <div class="section">YOURS</div>${stashPanel({use: true, sell: true})}
+    ${partyDetails()}
+    <div class="sticky-bottom"><button class="primary" data-a="leave-town">Leave Town</button></div>`;
+}
+function screenZone() {
+  const z = S.zone || {};
+  const prog = z.is_cleared
+    ? `cleared · overstay ${z.overstay_battles}`
+    : `encounter ${Math.min((z.encounter_index ?? 0) + 1, z.total_encounters)}/${z.total_encounters}`;
+  return topbar() + `
+    <div class="card"><div class="name">${esc(z.name || "?")}</div>
+      <div class="dim">${prog}</div></div>
+    ${partyStrip()}
+    <div style="margin:10px 0"><button class="primary" data-a="fight">⚔ Fight</button></div>
+    ${stashPanel({use: true})} ${partyDetails()}
+    <div class="sticky-bottom"><button style="width:100%" data-a="leave-zone">← Leave Zone</button></div>`;
+}
+function enemyCards() {
+  return (S.combat?.enemies || []).map(e => `
+    <div class="card" style="${e.is_alive ? "" : "opacity:.35"}">
+      <div class="row"><div class="grow"><span class="name small">${esc(e.name)}</span>
+        <span class="dim">Lv${e.level}</span></div>
+        <span class="small">${e.is_alive ? e.hp + "/" + e.max_hp : "✝"}</span></div>
+      ${e.is_alive ? hpbar(e.hp, e.max_hp) : ""}
+      ${e.charging ? `<div class="charge">⚡ ${esc(e.charging)}</div>` : ""}
+      ${e.statuses.length ? `<div class="status">${e.statuses.map(esc).join(" · ")}</div>` : ""}
+    </div>`).join("");
+}
+function abilityChipLabel(a) {
+  return `${esc(a.name)}${a.cooldown_remaining > 0 ? " ⏳" + a.cooldown_remaining : ""}` +
+    `${a.windup_turns ? " ⌛" + a.windup_turns : ""}${a.insight_amplified ? " ✦" : ""}`;
+}
+function slotEditor(p, d, key) {
+  const slot = getSlot(d, key);
+  const aid = slotAbility(p, d, slot);
+  let chips = p.abilities.map(a => {
+    const cd = a.cooldown_remaining > 0;
+    return `<button class="chip ${aid === a.id ? "sel" : ""} ${cd ? "cd" : ""}" ${cd ? "disabled" : ""}
+      data-a="slot-abil" data-c="${esc(p.id)}" data-k="${key}" data-id="${esc(a.id)}">${abilityChipLabel(a)}</button>`;
+  }).join("");
+  chips += `<button class="chip ${aid === "__wait__" ? "sel" : ""}"
+    data-a="slot-abil" data-c="${esc(p.id)}" data-k="${key}" data-id="__wait__">⏳ Wait</button>`;
+  let tchips = "";
+  const ab = abilityOf(p, aid);
+  if (ab && ab.target === "SINGLE_ENEMY" && livingEnemies().length > 1) {
+    tchips = `<div class="chips">` + livingEnemies().map(en =>
+      `<button class="chip ${resolveTargetFor(p, aid, slot.target) === en.id ? "sel" : ""}"
+        data-a="slot-tgt" data-c="${esc(p.id)}" data-k="${key}" data-id="${esc(en.id)}">
+        ${esc(en.name)} <span class="dim">${en.hp}</span></button>`).join("") + `</div>`;
+  } else if (ab && ab.target === "SINGLE_ALLY" && livingPlayers().length > 1) {
+    tchips = `<div class="chips">` + livingPlayers().map(x =>
+      `<button class="chip ${resolveTargetFor(p, aid, slot.target) === x.id ? "sel" : ""}"
+        data-a="slot-tgt" data-c="${esc(p.id)}" data-k="${key}" data-id="${esc(x.id)}">${esc(x.name)}</button>`).join("") + `</div>`;
+  }
+  return `<div class="slotedit"><div class="chips">${chips}</div>${tchips}</div>`;
+}
+function slotRow(p, d, key, label, skippable) {
+  const slot = getSlot(d, key);
+  if (slot === null) {
+    return `<div class="slotrow"><div class="row">
+      <span class="dim small grow">${label} — skipped</span>
+      <button class="small" data-a="slot-unskip" data-c="${esc(p.id)}" data-k="${key}">+ use</button>
+    </div></div>`;
+  }
+  const aid = slotAbility(p, d, slot);
+  const ab = abilityOf(p, aid);
+  const abName = aid === "__wait__" ? "Wait" : (ab ? ab.name : aid);
+  const tid = aid === "__wait__" ? null : resolveTargetFor(p, aid, slot.target);
+  const editing = d.editSlot === key;
+  return `<div class="slotrow"><div class="row">
+      <span class="small grow">${label}: <b>${esc(abName)}</b>${tid ? ` <span class="dim">→ ${esc(combatantName(tid))}</span>` : ""}</span>
+      ${skippable ? `<button class="small" data-a="slot-skip" data-c="${esc(p.id)}" data-k="${key}">✕</button>` : ""}
+      <button class="small ${editing ? "gold" : ""}" data-a="slot-edit" data-c="${esc(p.id)}" data-k="${key}">${editing ? "done" : "edit"}</button>
+    </div>${editing ? slotEditor(p, d, key) : ""}</div>`;
+}
+function decisionCard(p) {
+  const d = ui.D[p.id];
+  if (!d) return "";
+  const ab = abilityOf(p, d.ability);
+  const taunters = (p.taunted_by || []).filter(id => livingEnemies().some(e => e.id === id));
+  const badges =
+    `<span class="badge ap">AP ${p.ap}</span>` +
+    (p.cheat_debt ? `<span class="badge debt">debt ${p.cheat_debt}</span>` : "") +
+    (p.insight ? `<span class="badge ins">insight ${p.insight}</span>` : "") +
+    (p.frenzy_level > 1 ? `<span class="badge frz">frenzy ×${p.frenzy_level.toFixed(2)}</span>` : "") +
+    (p.speed_bonus ? `<span class="badge">+${p.speed_bonus} spd</span>` : "") +
+    (taunters.length ? `<span class="badge frz">TAUNTED → ${esc(combatantName(taunters[0]))}</span>` : "");
+  let body = "";
+  if (d.mode !== "survive") {
+    const chips = p.abilities.map(a => {
+      const cd = a.cooldown_remaining > 0;
+      return `<button class="chip ${!d.useItem && d.ability === a.id ? "sel" : ""} ${cd ? "cd" : ""}"
+        ${cd ? "disabled" : ""} data-a="set-abil" data-c="${esc(p.id)}" data-id="${esc(a.id)}">${abilityChipLabel(a)}</button>`;
+    }).join("");
+    // Taunt forces attacks onto the taunter — items would be wasted input
+    const itemChip = (S.combat?.consumables || []).length && !taunters.length
+      ? `<button class="chip ${d.useItem ? "sel" : ""}" data-a="set-useitem" data-c="${esc(p.id)}">🧪 Item</button>` : "";
+    body += `<div class="chips">${chips}${itemChip}</div>`;
+    if (ab && !d.useItem && ab.description) {
+      body += `<div class="dim small" style="margin-top:4px">${esc(ab.description)}</div>`;
+    }
+    if (d.useItem) {
+      body += `<div class="chips">` + (S.combat?.consumables || []).map(it =>
+        `<button class="chip ${d.item === it.id ? "sel" : ""}" data-a="set-item" data-c="${esc(p.id)}" data-id="${esc(it.id)}">
+          ${esc(it.name)}</button>`).join("") + `</div>`;
+      if (livingPlayers().length > 1) {
+        body += `<div class="dim small" style="margin-top:6px">on:</div><div class="chips">` +
+          livingPlayers().map(x =>
+            `<button class="chip ${d.itemTarget === x.id ? "sel" : ""}" data-a="set-itemtgt" data-c="${esc(p.id)}" data-id="${esc(x.id)}">${esc(x.name)}</button>`).join("") + `</div>`;
+      }
+    } else if (ab && ab.target === "SINGLE_ENEMY" && livingEnemies().length > 1) {
+      const targets = taunters.length
+        ? livingEnemies().filter(e => taunters.includes(e.id))
+        : livingEnemies();
+      body += `<div class="dim small" style="margin-top:6px">target:</div><div class="chips">` +
+        targets.map(e =>
+          `<button class="chip ${resolveTargetFor(p, d.ability, d.target) === e.id ? "sel" : ""}" data-a="set-tgt" data-c="${esc(p.id)}" data-id="${esc(e.id)}">
+            ${esc(e.name)} <span class="dim">${e.hp}</span></button>`).join("") + `</div>`;
+    } else if (ab && ab.target === "SINGLE_ALLY" && livingPlayers().length > 1) {
+      body += `<div class="dim small" style="margin-top:6px">ally:</div><div class="chips">` +
+        livingPlayers().map(x =>
+          `<button class="chip ${resolveTargetFor(p, d.ability, d.target) === x.id ? "sel" : ""}" data-a="set-tgt" data-c="${esc(p.id)}" data-id="${esc(x.id)}">${esc(x.name)}</button>`).join("") + `</div>`;
+    }
+    if (d.mode === "cheat") {
+      body += `<div class="row" style="margin-top:10px"><span class="dim small grow">extra actions (AP)</span>
+        <div class="stepper">
+          <button data-a="ap-dec" data-c="${esc(p.id)}">−</button><span>${d.ap}</span>
+          <button data-a="ap-inc" data-c="${esc(p.id)}">+</button>
+        </div></div>`;
+      body += d.extras.map((_, i) => slotRow(p, d, "x" + i, "Extra " + (i + 1), false)).join("");
+    }
+    if (p.speed_bonus > 0) {
+      body += d.bonus.map((_, i) => slotRow(p, d, "b" + i, "Bonus " + (i + 1), true)).join("");
+    }
+  } else {
+    body = `<div class="dim small" style="margin-top:8px">Braced: damage halved, +1 AP banked.</div>`;
+  }
+  return `<div class="card">
+    <div class="row"><div class="grow"><span class="name">${esc(p.name)}</span>${badges}</div>
+      <span class="small">${p.hp}/${p.max_hp}</span></div>
+    ${hpbar(p.hp, p.max_hp)}
+    ${p.statuses.length ? `<div class="status">${p.statuses.map(esc).join(" · ")}</div>` : ""}
+    <div class="seg">
+      <button class="${d.mode === "normal" ? "sel" : ""}" data-a="set-mode" data-c="${esc(p.id)}" data-id="normal">Act</button>
+      <button class="${d.mode === "survive" ? "sel" : ""}" ${taunters.length ? "disabled" : ""} data-a="set-mode" data-c="${esc(p.id)}" data-id="survive">Survive</button>
+      <button class="${d.mode === "cheat" ? "sel" : ""}" ${p.ap > 0 ? "" : "disabled"} data-a="set-mode" data-c="${esc(p.id)}" data-id="cheat">Cheat</button>
+    </div>
+    ${body}
+  </div>`;
+}
+function screenCombat() {
+  const c = S.combat;
+  if (!c) return topbar() + `<div class="card">No combat state.</div>`;
+  const log = c.log_lines.length
+    ? `<details open><summary>Round log</summary><div class="log" id="log">${c.log_lines.map(esc).join("\n")}</div></details>` : "";
+  return topbar() + `
+    <div class="section">ROUND ${c.round_number + 1} — ENEMIES</div>${enemyCards()}
+    ${log}
+    <div class="section">YOUR MOVE</div>
+    ${livingPlayers().map(decisionCard).join("")}
+    <div class="sticky-bottom"><button class="primary" data-a="submit-round">⚔ Resolve Round</button></div>`;
+}
+function screenLoot() {
+  const loot = S.loot || {money: 0, items: []};
+  const chips = loot.items.map((it, i) =>
+    `<button class="chip ${ui.lootSel.has(i) ? "sel" : ""}" data-a="toggle-loot" data-i="${i}"
+      title="${esc(itemDetail(it))}">${esc(it.name)} <span class="dim">${esc(it.type)}</span></button>`).join("");
+  const free = S.party ? S.party.stash_limit - S.party.stash_used : 0;
+  const overflow = loot.items.length && ui.lootSel.size > free;
+  return topbar() + `
+    <div class="card"><div class="name" style="color:var(--gold)">Won the fight</div>
+      <div class="small">+${loot.money}g</div></div>
+    ${S.text ? `<details><summary>Battle report</summary><pre class="text">${esc(S.text)}</pre></details>` : ""}
+    ${loot.items.length ? `<div class="section">LOOT — tap to toggle</div><div class="chips">${chips}</div>` : `<div class="dim small" style="margin:10px 2px">No drops.</div>`}
+    ${overflow ? `<div class="dim small" style="margin:6px 2px;color:var(--yellow)">⚠ ${ui.lootSel.size} picked, ${free} stash slots free — drop something below or deselect.</div>` : ""}
+    ${partyStrip()}
+    ${stashPanel({})}
+    <div class="sticky-bottom"><div class="row">
+      <button class="primary grow" data-a="loot-take">${loot.items.length ? `Take (${ui.lootSel.size})` : "Continue"}</button>
+    </div></div>`;
+}
+function screenRecruit() {
+  const r = S.recruit;
+  if (!r) {
+    return topbar() + `<div class="section">A WANDERER APPROACHES</div>
+      <pre class="text">${esc(S.text)}</pre>
+      <div class="sticky-bottom"><div class="row">
+        <button class="grow" data-a="recruit-no">Decline</button>
+        <button class="primary grow" data-a="recruit-yes">Recruit</button>
+      </div></div>`;
+  }
+  let detail = "";
+  if (r.growth) {
+    detail += `<div class="dim small" style="margin-top:8px">growth / level</div>` +
+      Object.entries(r.growth).map(([k, v]) =>
+        `<div class="row small"><span class="dim grow">${k}</span><span>+${v}</span></div>`).join("");
+  }
+  if (r.stats) {
+    detail += `<div class="dim small" style="margin-top:8px">stats (Lv${r.level ?? "?"} · ${r.hp ?? "?"} HP)</div>` +
+      Object.entries(r.stats).map(([k, v]) =>
+        `<div class="row small"><span class="dim grow">${k}</span><span>${v}</span></div>`).join("");
+  }
+  const gate = r.inspection === "FULL" ? ""
+    : `<div class="dim small" style="margin-top:8px">CHA ${r.cha} — ${r.inspection === "MODERATE"
+        ? "70+ reveals stats" : "30+ reveals growth, 70+ reveals stats"}</div>`;
+  return topbar() + `
+    <div class="section">A WANDERER APPROACHES</div>
+    <div class="card">
+      <div class="name">${esc(r.name)} <span class="dim">${esc(r.job_name)}${r.level ? " Lv" + r.level : ""}</span></div>
+      ${r.equipment.length ? `<div class="dim small">carries: ${r.equipment.map(esc).join(", ")}</div>` : ""}
+      ${detail}${gate}
+      <div class="dim small" style="margin-top:8px">party ${r.party_size}/${r.max_party}${r.party_full ? " — FULL: dismiss someone below first" : ""}</div>
+    </div>
+    ${r.party_full ? partyDetails() : ""}
+    <div class="sticky-bottom"><div class="row">
+      <button class="grow" data-a="recruit-no">Decline</button>
+      <button class="primary grow" ${r.party_full ? "disabled" : ""} data-a="recruit-yes">Recruit</button>
+    </div></div>`;
+}
+function recapCard() {
+  const r = S.recap;
+  if (!r) return S.text ? `<pre class="text">${esc(S.text)}</pre>` : "";
+  const row = (k, v) => `<div class="row small"><span class="dim grow">${k}</span><span>${v}</span></div>`;
+  return `<div class="card">
+    <div class="name">${esc(r.mc_name)} <span class="dim">Lv${r.mc_level}</span></div>
+    <div style="margin-top:6px">
+      ${row("zones cleared", r.zones_completed.length)}
+      ${row("encounters", `${r.encounters} (${r.victories}W / ${r.defeats}L)`)}
+      ${row("rounds fought", r.rounds)}
+      ${row("damage dealt", r.damage_dealt)}
+      ${row("damage taken", r.damage_taken)}
+      ${row("healing", r.healing)}
+      ${row("ally deaths", r.character_deaths)}
+      ${row("gold at end", r.gold + "g")}
+    </div></div>
+    ${S.text ? `<details><summary>Full report</summary><pre class="text">${esc(S.text)}</pre></details>` : ""}`;
+}
+function screenDead() {
+  return `
+    <h1 style="color:var(--red)">FALLEN</h1>
+    ${recapCard()}
+    ${screenSetup(`<div class="section">RISE AGAIN</div>`)}`;
+}
+function screenVictory() {
+  return `
+    <h1 style="color:var(--gold)">VICTORY</h1>
+    <div class="sub">the region is cleansed</div>
+    ${recapCard()}
+    ${screenSetup(`<div class="section">ANOTHER HERESY</div>`)}`;
+}
+
+function render() {
+  if (!S) return;
+  const app = document.getElementById("app");
+  const nameEl = document.getElementById("mc-name");
+  const savedName = nameEl ? nameEl.value : null;
+  let html;
+  switch (S.phase) {
+    case "SETUP": html = screenSetup(); break;
+    case "ZONE_SELECT": html = screenZoneSelect(); break;
+    case "IN_TOWN": html = screenTown(); break;
+    case "IN_ZONE": html = screenZone(); break;
+    case "COMBAT": html = screenCombat(); break;
+    case "POST_COMBAT": html = screenLoot(); break;
+    case "RECRUITING": html = screenRecruit(); break;
+    case "DEAD": html = screenDead(); break;
+    case "VICTORY": html = screenVictory(); break;
+    default: html = topbar() + `<pre class="text">${esc(S.text)}</pre>`;
+  }
+  app.innerHTML = html;
+  const nameEl2 = document.getElementById("mc-name");
+  if (nameEl2 && savedName != null) nameEl2.value = savedName;
+  const log = document.getElementById("log");
+  if (log) log.scrollTop = log.scrollHeight;
+}
+
+// ---------- one delegated click handler ----------
+document.addEventListener("click", (ev) => {
+  const el = ev.target.closest("[data-a]");
+  if (!el || el.disabled) return;
+  const a = el.dataset.a, id = el.dataset.id, cid = el.dataset.c, i = el.dataset.i;
+  const d = cid ? ui.D[cid] : null;
+  switch (a) {
+    case "sel-job": ui.selJob = id; render(); break;
+    case "start-run": {
+      if (!ui.selJob) { toast("Pick a job first"); return; }
+      const name = (document.getElementById("mc-name")?.value || "Wanderer").trim() || "Wanderer";
+      act("new_run", {name, job_id: ui.selJob}); break;
+    }
+    case "load-save": act("load_run", {slot: "autosave"}); break;
+    case "save": act("save_run", {slot: "autosave"}); break;
+    case "enter-zone": act("enter_zone", {zone_id: id}); break;
+    case "leave-zone": act("leave_zone"); break;
+    case "enter-town": act("enter_town", {town_id: id}); break;
+    case "leave-town": act("leave_town"); break;
+    case "rest": act("rest_at_lodge"); break;
+    case "buy": act("shop_buy", {item_id: id}); break;
+    case "sell": act("shop_sell", {item_id: id}); break;
+    case "fight": act("fight"); break;
+    case "pick-use": ui.pickUse = Number(i); ui.equipPreview = null; render(); break;
+    case "pick-cancel": ui.pickUse = null; render(); break;
+    case "use-on": {
+      const it = S.party.stash[Number(i)]; ui.pickUse = null;
+      act("use_consumable", {item_id: it.id, character_id: el.dataset.c}); break;
+    }
+    case "teach-on": {
+      const it = S.party.stash[Number(i)]; ui.pickUse = null;
+      act("use_scroll", {item_id: it.id, character_id: el.dataset.c}); break;
+    }
+    case "equip-pick": {
+      const it = S.party.stash[Number(i)];
+      fetchEquipPreview(el.dataset.c, it.id); break;
+    }
+    case "equip-confirm": {
+      const ep = ui.equipPreview;
+      if (ep) act("equip", {character_id: ep.cid, item_id: ep.item_id, slot: ep.data.slot});
+      break;
+    }
+    case "equip-cancel": ui.equipPreview = null; render(); break;
+    case "unequip": act("unequip", {character_id: el.dataset.c, slot: el.dataset.slot}); break;
+    case "confirm-arm": ui.confirm = el.dataset.key; render(); break;
+    case "confirm-cancel": ui.confirm = null; render(); break;
+    case "drop-item": act("drop_item", {item_id: id}); break;
+    case "bench": act("swap_roster", {active_id: el.dataset.c}); break;
+    case "promote": act("swap_roster", {reserve_id: el.dataset.c}); break;
+    case "dismiss-char": act("dismiss", {character_id: el.dataset.c}); break;
+    case "mimic-confirm": act("mc_swap_job", {job_id: id}); break;
+    // combat decision editing (local only)
+    case "set-mode": {
+      d.mode = id;
+      if (id === "cheat") {
+        d.ap = Math.max(1, Math.min(d.ap, playerAP(cid)));
+        while (d.extras.length < d.ap) d.extras.push(newSlot());
+        d.extras.length = d.ap;
+      }
+      render(); break;
+    }
+    case "set-abil": d.ability = id; d.useItem = false; d.target = null; render(); break;
+    case "set-tgt": d.target = id; render(); break;
+    case "set-useitem": d.useItem = !d.useItem; render(); break;
+    case "set-item": d.item = id; render(); break;
+    case "set-itemtgt": d.itemTarget = id; render(); break;
+    case "ap-inc": if (d.ap < playerAP(cid)) { d.ap++; d.extras.push(newSlot()); } render(); break;
+    case "ap-dec": if (d.ap > 1) { d.ap--; d.extras.pop(); } render(); break;
+    case "slot-edit": d.editSlot = d.editSlot === el.dataset.k ? null : el.dataset.k; render(); break;
+    case "slot-abil": { const s = getSlot(d, el.dataset.k); s.ability = id; s.target = null; render(); break; }
+    case "slot-tgt": { const s = getSlot(d, el.dataset.k); s.target = id; render(); break; }
+    case "slot-skip": {
+      d.bonus[+el.dataset.k.slice(1)] = null;
+      if (d.editSlot === el.dataset.k) d.editSlot = null;
+      render(); break;
+    }
+    case "slot-unskip": d.bonus[+el.dataset.k.slice(1)] = newSlot(); render(); break;
+    case "submit-round": {
+      const dec = buildDecisions();
+      if (dec) act("submit_decisions", {decisions: dec});
+      break;
+    }
+    case "toggle-loot": {
+      const n = Number(i);
+      ui.lootSel.has(n) ? ui.lootSel.delete(n) : ui.lootSel.add(n);
+      render(); break;
+    }
+    case "loot-take": {
+      const ids = (S.loot?.items || []).filter((_, n) => ui.lootSel.has(n)).map(it => it.id);
+      act("pick_loot", {item_ids: ids}); break;
+    }
+    case "recruit-yes": act("recruit", {accept: true}); break;
+    case "recruit-no": act("recruit", {accept: false}); break;
+  }
+});
+function playerAP(cid) {
+  const p = livingPlayers().find(x => x.id === cid);
+  return p ? Math.max(1, p.ap) : 1;
+}
+
+api("/api/state");
+</script>
+</body>
+</html>
