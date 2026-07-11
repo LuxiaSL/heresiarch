@@ -7,8 +7,8 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Static
 
-from heresiarch.engine.models.region_map import AsciiMap
 from heresiarch.tui.widgets.map_viewer import AnchorStatus, MapViewer
+from heresiarch.views.map_builder import build_region_map_vm
 
 
 class ZoneSelectScreen(Screen):
@@ -69,108 +69,35 @@ class ZoneSelectScreen(Screen):
         if run is None:
             return
 
-        ascii_map = self._get_region_map()
+        vm = build_region_map_vm(
+            run, self.app.game_data, self.app.game_loop,
+            requested_anchor_id=self._requested_anchor,
+        )
+        if vm is None:
+            self._fallback_list()
+            return
+        ascii_map = self.app.game_data.maps.get(vm.map_key)
         if ascii_map is None:
             self._fallback_list()
             return
 
-        # Build anchor statuses and navigable list
-        available = self.app.game_loop.get_available_zones(run)
-        available_ids = {z.id for z in available}
-        completed = set(run.zones_completed)
-
-        anchor_statuses: dict[str, AnchorStatus] = {}
-        navigable: list[str] = []
-
-        for anchor in ascii_map.anchors:
-            aid = anchor.id
-
-            if anchor.anchor_type == "town":
-                # Town anchor — check town unlock
-                if self.app.game_loop.is_town_unlocked(run, aid):
-                    anchor_statuses[aid] = AnchorStatus.AVAILABLE
-                    navigable.append(aid)
-                else:
-                    anchor_statuses[aid] = AnchorStatus.LOCKED
-            else:
-                # Zone anchor
-                if aid in completed:
-                    anchor_statuses[aid] = AnchorStatus.CLEARED
-                    navigable.append(aid)
-                elif aid in available_ids:
-                    anchor_statuses[aid] = AnchorStatus.AVAILABLE
-                    navigable.append(aid)
-                else:
-                    anchor_statuses[aid] = AnchorStatus.LOCKED
-
-        self._navigable_ids = navigable
-
-        # Find a good initial anchor: requested > first available > first navigable
-        initial = None
-        if self._requested_anchor and self._requested_anchor in navigable:
-            initial = self._requested_anchor
-        else:
-            for aid in navigable:
-                if anchor_statuses.get(aid) == AnchorStatus.AVAILABLE:
-                    initial = aid
-                    break
-        if initial is None and navigable:
-            initial = navigable[0]
+        self._navigable_ids = list(vm.navigable_ids)
 
         # Mount the map viewer
         container = self.query_one("#map-area", Vertical)
         viewer = MapViewer(
             ascii_map=ascii_map,
-            anchor_statuses=anchor_statuses,
-            navigable_ids=navigable,
-            initial_id=initial,
+            anchor_statuses={
+                a.id: AnchorStatus(a.status.value) for a in vm.anchors
+            },
+            navigable_ids=vm.navigable_ids,
+            initial_id=vm.initial_id,
         )
         container.mount(viewer)
         viewer.focus()
 
-        if initial:
-            self._show_anchor_detail(initial)
-
-    def _get_region_map(self) -> AsciiMap | None:
-        """Look up the region map for the player's current frontier.
-
-        Picks the region that has available but not-yet-cleared zones,
-        preferring the furthest region the player has unlocked. Falls
-        back to the first region if everything is cleared.
-        """
-        maps = getattr(self.app, "game_data", None)
-        if maps is None:
-            return None
-        region_maps = maps.maps
-        run = self.app.run_state
-        if run is None:
-            if region_maps:
-                return next(iter(region_maps.values()))
-            return None
-
-        # Find regions with available non-cleared zones (the frontier)
-        available = self.app.game_loop.get_available_zones(run)
-        completed = set(run.zones_completed)
-
-        # Prefer the region of the first available zone that isn't cleared
-        for zone in available:
-            if zone.id not in completed and zone.region in region_maps:
-                return region_maps[zone.region]
-
-        # All available zones are cleared — show region of last completed zone
-        # (reversed so we get the most recent)
-        for zone_id in reversed(run.zones_completed):
-            zone = self.app.game_data.zones.get(zone_id)
-            if zone and zone.region in region_maps:
-                return region_maps[zone.region]
-
-        # Fallback: first region found
-        for zone in self.app.game_data.zones.values():
-            if zone.region in region_maps:
-                return region_maps[zone.region]
-        if region_maps:
-            return next(iter(region_maps.values()))
-        return None
+        if vm.initial_id:
+            self._show_anchor_detail(vm.initial_id)
 
     def _fallback_list(self) -> None:
         """Simple text fallback if no map data is available."""

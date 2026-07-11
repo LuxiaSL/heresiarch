@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-import random
-
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Static
 
-from heresiarch.engine.models.region_map import AsciiMap
 from heresiarch.tui.widgets.map_viewer import AnchorStatus, MapViewer
+from heresiarch.views.map_builder import build_zone_map_vm
+
+# Path-row coloring: traversed vs not-yet-reached
+_PATH_TRAVERSED_STYLE = "#44aa44"
+_PATH_LOCKED_STYLE = "#333333"
 
 
 class ZoneScreen(Screen):
@@ -81,175 +83,40 @@ class ZoneScreen(Screen):
         if run is None or run.current_zone_id is None or run.zone_state is None:
             return
 
-        zone_id = run.current_zone_id
-        zone = self.app.game_data.zones.get(zone_id)
-        zs = run.zone_state
-        if zone is None:
+        vm = build_zone_map_vm(run, self.app.game_data)
+        if vm is None:
+            self._fallback_display()
             return
-
-        ascii_map = self.app.game_data.maps.get(zone_id)
+        ascii_map = self.app.game_data.maps.get(vm.map_key)
         if ascii_map is None:
             self._fallback_display()
             return
 
-        is_overstay = zs.is_cleared or zone.is_endless
-
-        # Build anchor statuses and navigable list
-        statuses: dict[str, AnchorStatus] = {}
-        navigable: list[str] = ["exit"]
-        statuses["exit"] = AnchorStatus.AVAILABLE
-
-        if zone.is_endless:
-            # Endless zones: all encounter anchors on the map are always
-            # available — there are no fixed encounters to track.
-            for anchor in ascii_map.anchors:
-                if anchor.anchor_type in ("encounter", "boss"):
-                    statuses[anchor.id] = AnchorStatus.AVAILABLE
-                    navigable.append(anchor.id)
-        elif is_overstay:
-            # Cleared zone re-entered: all encounters reachable
-            for i in range(len(zone.encounters)):
-                anchor_id = f"enc_{i}"
-                statuses[anchor_id] = AnchorStatus.CLEARED
-                navigable.append(anchor_id)
-        else:
-            for i in range(len(zone.encounters)):
-                anchor_id = f"enc_{i}"
-                if i in zs.encounters_completed:
-                    statuses[anchor_id] = AnchorStatus.CLEARED
-                    navigable.append(anchor_id)
-                elif i == zs.current_encounter_index:
-                    statuses[anchor_id] = AnchorStatus.AVAILABLE
-                    navigable.append(anchor_id)
-                    break  # can't navigate past the frontier
-                else:
-                    statuses[anchor_id] = AnchorStatus.LOCKED
-
-            # Set statuses for any remaining locked encounters
-            for i in range(len(zone.encounters)):
-                anchor_id = f"enc_{i}"
-                if anchor_id not in statuses:
-                    statuses[anchor_id] = AnchorStatus.LOCKED
-
-        # Compute path coloring
-        style_overrides = self._compute_path_coloring(ascii_map, statuses)
-
-        # Determine initial cursor position
-        initial: str | None = None
-        if zone.is_endless:
-            # Endless zones: always start on the encounter node
-            enc_anchors = [
-                a.id for a in ascii_map.anchors
-                if a.anchor_type in ("encounter", "boss")
-            ]
-            initial = enc_anchors[0] if enc_anchors else "exit"
-        elif is_overstay:
-            # Random position among encounter nodes for scouring flavor.
-            # Exclude boss nodes that act as travel tiles (next_zone) and
-            # the exit — player shouldn't land on navigation-only nodes.
-            excluded: set[int] = set()
-            if zone.next_zone:
-                for i, enc in enumerate(zone.encounters):
-                    if enc.is_boss:
-                        excluded.add(i)
-            enc_ids = [
-                f"enc_{i}"
-                for i in range(len(zone.encounters))
-                if i not in excluded
-            ]
-            if enc_ids:
-                rng = random.Random(zs.overstay_battles)
-                initial = rng.choice(enc_ids)
-        else:
-            # Start on the next uncleared encounter
-            for i in range(len(zone.encounters)):
-                anchor_id = f"enc_{i}"
-                if statuses.get(anchor_id) == AnchorStatus.AVAILABLE:
-                    initial = anchor_id
-                    break
-        if initial is None and navigable:
-            initial = navigable[-1]
+        style_overrides = {
+            (cell.row, cell.col): (
+                _PATH_TRAVERSED_STYLE if cell.traversed else _PATH_LOCKED_STYLE
+            )
+            for cell in vm.path_cells
+        }
 
         # Mount the map viewer
         container = self.query_one("#zone-map-area", Vertical)
         viewer = MapViewer(
             ascii_map=ascii_map,
-            anchor_statuses=statuses,
-            navigable_ids=navigable,
-            initial_id=initial,
+            anchor_statuses={
+                a.id: AnchorStatus(a.status.value) for a in vm.anchors
+            },
+            navigable_ids=vm.navigable_ids,
+            initial_id=vm.initial_id,
             style_overrides=style_overrides,
         )
         container.mount(viewer)
         viewer.focus()
 
-        if initial:
-            atype = "exit"
-            anchor = ascii_map.anchor_for_id(initial)
-            if anchor:
-                atype = anchor.anchor_type
-            self._show_encounter_detail(initial, atype)
-
-    def _compute_path_coloring(
-        self,
-        ascii_map: AsciiMap,
-        statuses: dict[str, AnchorStatus],
-    ) -> dict[tuple[int, int], str]:
-        """Color path characters green (cleared) or gray (locked) by column."""
-        overrides: dict[tuple[int, int], str] = {}
-
-        # Find all encounter/boss anchors on the map
-        enc_anchors = [
-            a for a in ascii_map.anchors
-            if a.anchor_type in ("encounter", "boss")
-        ]
-        if not enc_anchors:
-            return overrides
-
-        # All encounter anchors should share the same row (linear path)
-        path_row = enc_anchors[0].row
-
-        # Find the frontier column — column of the current/available encounter.
-        # Everything up to this column is "traversed" (green).
-        # If all cleared, frontier is the rightmost encounter.
-        frontier_col = 0
-        exit_anchor = ascii_map.anchor_for_id("exit")
-        if exit_anchor:
-            frontier_col = exit_anchor.col
-
-        for anchor in sorted(enc_anchors, key=lambda a: a.col):
-            status = statuses.get(anchor.id, AnchorStatus.LOCKED)
-            if status == AnchorStatus.CLEARED:
-                frontier_col = anchor.col
-            elif status == AnchorStatus.AVAILABLE:
-                frontier_col = anchor.col
-                break
-            else:
-                break
-
-        # Color the path row
-        cleared_style = "#44aa44"
-        locked_style = "#333333"
-
-        art = ascii_map.art
-        if path_row < 0 or path_row >= len(art):
-            return overrides
-
-        line = art[path_row]
-        for c, char in enumerate(line):
-            if char == " ":
-                continue  # skip empty space
-            # Don't override anchor positions — markers handle those
-            is_anchor = any(
-                a.row == path_row and a.col == c for a in ascii_map.anchors
-            )
-            if is_anchor:
-                continue
-            if c <= frontier_col:
-                overrides[(path_row, c)] = cleared_style
-            else:
-                overrides[(path_row, c)] = locked_style
-
-        return overrides
+        if vm.initial_id:
+            anchor = vm.anchor_for_id(vm.initial_id)
+            atype = anchor.anchor_type if anchor else "exit"
+            self._show_encounter_detail(vm.initial_id, atype)
 
     def _fallback_display(self) -> None:
         """Simple text fallback if no map data is available."""

@@ -7,8 +7,8 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Static
 
-from heresiarch.engine.models.region_map import AsciiMap
 from heresiarch.tui.widgets.map_viewer import AnchorStatus, MapViewer
+from heresiarch.views.map_builder import build_town_map_vm
 
 
 class TownScreen(Screen):
@@ -67,37 +67,29 @@ class TownScreen(Screen):
         if run is None or run.current_town_id is None:
             return
 
-        town_map = self._get_town_map(run.current_town_id)
-        if town_map is None:
+        vm = build_town_map_vm(run, self.app.game_data)
+        town_map = (
+            self.app.game_data.maps.get(vm.map_key) if vm is not None else None
+        )
+        if vm is None or town_map is None:
             container = self.query_one("#town-map-area", Vertical)
             container.mount(Static("[dim]No town map data found.[/dim]"))
             return
 
-        # All buildings are always available in town
-        statuses: dict[str, AnchorStatus] = {}
-        navigable: list[str] = []
-        for anchor in town_map.anchors:
-            statuses[anchor.id] = AnchorStatus.AVAILABLE
-            navigable.append(anchor.id)
-
-        initial = navigable[0] if navigable else None
-
         container = self.query_one("#town-map-area", Vertical)
         viewer = MapViewer(
             ascii_map=town_map,
-            anchor_statuses=statuses,
-            navigable_ids=navigable,
-            initial_id=initial,
+            anchor_statuses={
+                a.id: AnchorStatus(a.status.value) for a in vm.anchors
+            },
+            navigable_ids=vm.navigable_ids,
+            initial_id=vm.initial_id,
         )
         container.mount(viewer)
         viewer.focus()
 
-        if initial:
-            self._show_building_detail(initial)
-
-    def _get_town_map(self, town_id: str) -> AsciiMap | None:
-        """Look up the interior map for the current town."""
-        return self.app.game_data.maps.get(town_id)
+        if vm.initial_id:
+            self._show_building_detail(vm.initial_id)
 
     # --- Event handlers ---
 

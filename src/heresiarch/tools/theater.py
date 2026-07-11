@@ -46,7 +46,7 @@ from heresiarch.analytics.record_db import RecordDB
 from heresiarch.engine.data_loader import GameData, load_all
 from heresiarch.engine.models.battle_record import EncounterRecord
 from heresiarch.engine.models.combat_state import CombatEvent, CombatEventType
-from heresiarch.tui.event_renderer import get_event_delay, render_event
+from heresiarch.views.event_renderer import get_event_delay, render_event
 
 TICK_S = 0.1
 LOG_LINES = 7

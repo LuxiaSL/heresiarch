@@ -26,7 +26,7 @@ from heresiarch.engine.models.combat_state import (
     PlayerTurnDecision,
 )
 from heresiarch.engine.models.run_state import CombatResult
-from heresiarch.tui.event_renderer import (
+from heresiarch.views.event_renderer import (
     get_event_delay,
     render_event,
     render_events_summary,
