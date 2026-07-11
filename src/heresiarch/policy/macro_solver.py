@@ -625,7 +625,12 @@ class MacroSolver:
 
     def _heal_loop_branch(self, run: RunState, gl: GameLoop) -> RunState:
         """Buy-use-buy-use healing loop in branch simulation."""
-        target_pct = self.base_macro.config.in_town_heal_target_pct
+        from heresiarch.policy.builtin.golden_macro import IN_TOWN_HEAL_TARGET_PCT
+
+        target_pct = getattr(
+            self.base_macro.config, "in_town_heal_target_pct",
+            IN_TOWN_HEAL_TARGET_PCT,
+        )
         available_items = gl.resolve_town_shop(run)
         if POTION_ITEM_ID not in available_items:
             return run

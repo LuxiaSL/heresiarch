@@ -80,18 +80,18 @@ class ParamSpec:
 
 PARAM_SPECS: tuple[ParamSpec, ...] = (
     # --- GoldenMacroConfig knobs (live ones only) ---
+    # Macro v2 (2026-07-11) deleted the doctrine-covered knobs:
+    # heal_threshold_pct, in_town_heal_target_pct, overstay_cap,
+    # overstay_bail_hp_pct, town_visit_gold_threshold,
+    # town_visit_hp_threshold — those are computable rules now
+    # (zero-waste heal, expected-death retreat, derived debuff cap).
+    # load_params() drops unknown keys, so old best.json files still load.
     ParamSpec("potion_stockpile_target", "int", 0, 5, "macro"),
     ParamSpec("potion_stash_cap", "int", 1, 8, "macro"),
-    ParamSpec("overstay_cap", "int", 0, 25, "macro"),
-    ParamSpec("overstay_bail_hp_pct", "float", 0.05, 0.80, "macro"),
-    ParamSpec("heal_threshold_pct", "float", 0.10, 0.95, "macro"),
-    ParamSpec("in_town_heal_target_pct", "float", 0.50, 1.00, "macro"),
     ParamSpec("pre_boss_retreat_hp_pct", "float", 0.30, 1.00, "macro"),
     ParamSpec("lodge_on", "bool", 0, 1, "macro"),
     ParamSpec("lodge_hp_threshold", "float", 0.10, 0.60, "macro"),
     ParamSpec("pit_level_buffer", "int", 0, 10, "macro"),
-    ParamSpec("town_visit_gold_threshold", "int", 0, 150, "macro"),
-    ParamSpec("town_visit_hp_threshold", "float", 0.20, 0.90, "macro"),
     # --- RolloutConfig knobs ---
     ParamSpec("insight_dump_threshold", "int", 2, 10, "rollout"),
     ParamSpec("kill_safety", "float", 0.80, 2.00, "rollout"),

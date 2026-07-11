@@ -437,11 +437,13 @@ def _apply_shop_actions(
 
 
 def _auto_equip_new_weapon(run: RunState, ctx: _RunContext) -> RunState:
-    """Fill empty WEAPON and ARMOR slots on the MC from stash.
+    """Equip the best WEAPON and ARMOR from stash onto the MC.
 
-    Bought gear that never gets equipped is wasted gold, and the shop
-    logic has no equip hook otherwise. Kept to MC + these two slots
-    for Phase 1; accessories and party-wide equip are out of scope.
+    Upgrade-aware (macro doctrine): a stash item strictly better than
+    the equipped one — by (tier, base_price) — gets equipped, and the
+    engine returns the displaced item to the stash where the next shop
+    pass sells it. Kept to MC + these two slots; accessories and
+    party-wide equip are out of scope.
     """
     from heresiarch.engine.models.items import EquipType
 
@@ -459,32 +461,46 @@ def _auto_equip_new_weapon(run: RunState, ctx: _RunContext) -> RunState:
         ("ARMOR", EquipType.ARMOR),
     ]
 
+    def _rank(item) -> tuple[int, int]:
+        return (item.tier, item.base_price) if item else (0, 0)
+
     for slot, equip_type in slot_types:
-        if mc.equipment.get(slot) is not None:
-            continue
+        equipped_id = mc.equipment.get(slot)
+        equipped = None
+        if equipped_id:
+            equipped = ctx.game_data.items.get(equipped_id) or run.party.items.get(equipped_id)
+        current_rank = _rank(equipped)
+
+        best_iid = None
+        best_rank = current_rank
         for iid in list(run.party.stash):
             item = ctx.game_data.items.get(iid) or run.party.items.get(iid)
             if item is None or item.is_consumable:
                 continue
             if item.equip_type != equip_type:
                 continue
-            try:
-                run = gl.equip_item(run, mc.id, iid, slot)
-            except ValueError:
-                continue
-            run = run.record_macro(
-                "equip",
-                {
-                    "character_id": mc.id,
-                    "slot": slot,
-                    "item_id": iid,
-                    "displaced_item_id": None,
-                },
-            )
-            mc = run.party.characters.get(mc.id)
-            if mc is None:
-                return run
-            break
+            if _rank(item) > best_rank:
+                best_iid = iid
+                best_rank = _rank(item)
+
+        if best_iid is None:
+            continue
+        try:
+            run = gl.equip_item(run, mc.id, best_iid, slot)
+        except ValueError:
+            continue
+        run = run.record_macro(
+            "equip",
+            {
+                "character_id": mc.id,
+                "slot": slot,
+                "item_id": best_iid,
+                "displaced_item_id": equipped_id,
+            },
+        )
+        mc = run.party.characters.get(mc.id)
+        if mc is None:
+            return run
 
     return run
 
@@ -498,8 +514,8 @@ def _in_town_heal_loop(run: RunState, ctx: _RunContext) -> RunState:
     or potions aren't available in the shop.
     """
     gl = ctx.game_loop
-    target_pct = getattr(ctx.macro_policy, 'config', None)
-    target_pct = target_pct.in_town_heal_target_pct if target_pct else 1.0
+    config = getattr(ctx.macro_policy, 'config', None)
+    target_pct = getattr(config, 'in_town_heal_target_pct', 1.0) if config else 1.0
 
     available_items = gl.resolve_town_shop(run)
     potion_id = "minor_potion"

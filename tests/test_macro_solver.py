@@ -69,7 +69,7 @@ class TestDelegation:
     def test_config_property_exposes_base_config(self, game_data: GameData):
         ms = _make_macro_solver(game_data)
         assert ms.config is ms.base_macro.config
-        assert ms.config.heal_threshold_pct == ms.base_macro.config.heal_threshold_pct
+        assert ms.config.potion_stockpile_target == ms.base_macro.config.potion_stockpile_target
 
 
 # ---------------------------------------------------------------------------

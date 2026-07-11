@@ -80,8 +80,7 @@ class TestPreBossRetreat:
         run = _run_at_boss(game_data, hp_pct=0.5, gold=0)
         macro = GoldenMacroPolicy(
             GoldenMacroConfig(pre_boss_retreat_hp_pct=0.90,
-                              potion_stockpile_target=0,
-                              town_visit_gold_threshold=50),
+                              potion_stockpile_target=0),
             game_data,
         )
         assert macro.decide_retreat_to_town(run) is False
@@ -109,8 +108,7 @@ class TestPreBossRetreat:
         run = run.model_copy(update={"party": party})
 
         low_threshold = GoldenMacroPolicy(
-            GoldenMacroConfig(heal_threshold_pct=0.25,
-                              pre_boss_retreat_hp_pct=0.90),
+            GoldenMacroConfig(pre_boss_retreat_hp_pct=0.90),
             game_data,
         )
         uses = low_threshold.decide_between_encounter_items(run)
@@ -194,10 +192,10 @@ class TestParamSpace:
 
     def test_params_to_configs_applies_both_groups(self):
         params = preset_params("einherjar")
-        params["overstay_cap"] = 7
+        params["potion_stockpile_target"] = 4
         params["insight_dump_threshold"] = 3
         macro, rollout = params_to_configs(params, "einherjar")
-        assert macro.overstay_cap == 7
+        assert macro.potion_stockpile_target == 4
         assert rollout.insight_dump_threshold == 3
         # Job identity fields untouched by the search.
         assert macro.preferred_weapon_stat == (
@@ -210,12 +208,12 @@ class TestCEM:
         base = preset_params("einherjar")
         cem = CEMState.from_params(base, init_std=0.2)
         idx = next(
-            i for i, s in enumerate(PARAM_SPECS) if s.name == "overstay_cap"
+            i for i, s in enumerate(PARAM_SPECS) if s.name == "potion_stockpile_target"
         )
         before = cem.mean[idx]
 
         elite = dict(base)
-        elite["overstay_cap"] = 0  # elites all say: stop grinding
+        elite["potion_stockpile_target"] = 0  # elites all say: carry nothing
         cem.refit([elite, dict(elite)], smoothing=0.7, std_floor=0.05)
 
         assert cem.mean[idx] < before
