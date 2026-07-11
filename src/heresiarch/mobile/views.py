@@ -26,6 +26,12 @@ from heresiarch.engine.formulas import (
 from heresiarch.engine.models.abilities import AbilityCategory
 from heresiarch.engine.models.stats import GrowthVector, StatBlock
 from heresiarch.engine.recruitment import MAX_PARTY_SIZE, InspectionLevel
+from heresiarch.views.map_builder import (
+    MapVM,
+    build_region_map_vm,
+    build_town_map_vm,
+    build_zone_map_vm,
+)
 
 if TYPE_CHECKING:
     from heresiarch.agent.session import GameSession
@@ -249,6 +255,7 @@ class StatePayload(BaseModel):
     loot: LootView | None = None
     recruit: RecruitView | None = None
     recap: RecapView | None = None
+    map: MapVM | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -711,6 +718,25 @@ def build_equip_preview(
     )
 
 
+def build_map_view(session: GameSession) -> MapVM | None:
+    """Phase-appropriate ASCII map: region, zone path, or town interior."""
+    run = session.run
+    gl = session.game_loop
+    if run is None or gl is None:
+        return None
+    from heresiarch.agent.session import Phase
+
+    match session.phase:
+        case Phase.ZONE_SELECT:
+            return build_region_map_vm(run, session.game_data, gl)
+        case Phase.IN_ZONE:
+            return build_zone_map_vm(run, session.game_data)
+        case Phase.IN_TOWN:
+            return build_town_map_vm(run, session.game_data)
+        case _:
+            return None
+
+
 def build_state_payload(
     session: GameSession, *, text: str = "", error: str | None = None,
 ) -> StatePayload:
@@ -744,4 +770,5 @@ def build_state_payload(
         loot=_safe(build_loot_view),
         recruit=_safe(build_recruit_view),
         recap=_safe(build_recap_view),
+        map=_safe(build_map_view),
     )

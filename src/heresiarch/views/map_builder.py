@@ -43,6 +43,10 @@ class MapAnchorVM(BaseModel):
     detail: str = ""
     # Zone maps: boss node that acts as a travel tile to the next zone
     travel_to: str | None = None
+    # What selecting this anchor does, resolved server-side so frontends
+    # never re-derive game rules: enter_zone / enter_town / fight /
+    # leave_zone / travel / shop / lodge / leave_town. None = inert.
+    tap_action: str | None = None
 
 
 class PathCellVM(BaseModel):
@@ -131,6 +135,7 @@ def build_region_map_vm(
         label = aid
         detail = ""
 
+        tap_action: str | None = None
         if anchor.anchor_type == "town":
             town = game_data.towns.get(aid)
             if town is not None:
@@ -138,6 +143,7 @@ def build_region_map_vm(
             if game_loop.is_town_unlocked(run, aid):
                 status = AnchorState.AVAILABLE
                 navigable.append(aid)
+                tap_action = "enter_town"
                 lodge_cost = game_loop.get_lodge_cost(run)
                 shop_count = len(game_loop.resolve_town_shop(run))
                 detail = f"Lodge rest {lodge_cost}g · shop {shop_count} items"
@@ -160,17 +166,19 @@ def build_region_map_vm(
             if aid in completed:
                 status = AnchorState.CLEARED
                 navigable.append(aid)
+                tap_action = "enter_zone"
                 detail += " · overstay loot penalty"
             elif aid in available_ids:
                 status = AnchorState.AVAILABLE
                 navigable.append(aid)
+                tap_action = "enter_zone"
             else:
                 status = AnchorState.LOCKED
 
         anchors.append(MapAnchorVM(
             id=aid, row=anchor.row, col=anchor.col,
             anchor_type=anchor.anchor_type, status=status,
-            label=label, detail=detail,
+            label=label, detail=detail, tap_action=tap_action,
         ))
 
     status_by_id = {a.id: a.status for a in anchors}
@@ -264,11 +272,24 @@ def build_zone_map_vm(run: RunState, game_data: GameData) -> MapVM | None:
             aid, anchor.anchor_type, zone, zs, total, game_data,
             is_travel=aid in travel_targets,
         )
+
+        tap_action: str | None = None
+        if anchor.anchor_type == "exit":
+            tap_action = "leave_zone"
+        elif aid in travel_targets:
+            tap_action = "travel"
+        elif anchor.anchor_type in ("encounter", "boss"):
+            if status == AnchorState.AVAILABLE:
+                tap_action = "fight"
+            elif status == AnchorState.CLEARED and is_overstay:
+                tap_action = "fight"  # overstay: any node re-fights
+
         anchors.append(MapAnchorVM(
             id=aid, row=anchor.row, col=anchor.col,
             anchor_type=anchor.anchor_type, status=status,
             label=label, detail=detail,
             travel_to=travel_targets.get(aid),
+            tap_action=tap_action,
         ))
 
     initial = _zone_initial_anchor(
@@ -441,6 +462,12 @@ _BUILDING_TEXT: dict[str, tuple[str, str]] = {
     "exit": ("Exit", "Leave town"),
 }
 
+_BUILDING_TAP_ACTIONS: dict[str, str] = {
+    "shop": "shop",
+    "lodge": "lodge",
+    "exit": "leave_town",
+}
+
 
 def build_town_map_vm(run: RunState, game_data: GameData) -> MapVM | None:
     """Town interior: all buildings always available."""
@@ -458,6 +485,7 @@ def build_town_map_vm(run: RunState, game_data: GameData) -> MapVM | None:
             id=anchor.id, row=anchor.row, col=anchor.col,
             anchor_type=anchor.anchor_type, status=AnchorState.AVAILABLE,
             label=label, detail=detail,
+            tap_action=_BUILDING_TAP_ACTIONS.get(anchor.id),
         ))
         navigable.append(anchor.id)
 

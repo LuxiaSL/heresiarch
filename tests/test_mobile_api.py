@@ -268,6 +268,59 @@ def test_final_zone_clear_reaches_victory(client: TestClient) -> None:
     assert "VICTORY" in payload["text"]
 
 
+def test_zone_select_payload_has_region_map(client: TestClient) -> None:
+    payload = _act(client, "new_run", {"name": "Cartographer", "job_id": "einherjar", "seed": 5})
+    m = payload["map"]
+    assert m is not None
+    assert m["kind"] == "region"
+    assert m["art"] and m["width"] > 0
+    assert m["navigable_ids"], "region map must have navigable anchors"
+    assert m["initial_id"] in m["navigable_ids"]
+    by_id = {a["id"]: a for a in m["anchors"]}
+    initial = by_id[m["initial_id"]]
+    assert initial["status"] == "available"
+    assert initial["tap_action"] in ("enter_zone", "enter_town")
+    # At least one zone must be embarkable from the map
+    assert any(a["tap_action"] == "enter_zone" for a in m["anchors"])
+    # Locked zones are visible but not navigable and not tappable
+    locked = [a for a in m["anchors"] if a["status"] == "locked"]
+    for a in locked:
+        assert a["id"] not in m["navigable_ids"]
+        assert a["tap_action"] is None
+
+
+def test_zone_map_has_frontier_and_path(client: TestClient) -> None:
+    _act(client, "new_run", {"name": "Pathfinder", "job_id": "einherjar", "seed": 5})
+    payload = _act(client, "enter_zone", {"zone_id": "zone_01"})
+    m = payload["map"]
+    assert m is not None
+    assert m["kind"] == "zone"
+    by_id = {a["id"]: a for a in m["anchors"]}
+    assert by_id["exit"]["tap_action"] == "leave_zone"
+    assert by_id["enc_0"]["status"] == "available"
+    assert by_id["enc_0"]["tap_action"] == "fight"
+    assert m["initial_id"] == "enc_0"
+    assert m["path_cells"], "zone map must carry path coloring"
+    # Frontier: no traversed path cell lies beyond the available encounter
+    frontier = by_id["enc_0"]["col"]
+    assert all(c["col"] <= frontier for c in m["path_cells"] if c["traversed"])
+
+
+def test_town_payload_has_interior_map(client: TestClient) -> None:
+    payload = _act(client, "new_run", {"name": "Visitor", "job_id": "onmyoji", "seed": 3})
+    towns = payload["zone_select"]["towns"]
+    if not towns:
+        pytest.skip("no town unlocked at run start in current data")
+    payload = _act(client, "enter_town", {"town_id": towns[0]["id"]})
+    m = payload["map"]
+    if m is None:
+        pytest.skip("current town has no interior map")
+    assert m["kind"] == "town"
+    assert all(a["status"] == "available" for a in m["anchors"])
+    actions = {a["id"]: a["tap_action"] for a in m["anchors"]}
+    assert actions.get("exit") == "leave_town"
+
+
 def test_recruit_view_is_cha_gated(client: TestClient) -> None:
     _act(client, "new_run", {"name": "Recruiter", "job_id": "einherjar", "seed": 5})
     session = client.app.state.session

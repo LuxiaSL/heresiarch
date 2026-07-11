@@ -80,6 +80,14 @@
   .slotrow b { font-weight: 600; }
   .slotedit { margin: 8px 0 4px; padding: 8px; background: #12121a; border-radius: 8px;
     border: 1px solid var(--line); }
+  /* ASCII map: pannable <pre> with absolutely-positioned tap targets */
+  .mapscroll { background: #0a0a10; border: 1px solid var(--line); border-radius: 10px;
+    overflow: auto; max-height: 44vh; margin: 8px 0; -webkit-overflow-scrolling: touch; }
+  .mapwrap { position: relative; display: inline-block; font-size: 11px; line-height: 14px;
+    padding: 0; }
+  pre.map { margin: 6px; font-size: inherit; line-height: inherit; white-space: pre; }
+  .maptap { position: absolute; width: 28px; height: 28px; margin: 6px;
+    transform: translate(-50%,-50%); border-radius: 50%; background: transparent; z-index: 2; }
 </style>
 </head>
 <body>
@@ -94,6 +102,8 @@ const ui = {
   pickUse: null, lootSel: new Set(), busy: false,
   confirm: null,       // pending destructive-action key ("rest", "dismiss:<id>", …)
   equipPreview: null,  // {cid, item_id, data: EquipPreview}
+  mapKey: null, mapSel: null,          // ASCII map selection state
+  mapScroll: null, mapScrolled: false, // pan position, kept across re-renders
 };
 
 function esc(s) {
@@ -388,6 +398,140 @@ function topbar() {
     <span class="phase">${esc(S.phase)}</span><span class="gold">${gold}</span></div>`;
 }
 
+// ---------- ASCII map ----------
+// Marker chars/colors mirror tui/widgets/map_viewer.py; the statuses,
+// path frontier, and tap actions come resolved from the server (MapVM).
+const MAP_LINE_H = 14; // must match .mapwrap line-height
+const MAP_MARKERS = {
+  zone:      {locked: ["?", "#555555", 0], available: ["o", "#e6c566", 1], cleared: ["*", "#44aa44", 1]},
+  town:      {locked: ["?", "#555555", 0], available: ["T", "#c8a2c8", 1], cleared: ["T", "#c8a2c8", 1]},
+  building:  {locked: ["?", "#555555", 0], available: ["o", "#e6c566", 1], cleared: ["o", "#e6c566", 1]},
+  exit:      {locked: ["?", "#555555", 0], available: ["V", "#cc8866", 1], cleared: ["V", "#cc8866", 1]},
+  encounter: {locked: [".", "#333333", 0], available: ["o", "#e6c566", 1], cleared: ["*", "#44aa44", 1]},
+  boss:      {locked: [".", "#333333", 0], available: ["#", "#cc4444", 1], cleared: ["*", "#44aa44", 1]},
+};
+const MAP_TERRAIN = {
+  "~": "#335588", "*": "#886655", ".": "#444444", "|": "#555555", "/": "#555555",
+  "\\": "#555555", "_": "#555555", "-": "#444444", "=": "#555555", "(": "#555555",
+  ")": "#555555", "[": "#555555", "]": "#555555", "{": "#555555", "}": "#555555",
+  "#": "#555555", "+": "#555555",
+};
+function terrainStyle(ch) {
+  if (ch === " ") return null;
+  if (MAP_TERRAIN[ch]) return [MAP_TERRAIN[ch], 0];
+  if (/[a-zA-Z]/.test(ch)) return ["#666666", 0];
+  return ["#555555", 0];
+}
+function mapHtml(m, selId) {
+  const H = m.art.length, W = m.width;
+  const grid = m.art.map(line => Array.from(line.padEnd(W)));
+  const style = Array.from({length: H}, () => new Array(W).fill(null));
+  for (const c of (m.path_cells || [])) {
+    if (c.row >= 0 && c.row < H && c.col >= 0 && c.col < W)
+      style[c.row][c.col] = [c.traversed ? "#44aa44" : "#333333", 0];
+  }
+  for (const a of m.anchors) {
+    if (a.row < 0 || a.row >= H || a.col < 0 || a.col >= W) continue;
+    if (a.id === selId) {
+      grid[a.row][a.col] = "X"; style[a.row][a.col] = ["#e6c566", 1];
+      if (a.row >= 1 && a.col + 1 < W) {  // selection flag |>
+        grid[a.row - 1][a.col] = "|"; grid[a.row - 1][a.col + 1] = ">";
+        style[a.row - 1][a.col] = ["#e6c566", 1];
+        style[a.row - 1][a.col + 1] = ["#e6c566", 1];
+      }
+    } else {
+      const table = MAP_MARKERS[a.anchor_type] || MAP_MARKERS.zone;
+      const mk = table[a.status] || table.locked;
+      grid[a.row][a.col] = mk[0]; style[a.row][a.col] = [mk[1], mk[2]];
+    }
+  }
+  let out = "";
+  for (let r = 0; r < H; r++) {
+    let run = "", cur = null;
+    const flush = () => {
+      if (!run) return;
+      out += cur
+        ? `<span style="color:${cur[0]}${cur[1] ? ";font-weight:700" : ""}">${esc(run)}</span>`
+        : esc(run);
+      run = "";
+    };
+    for (let c = 0; c < W; c++) {
+      const st = style[r][c] || terrainStyle(grid[r][c]);
+      const key = st ? st[0] + st[1] : "";
+      if (key !== (cur ? cur[0] + cur[1] : "")) { flush(); cur = st; }
+      run += grid[r][c];
+    }
+    flush();
+    out += "\n";
+  }
+  return out;
+}
+function mapDetailCard(m) {
+  const a = m.anchors.find(x => x.id === ui.mapSel);
+  if (!a) return "";
+  let btn = "";
+  switch (a.tap_action) {
+    case "enter_zone":
+      btn = `<button class="primary" data-a="enter-zone" data-id="${esc(a.id)}">${a.status === "cleared" ? "Re-enter" : "Embark"}</button>`; break;
+    case "enter_town":
+      btn = `<button class="gold" data-a="enter-town" data-id="${esc(a.id)}">⌂ Visit</button>`; break;
+    case "fight":
+      btn = `<button class="primary" data-a="fight">⚔ Fight</button>`; break;
+    case "leave_zone":
+      btn = `<button data-a="leave-zone">← Leave</button>`; break;
+    case "leave_town":
+      btn = `<button data-a="leave-town">← Leave</button>`; break;
+    case "travel":
+      btn = `<button class="gold" data-a="map-travel" data-id="${esc(a.travel_to || "")}">Travel →</button>`; break;
+    case "shop":
+      btn = `<button data-a="map-goto" data-id="shop-section">Browse ▾</button>`; break;
+    case "lodge":
+      btn = `<button data-a="map-goto" data-id="lodge-card">Rest ▾</button>`; break;
+  }
+  return `<div class="card"><div class="row">
+    <div class="grow"><span class="name small">${esc(a.label || a.id)}</span>
+      ${a.detail ? `<div class="dim small">${esc(a.detail)}</div>` : ""}
+      ${a.status === "locked" ? `<div class="dim small">locked</div>` : ""}</div>
+    ${btn}</div></div>`;
+}
+function mapPanel(m) {
+  if (!m || !m.art.length) return "";
+  if (ui.mapKey !== m.map_key || !m.anchors.some(a => a.id === ui.mapSel)) {
+    ui.mapKey = m.map_key;
+    ui.mapSel = m.initial_id;
+    ui.mapScrolled = false;
+  }
+  const taps = m.navigable_ids.map(id => {
+    const a = m.anchors.find(x => x.id === id);
+    if (!a) return "";
+    return `<div class="maptap" data-a="map-sel" data-id="${esc(id)}"
+      style="left:calc(${a.col}ch + 0.5ch);top:${a.row * MAP_LINE_H + MAP_LINE_H / 2}px"></div>`;
+  }).join("");
+  return `<div class="mapscroll" id="mapscroll"><div class="mapwrap">
+    <pre class="map">${mapHtml(m, ui.mapSel)}</pre>${taps}</div></div>` + mapDetailCard(m);
+}
+function restoreMapScroll() {
+  const sc = document.getElementById("mapscroll");
+  if (!sc) return;
+  if (ui.mapScrolled && ui.mapScroll) {
+    sc.scrollLeft = ui.mapScroll.left; sc.scrollTop = ui.mapScroll.top;
+    return;
+  }
+  // First render of this map: center on the selected anchor
+  const sel = S.map && S.map.anchors.find(a => a.id === ui.mapSel);
+  if (sel) {
+    sc.scrollLeft = Math.max(0, sel.col * charWidth(sc) + 6 - sc.clientWidth / 2);
+    sc.scrollTop = Math.max(0, sel.row * MAP_LINE_H + 6 - sc.clientHeight / 2);
+  }
+  ui.mapScrolled = true;
+  ui.mapScroll = {left: sc.scrollLeft, top: sc.scrollTop};
+}
+function charWidth(scroller) {
+  const pre = scroller.querySelector("pre.map");
+  if (!pre || !S.map || !S.map.width) return 7;
+  return pre.getBoundingClientRect().width / S.map.width;
+}
+
 // ---------- screens ----------
 function screenSetup(headerHtml) {
   const jobs = S.jobs.map(j => `
@@ -415,9 +559,14 @@ function screenZoneSelect() {
       <span class="dim">Lv${z.zone_level}</span></div>
       <div class="dim small">${z.n_encounters} fights${z.recruitment_chance > 0 ? ` · recruit ${Math.round(z.recruitment_chance * 100)}%` : ""}</div>
     </div>`).join("");
-  return topbar() + partyStrip() +
-    (towns ? `<div class="section">TOWN</div>${towns}` : "") +
-    `<div class="section">ZONES</div>${zones}` +
+  const map = mapPanel(S.map);
+  const list = map
+    ? `<details><summary>All destinations (list)</summary>
+        ${towns ? `<div class="section">TOWN</div>${towns}` : ""}
+        <div class="section">ZONES</div>${zones}</details>`
+    : (towns ? `<div class="section">TOWN</div>${towns}` : "") +
+      `<div class="section">ZONES</div>${zones}`;
+  return topbar() + map + partyStrip() + list +
     stashPanel({use: true}) + partyDetails() +
     `<div class="card"><button style="width:100%" data-a="save">Save run</button></div>`;
 }
@@ -433,15 +582,16 @@ function screenTown() {
   }).join("");
   return topbar() + `
     <div class="card"><div class="name">⌂ ${esc(t.name || "Town")}</div></div>
+    ${mapPanel(S.map)}
     ${partyStrip()}
-    <div class="card"><div class="row">
+    <div class="card" id="lodge-card"><div class="row">
       <div class="grow">Lodge — full heal<div class="dim small">resets progress in uncleared zones</div></div>
       ${ui.confirm === "rest"
         ? `<button class="danger" data-a="rest">Rest — ${t.lodge_cost != null ? t.lodge_cost + "g" : "?"}</button>
            <button data-a="confirm-cancel">✕</button>`
         : `<button class="gold" data-a="confirm-arm" data-key="rest">${t.lodge_cost != null ? t.lodge_cost + "g" : "rest"}</button>`}
     </div></div>
-    <div class="section">SHOP</div>${shop}
+    <div class="section" id="shop-section">SHOP</div>${shop}
     <div class="section">YOURS</div>${stashPanel({use: true, sell: true})}
     ${partyDetails()}
     <div class="sticky-bottom"><button class="primary" data-a="leave-town">Leave Town</button></div>`;
@@ -454,6 +604,7 @@ function screenZone() {
   return topbar() + `
     <div class="card"><div class="name">${esc(z.name || "?")}</div>
       <div class="dim">${prog}</div></div>
+    ${mapPanel(S.map)}
     ${partyStrip()}
     <div style="margin:10px 0"><button class="primary" data-a="fight">⚔ Fight</button></div>
     ${stashPanel({use: true})} ${partyDetails()}
@@ -698,6 +849,10 @@ function render() {
   const app = document.getElementById("app");
   const nameEl = document.getElementById("mc-name");
   const savedName = nameEl ? nameEl.value : null;
+  const oldMapScroll = document.getElementById("mapscroll");
+  if (oldMapScroll) {
+    ui.mapScroll = {left: oldMapScroll.scrollLeft, top: oldMapScroll.scrollTop};
+  }
   let html;
   switch (S.phase) {
     case "SETUP": html = screenSetup(); break;
@@ -714,6 +869,7 @@ function render() {
   app.innerHTML = html;
   const nameEl2 = document.getElementById("mc-name");
   if (nameEl2 && savedName != null) nameEl2.value = savedName;
+  restoreMapScroll();
   const log = document.getElementById("log");
   if (log) log.scrollTop = log.scrollHeight;
 }
@@ -736,6 +892,16 @@ document.addEventListener("click", (ev) => {
     case "enter-zone": act("enter_zone", {zone_id: id}); break;
     case "leave-zone": act("leave_zone"); break;
     case "enter-town": act("enter_town", {town_id: id}); break;
+    case "map-sel": ui.mapSel = id; render(); break;
+    case "map-goto": document.getElementById(id)?.scrollIntoView({behavior: "smooth"}); break;
+    case "map-travel": {
+      // Boss travel tile: leave the cleared zone, then enter the next one.
+      (async () => {
+        await api("/api/action", {tool: "leave_zone", args: {}});
+        if (S && !S.error) await api("/api/action", {tool: "enter_zone", args: {zone_id: id}});
+      })();
+      break;
+    }
     case "leave-town": act("leave_town"); break;
     case "rest": act("rest_at_lodge"); break;
     case "buy": act("shop_buy", {item_id: id}); break;
