@@ -133,3 +133,36 @@ def test_tap_never_breaks_the_sim(tmp_path: Path, game_data: GameData):
         data_tap=tap,
     )
     assert result.encounters_cleared >= 0  # run completed normally
+
+
+def test_tap_failure_is_logged_not_silent(
+    tmp_path: Path, game_data: GameData, caplog, monkeypatch,
+):
+    """Swallowed tap failures emit a rate-limited warning (data loss!)."""
+    import logging
+
+    import heresiarch.tools.data_tap as data_tap_mod
+    from heresiarch.logutil import RateLimitedLogger
+
+    # Fresh limiter: another test may have burned this key's window.
+    monkeypatch.setattr(data_tap_mod, "_rate_limited", RateLimitedLogger())
+
+    class BrokenTap(DataTap):
+        def _flush(self):  # type: ignore[override]
+            raise OSError("disk on fire")
+
+    tap = BrokenTap(tmp_path / "x.jsonl.gz", mc_job_id="einherjar",
+                    seed=7, game_data=game_data)
+    with caplog.at_level(logging.WARNING, "heresiarch.tools.data_tap"):
+        result = simulate_run(
+            mc_job_id="einherjar",
+            combat_policy=FloorCombatPolicy(),
+            macro_policy=FloorPlusMacroPolicy(),
+            seed=7,
+            max_encounters=15,
+            game_data=game_data,
+            data_tap=tap,
+        )
+    assert result.encounters_cleared >= 0  # run still completed normally
+    assert "on_run_end failed" in caplog.text
+    assert "OSError" in caplog.text

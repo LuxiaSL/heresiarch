@@ -1,0 +1,261 @@
+{
+  "kind": "combat",
+  "model_kind": "mlp",
+  "features_version": 1,
+  "feature_names": [
+    "round_n",
+    "party_pressure",
+    "enemy_pressure",
+    "job_berserker",
+    "job_einherjar",
+    "job_martyr",
+    "job_onmyoji",
+    "job_sacrist",
+    "p_agg_n",
+    "p_agg_hp_mean",
+    "p_agg_hp_min",
+    "p_agg_hp_pool",
+    "p_agg_threats",
+    "p0_alive",
+    "p0_hp_frac",
+    "p0_level_n",
+    "p0_ap_n",
+    "p0_insight_n",
+    "p0_debt_n",
+    "p0_frenzy_level_n",
+    "p0_surviving",
+    "p0_statuses_n",
+    "p0_str_n",
+    "p0_mag_n",
+    "p0_def_n",
+    "p0_res_n",
+    "p0_spd_n",
+    "p1_alive",
+    "p1_hp_frac",
+    "p1_level_n",
+    "p1_ap_n",
+    "p1_insight_n",
+    "p1_debt_n",
+    "p1_frenzy_level_n",
+    "p1_surviving",
+    "p1_statuses_n",
+    "p1_str_n",
+    "p1_mag_n",
+    "p1_def_n",
+    "p1_res_n",
+    "p1_spd_n",
+    "p2_alive",
+    "p2_hp_frac",
+    "p2_level_n",
+    "p2_ap_n",
+    "p2_insight_n",
+    "p2_debt_n",
+    "p2_frenzy_level_n",
+    "p2_surviving",
+    "p2_statuses_n",
+    "p2_str_n",
+    "p2_mag_n",
+    "p2_def_n",
+    "p2_res_n",
+    "p2_spd_n",
+    "e_agg_n",
+    "e_agg_hp_mean",
+    "e_agg_hp_min",
+    "e_agg_hp_pool",
+    "e_agg_threats",
+    "e0_alive",
+    "e0_hp_frac",
+    "e0_level_n",
+    "e0_ap_n",
+    "e0_insight_n",
+    "e0_debt_n",
+    "e0_frenzy_level_n",
+    "e0_surviving",
+    "e0_statuses_n",
+    "e0_str_n",
+    "e0_mag_n",
+    "e0_def_n",
+    "e0_res_n",
+    "e0_spd_n",
+    "e1_alive",
+    "e1_hp_frac",
+    "e1_level_n",
+    "e1_ap_n",
+    "e1_insight_n",
+    "e1_debt_n",
+    "e1_frenzy_level_n",
+    "e1_surviving",
+    "e1_statuses_n",
+    "e1_str_n",
+    "e1_mag_n",
+    "e1_def_n",
+    "e1_res_n",
+    "e1_spd_n",
+    "e2_alive",
+    "e2_hp_frac",
+    "e2_level_n",
+    "e2_ap_n",
+    "e2_insight_n",
+    "e2_debt_n",
+    "e2_frenzy_level_n",
+    "e2_surviving",
+    "e2_statuses_n",
+    "e2_str_n",
+    "e2_mag_n",
+    "e2_def_n",
+    "e2_res_n",
+    "e2_spd_n",
+    "e3_alive",
+    "e3_hp_frac",
+    "e3_level_n",
+    "e3_ap_n",
+    "e3_insight_n",
+    "e3_debt_n",
+    "e3_frenzy_level_n",
+    "e3_surviving",
+    "e3_statuses_n",
+    "e3_str_n",
+    "e3_mag_n",
+    "e3_def_n",
+    "e3_res_n",
+    "e3_spd_n",
+    "e4_alive",
+    "e4_hp_frac",
+    "e4_level_n",
+    "e4_ap_n",
+    "e4_insight_n",
+    "e4_debt_n",
+    "e4_frenzy_level_n",
+    "e4_surviving",
+    "e4_statuses_n",
+    "e4_str_n",
+    "e4_mag_n",
+    "e4_def_n",
+    "e4_res_n",
+    "e4_spd_n"
+  ],
+  "target": "value",
+  "trained_at": "2026-07-10T02:41:50",
+  "metrics": {
+    "r2": 0.8035,
+    "mae": 0.0741,
+    "n_train": 744932,
+    "n_test": 182012,
+    "rows_skipped": 0,
+    "auc_won": 0.9767,
+    "per_job": {
+      "berserker": {
+        "n_test": 9958,
+        "mae": 0.1106,
+        "r2": 0.7422,
+        "auc_won": 0.9494
+      },
+      "einherjar": {
+        "n_test": 47637,
+        "mae": 0.0765,
+        "r2": 0.7951,
+        "auc_won": 0.9649
+      },
+      "martyr": {
+        "n_test": 97408,
+        "mae": 0.0561,
+        "r2": 0.8639,
+        "auc_won": 0.9938
+      },
+      "onmyoji": {
+        "n_test": 6927,
+        "mae": 0.1877,
+        "r2": 0.7055,
+        "auc_won": 0.9639
+      },
+      "sacrist": {
+        "n_test": 20082,
+        "mae": 0.0987,
+        "r2": 0.7755,
+        "auc_won": 0.983
+      }
+    }
+  },
+  "top_importances": [
+    {
+      "feature": "p0_def_n",
+      "importance": 0.30266
+    },
+    {
+      "feature": "p_agg_hp_pool",
+      "importance": 0.23031
+    },
+    {
+      "feature": "e0_def_n",
+      "importance": 0.23029
+    },
+    {
+      "feature": "e0_str_n",
+      "importance": 0.20748
+    },
+    {
+      "feature": "party_pressure",
+      "importance": 0.1576
+    },
+    {
+      "feature": "enemy_pressure",
+      "importance": 0.14899
+    },
+    {
+      "feature": "p1_hp_frac",
+      "importance": 0.12385
+    },
+    {
+      "feature": "e_agg_hp_pool",
+      "importance": 0.1159
+    },
+    {
+      "feature": "p0_str_n",
+      "importance": 0.09752
+    },
+    {
+      "feature": "p1_spd_n",
+      "importance": 0.0871
+    },
+    {
+      "feature": "e0_mag_n",
+      "importance": 0.08511
+    },
+    {
+      "feature": "job_martyr",
+      "importance": 0.07352
+    },
+    {
+      "feature": "p2_spd_n",
+      "importance": 0.07201
+    },
+    {
+      "feature": "p0_hp_frac",
+      "importance": 0.06322
+    },
+    {
+      "feature": "p0_spd_n",
+      "importance": 0.06304
+    },
+    {
+      "feature": "e1_str_n",
+      "importance": 0.05646
+    },
+    {
+      "feature": "p_agg_hp_mean",
+      "importance": 0.05518
+    },
+    {
+      "feature": "p1_res_n",
+      "importance": 0.05412
+    },
+    {
+      "feature": "p1_str_n",
+      "importance": 0.05176
+    },
+    {
+      "feature": "e1_def_n",
+      "importance": 0.05175
+    }
+  ]
+}

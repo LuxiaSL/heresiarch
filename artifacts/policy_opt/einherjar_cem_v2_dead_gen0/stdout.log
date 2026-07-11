@@ -1,0 +1,3 @@
+Live view: uv run python -m heresiarch.tools.watch artifacts/policy_opt/einherjar_cem_v2/progress.jsonl
+Policy optimizer — job=einherjar pop=12 seeds/candidate=6 gens=8 depth=3 workers=14
+Artifacts → artifacts/policy_opt/einherjar_cem_v2

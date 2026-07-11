@@ -1,0 +1,19 @@
+{
+  "params": {
+    "potion_stockpile_target": 3,
+    "potion_stash_cap": 6,
+    "overstay_cap": 20,
+    "overstay_bail_hp_pct": 0.35,
+    "heal_threshold_pct": 0.75,
+    "in_town_heal_target_pct": 1.0,
+    "pre_boss_retreat_hp_pct": 0.9,
+    "lodge_on": false,
+    "lodge_hp_threshold": 0.3,
+    "pit_level_buffer": 5,
+    "town_visit_gold_threshold": 40,
+    "town_visit_hp_threshold": 0.35,
+    "insight_dump_threshold": 6,
+    "kill_safety": 1.0,
+    "heal_safety": 1.2
+  }
+}

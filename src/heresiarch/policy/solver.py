@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Union
 
 from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.models.combat_state import (
@@ -96,6 +96,47 @@ class SolverStats:
     shallow_decides: int = 0   # adaptive depth dropped to 1-ply
     budget_exhausted: int = 0  # decides cut short by the time budget
     model_leaf_evals: int = 0  # leaves scored by the value model
+    model_batch_calls: int = 0  # batched predict calls issued
+
+
+# ---------------------------------------------------------------------------
+# Deferred leaf scoring
+#
+# With leaf_eval="model", single-row model.predict per leaf dominates
+# solver time (~0.21ms/row serial vs ~0.01ms/row batched). The search
+# therefore returns a score *expression* instead of eagerly predicting:
+# floats for terminal/rollout leaves, _DeferredLeaf for model leaves,
+# _MaxOf for inner nodes. decide() collects every deferred leaf across
+# all candidates, issues ONE batched predict, then resolves the trees.
+# Tree shape never depends on leaf values (pruning is heuristic; the
+# wall-clock budget gates on candidate *count*, see decide), so
+# deferral cannot change which nodes get expanded.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _DeferredLeaf:
+    """A leaf state awaiting a (batched) model prediction.
+
+    ``state``/``engine``/``stash`` are retained so a model failure at
+    scoring time can still fall back to heuristic rollout — the model
+    must never kill a sim.
+    """
+
+    state: CombatState
+    engine: CombatEngine
+    stash: list[str]
+    value: float | None = None
+
+
+@dataclass
+class _MaxOf:
+    """Inner search node: score = max(children)."""
+
+    children: list["_ScoreNode"] = field(default_factory=list)
+
+
+_ScoreNode = Union[float, _DeferredLeaf, _MaxOf]
 
 
 class CombatSolver:
@@ -206,11 +247,7 @@ class CombatSolver:
             effective_depth = 1
             self._stats.shallow_decides += 1
 
-        # --- Evaluate each via rollout ---
-        best_score = -1.0
-        best_decision = candidates[0]
-        best_ap_spend = 999
-
+        # --- Evaluate each candidate (leaf scoring may be deferred) ---
         # Snapshot once; restore per-branch
         # We need a RNG for the snapshot. The solver doesn't own the combat
         # RNG directly — it's on the CombatEngine. We create a temporary
@@ -222,25 +259,39 @@ class CombatSolver:
 
         snap = CombatSnapshot.take(state, base_rng)
 
+        scored: list[tuple[PlayerTurnDecision, _ScoreNode]] = []
         for candidate in candidates:
-            if self._over_budget() and best_score >= 0:
+            if self._over_budget() and scored:
                 self._stats.budget_exhausted += 1
                 break
             branch_state, branch_rng = snap.restore()
-            score = self._evaluate_candidate(
+            node = self._evaluate_candidate(
                 branch_state, branch_rng, actor.id, candidate,
                 search_depth=effective_depth,
             )
-            ap_spend = candidate.cheat_actions
+            scored.append((candidate, node))
+            self._stats.candidates_evaluated += 1
 
+        # --- Score all deferred model leaves in one batched predict ---
+        leaves: list[_DeferredLeaf] = []
+        for _, node in scored:
+            _collect_leaves(node, leaves)
+        if leaves:
+            self._score_deferred_leaves(leaves)
+
+        # --- Pick the best candidate (same tie-break as before) ---
+        best_score = -1.0
+        best_decision = candidates[0]
+        best_ap_spend = 999
+        for candidate, node in scored:
+            score = _resolve_score(node)
+            ap_spend = candidate.cheat_actions
             if score > best_score or (
                 score == best_score and ap_spend < best_ap_spend
             ):
                 best_score = score
                 best_decision = candidate
                 best_ap_spend = ap_spend
-
-            self._stats.candidates_evaluated += 1
 
         return best_decision
 
@@ -364,7 +415,7 @@ class CombatSolver:
         actor_id: str,
         candidate: PlayerTurnDecision,
         search_depth: int | None = None,
-    ) -> float:
+    ) -> _ScoreNode:
         """Simulate the candidate decision then search deeper or rollout."""
         depth = search_depth if search_depth is not None else self.config.search_depth
         return self._search_ply(
@@ -381,7 +432,7 @@ class CombatSolver:
         candidate: PlayerTurnDecision,
         depth_remaining: int,
         stash: list[str],
-    ) -> float:
+    ) -> _ScoreNode:
         """Execute one ply: apply candidate, then recurse or rollout.
 
         At depth_remaining > 0: simulate this round, enumerate next
@@ -442,7 +493,7 @@ class CombatSolver:
         actor: CombatantState,
         depth_remaining: int,
         stash: list[str],
-    ) -> float:
+    ) -> _ScoreNode:
         """Enumerate candidates for the next round and search recursively."""
         legal = compute_legal(state, actor, stash=stash)
 
@@ -491,51 +542,138 @@ class CombatSolver:
         if len(candidates) > prune_to:
             candidates = _heuristic_prune(candidates, prune_to)
 
-        best_score = -1.0
+        children: list[_ScoreNode] = []
         for cand in candidates:
-            if self._over_budget() and best_score >= 0:
+            if self._over_budget() and children:
                 break
             branch_state, branch_rng = snap.restore()
-            score = self._search_ply(
+            children.append(self._search_ply(
                 branch_state, branch_rng, actor_id, cand,
                 depth_remaining=depth_remaining - 1,
                 stash=stash,
-            )
-            if score > best_score:
-                best_score = score
+            ))
             self._stats.candidates_evaluated += 1
 
-        return best_score
+        if not children:
+            return -1.0
+        if all(isinstance(c, float) for c in children):
+            return max(children)  # type: ignore[type-var, arg-type]
+        return _MaxOf(children)
+
+    def _use_model_leaves(self) -> bool:
+        return (
+            self.value_fn is not None
+            and self.config.leaf_eval == "model"
+            and not self._model_failed
+        )
 
     def _rollout_to_end(
         self,
         state: CombatState,
         engine: CombatEngine,
         stash: list[str],
-    ) -> float:
+    ) -> _ScoreNode:
         """Score a leaf state: learned value model or heuristic rollout.
 
-        With ``leaf_eval == "model"`` and a value_fn, the state is
-        scored by one model prediction on the same [0, 2] scale
-        ``evaluate_terminal`` uses. ``model_leaf_rollout_rounds`` first
-        plays K heuristic rounds so the leaf sees the immediate
-        consequences (a burst resolving, a kill confirming) before the
-        model judges the settled position — the designer's onmyoji
-        diagnosis: banked insight pays off a turn or two beyond where
-        a bare leaf can see. Any model failure downgrades to full
+        With ``leaf_eval == "model"`` and a value_fn,
+        ``model_leaf_rollout_rounds`` first plays K heuristic rounds so
+        the leaf sees the immediate consequences (a burst resolving, a
+        kill confirming) before the model judges the settled position —
+        the designer's onmyoji diagnosis: banked insight pays off a
+        turn or two beyond where a bare leaf can see. Scoring itself is
+        deferred — decide() batches every settled leaf of the decision
+        into one model predict on the same [0, 2] scale
+        ``evaluate_terminal`` uses. Any model failure downgrades to
         rollout for the rest of the process (warn once, never crash).
         """
-        model_mode = (
-            self.value_fn is not None
-            and self.config.leaf_eval == "model"
-            and not self._model_failed
+        if self._use_model_leaves():
+            state, remaining_stash = self._play_rollout_rounds(
+                state, engine, stash,
+                self.config.model_leaf_rollout_rounds,
+            )
+            if state.is_finished:
+                return evaluate_terminal(state)
+            return _DeferredLeaf(
+                state=state, engine=engine, stash=remaining_stash,
+            )
+
+        return self._heuristic_rollout(state, engine, stash)
+
+    def _score_deferred_leaves(self, leaves: list[_DeferredLeaf]) -> None:
+        """Assign values to deferred leaves; model first, rollout fallback.
+
+        A ``ModelValueFn`` scores every leaf with one batched predict.
+        A plain callable value_fn (tests, custom hooks) is called once
+        per leaf. Both receive the leaf's stash context (v2 features).
+        Any failure marks the model dead for this process and rolls out
+        the still-unscored leaves — never crashes the sim.
+        """
+        if self._use_model_leaves():
+            value_fn = self.value_fn
+            batch = getattr(value_fn, "value_batch", None)
+            potions = [
+                sum(1 for i in leaf.stash if i in self._heal_item_ids)
+                for leaf in leaves
+            ]
+            sizes = [len(leaf.stash) for leaf in leaves]
+            try:
+                if callable(batch):
+                    values = batch(
+                        [leaf.state for leaf in leaves], self._mc_job_id,
+                        stash_potions=potions, stash_sizes=sizes,
+                    )
+                    for leaf, value in zip(leaves, values):
+                        leaf.value = float(value)
+                    self._stats.model_leaf_evals += len(leaves)
+                    self._stats.model_batch_calls += 1
+                    return
+                assert value_fn is not None  # _use_model_leaves guarantees
+                for leaf, n_potions, size in zip(leaves, potions, sizes):
+                    leaf.value = float(value_fn(
+                        leaf.state, self._mc_job_id, n_potions, size,
+                    ))
+                    self._stats.model_leaf_evals += 1
+                return
+            except Exception as exc:  # noqa: BLE001 — model must never kill a sim
+                self._model_failed = True
+                logger.warning(
+                    "Combat value model failed (%s: %s) — falling back "
+                    "to heuristic rollout leaves.", type(exc).__name__, exc,
+                )
+
+        for leaf in leaves:
+            if leaf.value is None:
+                leaf.value = self._heuristic_rollout(
+                    leaf.state, leaf.engine, leaf.stash,
+                )
+
+    def _heuristic_rollout(
+        self,
+        state: CombatState,
+        engine: CombatEngine,
+        stash: list[str],
+    ) -> float:
+        """Play out remaining rounds with the heuristic rollout policy."""
+        state, _ = self._play_rollout_rounds(
+            state, engine, stash, self.config.max_rollout_rounds,
         )
+        return evaluate_terminal(state)
+
+    def _play_rollout_rounds(
+        self,
+        state: CombatState,
+        engine: CombatEngine,
+        stash: list[str],
+        max_rounds: int,
+    ) -> tuple[CombatState, list[str]]:
+        """Advance up to ``max_rounds`` heuristic rounds.
+
+        Returns the settled state and the stash that survived it —
+        shared by full heuristic rollouts (max_rollout_rounds) and the
+        hybrid model-leaf settle (model_leaf_rollout_rounds).
+        """
         remaining_stash = list(stash)
         rounds = 0
-        if model_mode:
-            max_rounds = self.config.model_leaf_rollout_rounds
-        else:
-            max_rounds = self.config.max_rollout_rounds
         no_progress_cap = self.config.rollout_no_progress_rounds
         no_progress = 0
         prev_hp = _hp_signature(state)
@@ -573,30 +711,7 @@ class CombatSolver:
             state.consumed_items = []
 
         self._stats.rollout_rounds_total += rounds
-
-        if model_mode:
-            if state.is_finished:
-                return evaluate_terminal(state)
-            try:
-                potions = sum(
-                    1 for i in remaining_stash if i in self._heal_item_ids
-                )
-                value = self.value_fn(
-                    state, self._mc_job_id, potions, len(remaining_stash),
-                )
-            except Exception as exc:  # noqa: BLE001 — model must never kill a sim
-                self._model_failed = True
-                logger.warning(
-                    "Combat value model failed (%s: %s) — falling back "
-                    "to heuristic rollout leaves.", type(exc).__name__, exc,
-                )
-                # Finish this leaf honestly with a full rollout.
-                return self._rollout_to_end(state, engine, remaining_stash)
-            else:
-                self._stats.model_leaf_evals += 1
-                return value
-
-        return evaluate_terminal(state)
+        return state, remaining_stash
 
 
 def evaluate_terminal(state: CombatState) -> float:
@@ -625,6 +740,28 @@ def evaluate_terminal(state: CombatState) -> float:
         p.current_hp / max(1, p.max_hp) for p in players
     ) / len(players)
     return 0.5 * hp_ratio
+
+
+def _collect_leaves(node: _ScoreNode, out: list[_DeferredLeaf]) -> None:
+    """Gather deferred leaves depth-first (stable evaluation order)."""
+    if isinstance(node, _DeferredLeaf):
+        out.append(node)
+    elif isinstance(node, _MaxOf):
+        for child in node.children:
+            _collect_leaves(child, out)
+
+
+def _resolve_score(node: _ScoreNode) -> float:
+    """Collapse a score expression once every leaf has a value."""
+    if isinstance(node, _DeferredLeaf):
+        if node.value is None:  # defensive: scoring must precede resolve
+            raise RuntimeError("deferred leaf resolved before scoring")
+        return node.value
+    if isinstance(node, _MaxOf):
+        if not node.children:  # defensive: built non-empty in search
+            return -1.0
+        return max(_resolve_score(child) for child in node.children)
+    return node
 
 
 def _hp_signature(state: CombatState) -> tuple[int, ...]:

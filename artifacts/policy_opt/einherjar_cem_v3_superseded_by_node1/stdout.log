@@ -1,0 +1,5 @@
+Live view: uv run python -m heresiarch.tools.watch artifacts/policy_opt/einherjar_cem_v3/progress.jsonl
+Theater:   uv run python -m heresiarch.tools.theater --follow --db artifacts/policy_opt/einherjar_cem_v3/records.db
+Warm start: CEM mean from artifacts/policy_opt/einherjar_cem_v1/best.json
+Policy optimizer — job=einherjar pop=12 seeds/candidate=6 gens=6 depth=3 workers=14
+Artifacts → artifacts/policy_opt/einherjar_cem_v3

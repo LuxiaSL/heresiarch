@@ -17,7 +17,7 @@ import logging
 import math
 import pickle
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 from heresiarch.policy.features import FEATURES_VERSION, combat_features
 
@@ -61,6 +61,66 @@ def job_leaf_defaults(job_id: str) -> tuple[str, int]:
 DEFAULT_MODEL_PATH = Path(
     f"artifacts/models/combat_value_v{FEATURES_VERSION}.pkl"
 )
+
+
+class ModelValueFn:
+    """Trained-model CombatValueFn with a batched variant.
+
+    ``__call__`` keeps the one-state v2 contract (stash context args).
+    ``value_batch`` scores N states with a single ``model.predict``
+    call — sklearn's per-call overhead dominates single-row prediction
+    (~0.21ms/row serial vs ~0.01ms/row batched), so the solver collects
+    leaves and predicts once per decision (see
+    solver._score_deferred_leaves).
+
+    Both paths clamp to evaluate_terminal's [0, 2] scale and raise
+    ``ValueError`` on non-finite predictions so callers can trip their
+    rollback-to-rollout handling.
+    """
+
+    def __init__(self, model: Any) -> None:
+        self._model = model
+
+    def __call__(
+        self, state: CombatState, mc_job_id: str,
+        stash_potions: int = 0, stash_size: int = 0,
+    ) -> float:
+        return self.value_batch(
+            [state], mc_job_id,
+            stash_potions=[stash_potions], stash_sizes=[stash_size],
+        )[0]
+
+    def value_batch(
+        self, states: Sequence[CombatState], mc_job_id: str,
+        stash_potions: Sequence[int] | None = None,
+        stash_sizes: Sequence[int] | None = None,
+    ) -> list[float]:
+        if not states:
+            return []
+        if stash_potions is None:
+            stash_potions = [0] * len(states)
+        if stash_sizes is None:
+            stash_sizes = [0] * len(states)
+        xs = [
+            combat_features(
+                s, mc_job_id,
+                stash_potions=n_potions, stash_size=size,
+            )
+            for s, n_potions, size in zip(states, stash_potions, stash_sizes)
+        ]
+        preds = self._model.predict(xs)
+        out: list[float] = []
+        for v in preds:
+            fv = float(v)
+            if not math.isfinite(fv):
+                raise ValueError(f"model predicted non-finite value {fv!r}")
+            out.append(min(2.0, max(0.0, fv)))
+        if len(out) != len(states):
+            raise ValueError(
+                f"model returned {len(out)} predictions for "
+                f"{len(states)} states"
+            )
+        return out
 
 # Per-process cache: multiprocessing workers each load the artifact
 # once instead of per (candidate, seed) task. None results are cached
@@ -128,19 +188,4 @@ def _load_uncached(path: Path) -> CombatValueFn | None:
         )
         return None
 
-    model = payload["model"]
-
-    def value_fn(
-        state: CombatState, mc_job_id: str,
-        stash_potions: int = 0, stash_size: int = 0,
-    ) -> float:
-        x = combat_features(
-            state, mc_job_id,
-            stash_potions=stash_potions, stash_size=stash_size,
-        )
-        v = float(model.predict([x])[0])
-        if not math.isfinite(v):
-            raise ValueError(f"model predicted non-finite value {v!r}")
-        return min(2.0, max(0.0, v))
-
-    return value_fn
+    return ModelValueFn(payload["model"])

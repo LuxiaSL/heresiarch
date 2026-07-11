@@ -1,0 +1,130 @@
+{
+  "kind": "macro",
+  "model_kind": "mlp",
+  "features_version": 1,
+  "feature_names": [
+    "mc_level_n",
+    "mc_hp_frac",
+    "party_size_n",
+    "party_hp_mean",
+    "gold_n",
+    "potions_n",
+    "stash_used_n",
+    "zone_level_n",
+    "zone_level_delta_n",
+    "encounter_index_n",
+    "zones_completed_n",
+    "in_cleared_zone",
+    "job_berserker",
+    "job_einherjar",
+    "job_martyr",
+    "job_onmyoji",
+    "job_sacrist"
+  ],
+  "target": "zones_ahead",
+  "trained_at": "2026-07-10T02:42:37",
+  "metrics": {
+    "r2": 0.6316,
+    "mae": 0.6269,
+    "n_train": 180288,
+    "n_test": 43489,
+    "rows_skipped": 0,
+    "per_job": {
+      "berserker": {
+        "n_test": 3769,
+        "mae": 0.7754,
+        "r2": -0.0014
+      },
+      "einherjar": {
+        "n_test": 11143,
+        "mae": 0.9034,
+        "r2": 0.4043
+      },
+      "martyr": {
+        "n_test": 17470,
+        "mae": 0.2939,
+        "r2": 0.8348
+      },
+      "onmyoji": {
+        "n_test": 1845,
+        "mae": 0.31,
+        "r2": -0.0628
+      },
+      "sacrist": {
+        "n_test": 9262,
+        "mae": 0.9249,
+        "r2": 0.437
+      }
+    }
+  },
+  "top_importances": [
+    {
+      "feature": "zones_completed_n",
+      "importance": 1.04008
+    },
+    {
+      "feature": "zone_level_n",
+      "importance": 0.50997
+    },
+    {
+      "feature": "gold_n",
+      "importance": 0.50484
+    },
+    {
+      "feature": "job_martyr",
+      "importance": 0.49886
+    },
+    {
+      "feature": "mc_level_n",
+      "importance": 0.39677
+    },
+    {
+      "feature": "job_einherjar",
+      "importance": 0.1383
+    },
+    {
+      "feature": "stash_used_n",
+      "importance": 0.09877
+    },
+    {
+      "feature": "job_sacrist",
+      "importance": 0.09235
+    },
+    {
+      "feature": "zone_level_delta_n",
+      "importance": 0.06489
+    },
+    {
+      "feature": "job_berserker",
+      "importance": 0.06159
+    },
+    {
+      "feature": "party_size_n",
+      "importance": 0.05742
+    },
+    {
+      "feature": "job_onmyoji",
+      "importance": 0.04994
+    },
+    {
+      "feature": "in_cleared_zone",
+      "importance": 0.04965
+    },
+    {
+      "feature": "encounter_index_n",
+      "importance": 0.04158
+    },
+    {
+      "feature": "party_hp_mean",
+      "importance": 0.01467
+    },
+    {
+      "feature": "mc_hp_frac",
+      "importance": 0.00394
+    },
+    {
+      "feature": "potions_n",
+      "importance": 0.0
+    }
+  ]
+}

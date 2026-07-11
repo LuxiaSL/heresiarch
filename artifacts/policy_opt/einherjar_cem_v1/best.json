@@ -1,0 +1,41 @@
+{
+  "job": "einherjar",
+  "generation": 8,
+  "mean_fitness": 637.5,
+  "win_rate": 0.0,
+  "mean_zones": 6.0,
+  "params": {
+    "potion_stockpile_target": 1,
+    "potion_stash_cap": 5,
+    "overstay_cap": 17,
+    "overstay_bail_hp_pct": 0.2968,
+    "heal_threshold_pct": 0.3663,
+    "in_town_heal_target_pct": 0.9491,
+    "pre_boss_retreat_hp_pct": 0.9484,
+    "lodge_on": false,
+    "lodge_hp_threshold": 0.3279,
+    "pit_level_buffer": 5,
+    "town_visit_gold_threshold": 78,
+    "town_visit_hp_threshold": 0.5635,
+    "insight_dump_threshold": 6,
+    "kill_safety": 1.0307,
+    "heal_safety": 0.9206
+  },
+  "baseline_params": {
+    "potion_stockpile_target": 1,
+    "potion_stash_cap": 5,
+    "overstay_cap": 20,
+    "overstay_bail_hp_pct": 0.25,
+    "heal_threshold_pct": 0.55,
+    "in_town_heal_target_pct": 1.0,
+    "pre_boss_retreat_hp_pct": 0.9,
+    "lodge_on": false,
+    "lodge_hp_threshold": 0.3,
+    "pit_level_buffer": 5,
+    "town_visit_gold_threshold": 50,
+    "town_visit_hp_threshold": 0.6,
+    "insight_dump_threshold": 6,
+    "kill_safety": 1.0,
+    "heal_safety": 1.0
+  }
+}

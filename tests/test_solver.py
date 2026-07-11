@@ -1,12 +1,8 @@
 """Tests for the combat solver: enumerator, rollout, and full solver."""
 
 import random
-from pathlib import Path
-
-import pytest
-
 from heresiarch.engine.combat import CombatEngine
-from heresiarch.engine.data_loader import GameData, load_all
+from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.formulas import (
     calculate_effective_stats,
     calculate_max_hp,
@@ -26,16 +22,6 @@ from heresiarch.policy.rollout import HeuristicRolloutPolicy
 from heresiarch.policy.solver import CombatSolver, SolverConfig, evaluate_terminal
 from heresiarch.policy.validation import compute_legal
 from tests.conftest import _make_character
-
-
-@pytest.fixture
-def game_data() -> GameData:
-    return load_all(Path("data"))
-
-
-@pytest.fixture
-def seeded_rng() -> random.Random:
-    return random.Random(42)
 
 
 def _make_combat(

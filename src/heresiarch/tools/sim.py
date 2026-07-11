@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from heresiarch.engine.data_loader import load_all
 from heresiarch.engine.formulas import (
@@ -292,14 +292,67 @@ def cmd_sigmoid(args: argparse.Namespace) -> None:
     print(sigmoid_explorer(args.max, args.mid, args.rate))
 
 
-def _run_one_seed(args: tuple):
+class _SeedTask(NamedTuple):
+    """One (seed, config) work unit for :func:`_run_one_seed`.
+
+    A NamedTuple rather than a bare tuple so the field count is checked
+    at construction time — the old 16-way positional unpack silently
+    broke whenever a caller and the worker disagreed on arity.
+    Trailing fields default so lighter callers (deep-analyze) can omit
+    the tap/model knobs.
+    """
+
+    seed: int
+    job_id: str
+    policy_name: str
+    macro_name: str
+    data_path: str
+    max_enc: int
+    db_path: str
+    solver_depth: int
+    solver_prune: int
+    macro_lookahead: int
+    macro_params_path: str = ""
+    adaptive: bool = False
+    record_every: int = 0
+    tap_dir: str = ""
+    leaf_eval: str = "rollout"
+    model_path: str = ""
+    leaf_rollout: int = 0
+
+
+# Per-process GameData cache, keyed by data path. Populated by the
+# pool initializer so each worker loads YAML once instead of per seed
+# (~0.4s/load). Falls back to an on-demand load for direct callers.
+_WORKER_GAME_DATA: dict[str, "GameData"] = {}
+
+
+def _worker_init(data_path: str) -> None:
+    """Pool initializer: load GameData once per worker process."""
+    from heresiarch.engine.data_loader import load_all as _load_all
+
+    _WORKER_GAME_DATA[data_path] = _load_all(Path(data_path))
+
+
+def _worker_game_data(data_path: str) -> "GameData":
+    """Cached GameData for this process; loads and caches on miss."""
+    gd = _WORKER_GAME_DATA.get(data_path)
+    if gd is None:
+        from heresiarch.engine.data_loader import load_all as _load_all
+
+        gd = _load_all(Path(data_path))
+        _WORKER_GAME_DATA[data_path] = gd
+    return gd
+
+
+def _run_one_seed(task: _SeedTask | tuple):
     """Worker function for parallel multi-seed runs.
 
-    Each worker loads its own GameData and constructs fresh policies
-    to avoid shared mutable state across processes.
+    GameData comes from the per-process cache (see ``_worker_init``);
+    policies are constructed fresh per seed to avoid shared mutable
+    state across simulations.
     """
     from heresiarch.analytics.record_db import RecordDB as _RecordDB
-    from heresiarch.engine.data_loader import load_all as _load_all
     from heresiarch.policy.builtin.default_macro import DefaultMacroPolicy
     from heresiarch.policy.builtin.floor import FloorCombatPolicy
     from heresiarch.policy.builtin.floor_plus import (
@@ -320,13 +373,15 @@ def _run_one_seed(args: tuple):
     from heresiarch.policy.solver import make_solver
     from heresiarch.tools.run_driver import simulate_run as _simulate_run
 
+    if not isinstance(task, _SeedTask):
+        task = _SeedTask(*task)
     (
         seed, job_id, policy_name, macro_name, data_path, max_enc, db_path,
         solver_depth, solver_prune, macro_lookahead, macro_params_path,
         adaptive, record_every, tap_dir, leaf_eval, model_path,
         leaf_rollout,
-    ) = args
-    gd = _load_all(Path(data_path))
+    ) = task
+    gd = _worker_game_data(data_path)
 
     from heresiarch.policy.solver import SolverConfig
 
@@ -580,22 +635,24 @@ def cmd_run(args: argparse.Namespace) -> None:
     if args.workers > 1 and len(seeds) > 1:
         import multiprocessing
 
+        data_path = str(Path("data"))
         worker_args = [
-            (
-                seed, args.job,
-                args.policy, args.macro,
-                str(Path("data")),
-                args.max_encounters,
-                args.record_db or "",
-                args.solver_depth, args.solver_prune,
-                args.macro_lookahead,
-                macro_params_path or "",
-                getattr(args, "adaptive", False),
-                getattr(args, "record_every", 0),
-                getattr(args, "tap_out", "") or "",
-                leaf_eval,
-                model_path,
-                leaf_rollout,
+            _SeedTask(
+                seed=seed, job_id=args.job,
+                policy_name=args.policy, macro_name=args.macro,
+                data_path=data_path,
+                max_enc=args.max_encounters,
+                db_path=args.record_db or "",
+                solver_depth=args.solver_depth,
+                solver_prune=args.solver_prune,
+                macro_lookahead=args.macro_lookahead,
+                macro_params_path=macro_params_path or "",
+                adaptive=getattr(args, "adaptive", False),
+                record_every=getattr(args, "record_every", 0),
+                tap_dir=getattr(args, "tap_out", "") or "",
+                leaf_eval=leaf_eval,
+                model_path=model_path,
+                leaf_rollout=leaf_rollout,
             )
             for seed in seeds
         ]
@@ -603,7 +660,9 @@ def cmd_run(args: argparse.Namespace) -> None:
         if args.progress:
             print(f"  Running {len(seeds)} seeds across {n_workers} "
                   f"workers...", file=sys.stderr)
-        with multiprocessing.Pool(n_workers) as pool:
+        with multiprocessing.Pool(
+            n_workers, initializer=_worker_init, initargs=(data_path,),
+        ) as pool:
             for r in pool.imap_unordered(_run_one_seed, worker_args):
                 results.append(r)
                 if args.progress:
@@ -690,19 +749,23 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
     # --- Phase 1: Broad sweep ---
     print(f"=== Phase 1: Broad sweep ({args.n} seeds, depth={args.broad_depth}) ===", file=sys.stderr)
     macro_lookahead = getattr(args, "macro_lookahead", 3)
+    data_path = str(Path("data"))
     broad_args = [
-        (
-            args.seed_start + i, args.job,
-            "solver", args.macro,
-            str(Path("data")),
-            args.max_encounters, "",
-            args.broad_depth, args.broad_prune,
-            macro_lookahead, "", False, 0, "",
+        _SeedTask(
+            seed=args.seed_start + i, job_id=args.job,
+            policy_name="solver", macro_name=args.macro,
+            data_path=data_path,
+            max_enc=args.max_encounters, db_path="",
+            solver_depth=args.broad_depth,
+            solver_prune=args.broad_prune,
+            macro_lookahead=macro_lookahead,
         )
         for i in range(args.n)
     ]
     broad_results = []
-    with multiprocessing.Pool(n_workers) as pool:
+    with multiprocessing.Pool(
+        n_workers, initializer=_worker_init, initargs=(data_path,),
+    ) as pool:
         for r in pool.imap_unordered(_run_one_seed, broad_args):
             broad_results.append(r)
             if args.progress:
@@ -730,19 +793,22 @@ def cmd_deep_analyze(args: argparse.Namespace) -> None:
 
     # --- Phase 2: Deep dive ---
     deep_args = [
-        (
-            seed, args.job,
-            "solver", args.macro,
-            str(Path("data")),
-            args.max_encounters, "",
-            args.deep_depth, args.deep_prune,
-            macro_lookahead, "", False, 0, "",
+        _SeedTask(
+            seed=seed, job_id=args.job,
+            policy_name="solver", macro_name=args.macro,
+            data_path=data_path,
+            max_enc=args.max_encounters, db_path="",
+            solver_depth=args.deep_depth,
+            solver_prune=args.deep_prune,
+            macro_lookahead=macro_lookahead,
         )
         for seed in worst_seed_ids
     ]
     deep_results = []
     deep_workers = min(n_workers, worst_n)
-    with multiprocessing.Pool(deep_workers) as pool:
+    with multiprocessing.Pool(
+        deep_workers, initializer=_worker_init, initargs=(data_path,),
+    ) as pool:
         for r in pool.imap_unordered(_run_one_seed, deep_args):
             deep_results.append(r)
             if args.progress:
