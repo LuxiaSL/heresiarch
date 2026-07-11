@@ -54,6 +54,7 @@ class Phase(str, Enum):
     POST_COMBAT = "POST_COMBAT"
     RECRUITING = "RECRUITING"
     DEAD = "DEAD"
+    VICTORY = "VICTORY"
 
 
 class AgentError(Exception):
@@ -118,7 +119,17 @@ _PHASE_TOOLS: dict[Phase, set[str]] = {
         "lookup_zone", "lookup_formula", "get_state",
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
     },
+    Phase.VICTORY: {
+        "get_battle_record", "get_run_summary", "new_run",
+        "lookup_job", "lookup_ability", "lookup_item", "lookup_enemy",
+        "lookup_zone", "lookup_formula", "get_state",
+        "save_note", "read_notes", "save_run", "load_run", "list_saves",
+    },
 }
+
+# drop_item is available wherever the stash is manageable
+for _phase in (Phase.ZONE_SELECT, Phase.IN_TOWN, Phase.IN_ZONE, Phase.POST_COMBAT):
+    _PHASE_TOOLS[_phase].add("drop_item")
 
 
 class GameSession:
@@ -274,6 +285,11 @@ class GameSession:
                 return "Recruiting."
             case Phase.DEAD:
                 return S.summarize_death(run, self.game_data)
+            case Phase.VICTORY:
+                return (
+                    "REGION CLEARED — VICTORY!\n\n"
+                    + S.summarize_run_report(run, self.game_data)
+                )
             case _:
                 return f"Phase: {self.phase.value}"
 
@@ -897,6 +913,19 @@ class GameSession:
 
         self._last_loot = None
 
+        # Region victory: final zone fully cleared. The TUI detects this
+        # inside its post-combat screen; the session must do it here or
+        # agent/mobile runs can beat the final boss and never "win".
+        zone = self.game_data.zones.get(self.run.current_zone_id or "")
+        zs = self.run.zone_state
+        if zone is not None and zone.is_final and zs is not None and zs.is_cleared:
+            self.phase = Phase.VICTORY
+            self._autosave()
+            return (
+                "REGION CLEARED — VICTORY!\n\n"
+                + S.summarize_run_report(self.run, self.game_data)
+            )
+
         # Check for recruitment
         if self._should_offer_recruitment():
             self._generate_recruitment()
@@ -1142,6 +1171,29 @@ class GameSession:
         lines.append(f"\nRoster — Active: {', '.join(active_names)}")
         lines.append(f"Reserve: {', '.join(reserve_names) or 'none'}")
         return "\n".join(lines)
+
+    def drop_item(self, item_id: str) -> str:
+        """Discard an item from the stash. Frees a slot; the item is lost."""
+        self._require_phase("drop_item")
+        run = self._require_run()
+
+        if item_id not in run.party.stash:
+            raise AgentError(
+                f"'{item_id}' is not in the stash. "
+                f"Stash: {', '.join(run.party.stash) or 'empty'}"
+            )
+
+        new_stash = list(run.party.stash)
+        new_stash.remove(item_id)
+        new_party = run.party.model_copy(update={"stash": new_stash})
+        self.run = run.model_copy(update={"party": new_party})
+
+        item = self.game_data.items.get(item_id) or run.party.items.get(item_id)
+        name = item.name if item else item_id
+        return (
+            f"Dropped {name}. "
+            f"Stash: {len(new_stash)}/10"
+        )
 
     def use_scroll(self, item_id: str, character_id: str) -> str:
         """Use a teach scroll."""
