@@ -12,11 +12,17 @@ on the summarizer side (see design/mobile-spike.md).
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 from heresiarch.agent import summarizer as S
+from heresiarch.views.event_renderer import (
+    get_event_delay,
+    render_event,
+    render_events_summary,
+)
 from heresiarch.engine.formulas import (
     calculate_buy_price,
     calculate_sell_price,
@@ -112,12 +118,30 @@ class CombatantView(BaseModel):
     abilities: list[AbilityView] = Field(default_factory=list)
 
 
+class CombatEventView(BaseModel):
+    """One display-ready combat event for client-side paced playback."""
+
+    type: str
+    text: str
+    color: str = "neutral"  # damage / heal / buff / debuff / death / neutral
+    actor_id: str = ""
+    target_id: str = ""
+    value: int = 0
+    self_damage: bool = False  # DAMAGE_DEALT recoil: HP loss lands on the actor
+    significant: bool = True
+    delay_ms: int = 250
+
+
 class CombatView(BaseModel):
     round_number: int
     players: list[CombatantView] = Field(default_factory=list)
     enemies: list[CombatantView] = Field(default_factory=list)
     consumables: list[ItemView] = Field(default_factory=list)
     log_lines: list[str] = Field(default_factory=list)
+    # Auto-battle: a recorded victory vs this enemy group has rounds left
+    auto_available: bool = False
+    # Set when the TUI's halt rule applies (client stops the auto loop)
+    auto_halt: str | None = None
 
 
 class ZoneCardView(BaseModel):
@@ -256,6 +280,13 @@ class StatePayload(BaseModel):
     recruit: RecruitView | None = None
     recap: RecapView | None = None
     map: MapVM | None = None
+    # Last processed round, for paced playback: verbose events (per-type
+    # delays), one-line-per-turn summary, and HP at round start so bars
+    # can animate down event-by-event. Present in COMBAT and on the
+    # screen right after combat ends (POST_COMBAT / DEAD).
+    events: list[CombatEventView] = Field(default_factory=list)
+    events_summary: list[CombatEventView] = Field(default_factory=list)
+    hp_start: dict[str, int] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -479,23 +510,38 @@ def build_town_view(session: GameSession) -> TownView | None:
     )
 
 
+def _combatant_names(session: GameSession) -> dict[str, str]:
+    """Display names for all combatants, mirroring the TUI's naming.
+
+    Players get character names; enemies get template names with a
+    letter suffix (Slime A, Slime B) whenever the fight has more than
+    one enemy. Built from session state so it survives combat teardown
+    (the final round's events render on the post-combat screen).
+    """
+    names: dict[str, str] = {}
+    if session.run is not None:
+        for cid, char in session.run.party.characters.items():
+            names[cid] = char.name
+    enemy_ids = list(session._enemy_combatant_templates)
+    multi = len(enemy_ids) > 1
+    for i, cid in enumerate(enemy_ids):
+        tmpl = session.game_data.enemies.get(
+            session._enemy_combatant_templates[cid],
+        )
+        base = tmpl.name if tmpl else cid
+        names[cid] = f"{base} {chr(65 + i)}" if multi else base
+    return names
+
+
 def _combatant_view(
     c: CombatantState,
     session: GameSession,
+    names: dict[str, str],
     *,
     slowest_enemy_spd: int = 0,
 ) -> CombatantView:
     game_data = session.game_data
-    if c.is_player:
-        name = c.id
-        if session.run is not None:
-            char = session.run.party.characters.get(c.id)
-            if char is not None:
-                name = char.name
-    else:
-        tmpl_id = session._enemy_combatant_templates.get(c.id, "")
-        tmpl = game_data.enemies.get(tmpl_id)
-        name = tmpl.name if tmpl else c.id
+    name = names.get(c.id, c.id)
 
     charging = None
     if c.charging_ability_id:
@@ -569,16 +615,114 @@ def build_combat_view(session: GameSession) -> CombatView | None:
         if v.is_consumable
     ]
 
+    # Auto-battle availability: a recorded win vs this group with rounds
+    # left to replay; halted (TUI rule) once anyone drops to half HP.
+    from heresiarch.engine.replay import find_matching_record
+
+    record = find_matching_record(
+        run.battle_record.encounters,
+        list(session._enemy_combatant_templates.values()),
+    )
+    auto_available = (
+        record is not None and combat.round_number < len(record.rounds)
+    )
+    auto_halt = None
+    if any(
+        c.current_hp <= c.max_hp // 2
+        for c in combat.player_combatants
+        if c.is_alive
+    ):
+        auto_halt = "party HP below 50%"
+
+    names = _combatant_names(session)
     return CombatView(
         round_number=combat.round_number,
         players=[
-            _combatant_view(c, session, slowest_enemy_spd=slowest)
+            _combatant_view(c, session, names, slowest_enemy_spd=slowest)
             for c in combat.player_combatants
         ],
-        enemies=[_combatant_view(c, session) for c in combat.enemy_combatants],
+        enemies=[
+            _combatant_view(c, session, names)
+            for c in combat.enemy_combatants
+        ],
         consumables=consumables,
         log_lines=log_lines,
+        auto_available=auto_available,
+        auto_halt=auto_halt,
     )
+
+
+# Rich markup tags ([bold #cc4444] … [/bold #cc4444]) → plain text
+_RICH_TAG_RE = re.compile(r"\[/?[a-zA-Z#][^\[\]]*\]")
+
+
+def _strip_markup(text: str) -> str:
+    return _RICH_TAG_RE.sub("", text)
+
+
+def _events_phase_active(session: GameSession) -> bool:
+    """Round events are shown mid-combat and on the screen right after."""
+    from heresiarch.agent.session import Phase
+
+    return session.phase in (Phase.COMBAT, Phase.POST_COMBAT, Phase.DEAD)
+
+
+def build_round_events(session: GameSession) -> list[CombatEventView]:
+    """Verbose per-event playback list with TUI-matching delays."""
+    if not _events_phase_active(session) or not session._round_events:
+        return []
+    names = _combatant_names(session)
+    ability_names = {a.id: a.name for a in session.game_data.abilities.values()}
+
+    views: list[CombatEventView] = []
+    for event in session._round_events:
+        try:
+            rendered = render_event(event, names, ability_names, verbose=True)
+        except Exception:  # noqa: BLE001 — rendering must never break the payload
+            rendered = None
+        if rendered is None:
+            continue
+        views.append(CombatEventView(
+            type=event.event_type.value,
+            text=_strip_markup(rendered.text),
+            color=rendered.color,
+            actor_id=event.actor_id,
+            target_id=event.target_id,
+            value=event.value,
+            self_damage=bool(event.details.get("self_damage", False)),
+            significant=rendered.is_significant,
+            delay_ms=get_event_delay(event),
+        ))
+    return views
+
+
+def build_round_events_summary(session: GameSession) -> list[CombatEventView]:
+    """One-line-per-turn collapse of the last round (TUI summary mode)."""
+    if not _events_phase_active(session) or not session._round_events:
+        return []
+    names = _combatant_names(session)
+    ability_names = {a.id: a.name for a in session.game_data.abilities.values()}
+    try:
+        rendered = render_events_summary(
+            session._round_events, names, ability_names,
+        )
+    except Exception:  # noqa: BLE001 — degrade to empty, never 500
+        return []
+    return [
+        CombatEventView(
+            type="SUMMARY",
+            text=_strip_markup(r.text),
+            color=r.color,
+            delay_ms=300,
+        )
+        for r in rendered
+    ]
+
+
+def build_hp_start(session: GameSession) -> dict[str, int]:
+    if not _events_phase_active(session):
+        return {}
+    return dict(session._round_start_hp)
 
 
 def build_loot_view(session: GameSession) -> LootView | None:
@@ -771,4 +915,7 @@ def build_state_payload(
         recruit=_safe(build_recruit_view),
         recap=_safe(build_recap_view),
         map=_safe(build_map_view),
+        events=_safe(build_round_events, default=[]),
+        events_summary=_safe(build_round_events_summary, default=[]),
+        hp_start=_safe(build_hp_start, default={}),
     )

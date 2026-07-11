@@ -61,6 +61,12 @@
   .log { background: #101016; border: 1px solid var(--line); border-radius: 10px;
     padding: 10px; font-size: 12px; line-height: 1.55; max-height: 34vh;
     overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+  .log .ev-damage { color: #e08585; }
+  .log .ev-heal { color: #7fd6a4; }
+  .log .ev-buff { color: #9bb8ff; }
+  .log .ev-debuff { color: #e0b070; }
+  .log .ev-death { color: #c05555; font-weight: 700; }
+  .log .ev-neutral { color: var(--dim); }
   pre.text { background: #101016; border: 1px solid var(--line); border-radius: 10px;
     padding: 10px; font-size: 12px; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; }
   .sticky-bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px
@@ -104,6 +110,9 @@ const ui = {
   equipPreview: null,  // {cid, item_id, data: EquipPreview}
   mapKey: null, mapSel: null,          // ASCII map selection state
   mapScroll: null, mapScrolled: false, // pan position, kept across re-renders
+  verbose: (localStorage.getItem("hx_log") || "verbose") !== "summary",
+  pb: null,          // active event playback {evs, i, timer, hp, dead}
+  auto: false,       // auto-battle loop engaged
 };
 
 function esc(s) {
@@ -129,18 +138,136 @@ async function api(path, body) {
 const act = (tool, args) => api("/api/action", {tool, args: args || {}});
 
 function onPayload(p) {
+  const prevPhase = ui.lastPhase;
+  stopPlayback();
   S = p;
   ui.confirm = null; ui.equipPreview = null;
-  if (p.error) toast(p.error);
+  if (p.error) { toast(p.error); ui.auto = false; }
   if (p.phase !== ui.lastPhase) {
     ui.pickUse = null;
     if (p.phase === "POST_COMBAT") ui.lootSel = new Set((p.loot?.items || []).map((_, i) => i));
+    if (p.phase !== "COMBAT") ui.auto = false;
     ui.lastPhase = p.phase;
   }
   if (p.combat && p.combat.round_number !== ui.lastRound) {
     rebuildDecisions(); ui.lastRound = p.combat.round_number;
   }
+  // A round just resolved: replay its events paced instead of snapping
+  const evs = ui.verbose ? p.events : p.events_summary;
+  if (prevPhase === "COMBAT" && evs && evs.length) {
+    startPlayback(evs);
+  } else {
+    render();
+  }
+}
+
+// ---------- paced event playback ----------
+function startPlayback(evs) {
+  const animateHp = S.phase === "COMBAT" && ui.verbose;
+  ui.pb = {
+    evs, i: 0, timer: null,
+    hp: animateHp ? {...(S.hp_start || {})} : null,
+    dead: {},
+  };
   render();
+  pbTick();
+}
+function stopPlayback() {
+  if (ui.pb && ui.pb.timer) clearTimeout(ui.pb.timer);
+  ui.pb = null;
+}
+function pbTick() {
+  const pb = ui.pb;
+  if (!pb) return;
+  if (pb.i >= pb.evs.length) { pbFinish(); return; }
+  const e = pb.evs[pb.i++];
+  pbApply(e);
+  pbAppendLine(e);
+  pbUpdateHpBars();
+  pb.timer = setTimeout(pbTick, e.delay_ms || 250);
+}
+function pbSkip() {
+  const pb = ui.pb;
+  if (!pb) return;
+  if (pb.timer) clearTimeout(pb.timer);
+  while (pb.i < pb.evs.length) pbApply(pb.evs[pb.i++]);
+  pbFinish();
+}
+function pbFinish() {
+  ui.pb = null;
+  render();
+  autoContinue();
+}
+function pbApply(e) {
+  // Mirror of the TUI's _apply_display_event: progressive HP state
+  const pb = ui.pb;
+  if (!pb || !pb.hp) return;
+  const hit = (id, dmg) => { if (id in pb.hp) pb.hp[id] = Math.max(0, pb.hp[id] - dmg); };
+  switch (e.type) {
+    case "DAMAGE_DEALT": hit(e.self_damage ? e.actor_id : e.target_id, e.value); break;
+    case "DOT_TICK":
+    case "RETALIATE_TRIGGERED":
+    case "THORNS_TRIGGERED": hit(e.target_id, e.value); break;
+    case "HEALING":
+      if (e.target_id in pb.hp)
+        pb.hp[e.target_id] = Math.min(maxHpOf(e.target_id), pb.hp[e.target_id] + e.value);
+      break;
+    case "DEATH": pb.dead[e.target_id] = true; if (e.target_id in pb.hp) pb.hp[e.target_id] = 0; break;
+  }
+}
+function maxHpOf(id) {
+  const all = [...(S.combat?.players || []), ...(S.combat?.enemies || [])];
+  return (all.find(c => c.id === id) || {max_hp: 9999}).max_hp;
+}
+function evLine(e) {
+  return `<div class="ev-${esc(e.color || "neutral")}">${esc(e.text)}</div>`;
+}
+function pbAppendLine(e) {
+  const log = document.getElementById("log");
+  if (!log) return;
+  const div = document.createElement("div");
+  div.className = "ev-" + (e.color || "neutral");
+  div.textContent = e.text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+function pbUpdateHpBars() {
+  const pb = ui.pb;
+  if (!pb || !pb.hp) return;
+  for (const [id, hp] of Object.entries(pb.hp)) {
+    const max = maxHpOf(id);
+    const bar = document.querySelector(`[data-hpbar="${CSS.escape(id)}"] > div`);
+    if (bar) {
+      const pct = max > 0 ? Math.max(0, Math.min(100, 100 * hp / max)) : 0;
+      bar.style.width = pct + "%";
+      bar.style.background = pct > 50 ? "var(--green)" : pct > 25 ? "var(--yellow)" : "var(--red)";
+    }
+    const txt = document.querySelector(`[data-hptext="${CSS.escape(id)}"]`);
+    if (txt) txt.textContent = pb.dead[id] ? "✝" : hp + "/" + max;
+  }
+}
+function dispHp(c) {
+  // During playback, cards show the progressive HP, not the final state
+  const pb = ui.pb;
+  if (pb && pb.hp && c.id in pb.hp) {
+    return {hp: pb.hp[c.id], alive: !pb.dead[c.id]};
+  }
+  return {hp: c.hp, alive: c.is_alive};
+}
+function autoContinue() {
+  if (!ui.auto || !S || S.phase !== "COMBAT") { ui.auto = false; return; }
+  const c = S.combat;
+  if (!c || !c.auto_available) {
+    ui.auto = false;
+    toast("Auto-battle stopped — strategy exhausted");
+    render(); return;
+  }
+  if (c.auto_halt) {
+    ui.auto = false;
+    toast("Auto-battle stopped — " + c.auto_halt);
+    render(); return;
+  }
+  act("auto_battle_round");
 }
 async function fetchEquipPreview(cid, itemId) {
   try {
@@ -247,10 +374,10 @@ function buildDecisions() {
 }
 
 // ---------- shared render helpers ----------
-function hpbar(hp, max) {
+function hpbar(hp, max, id) {
   const pct = max > 0 ? Math.max(0, Math.min(100, 100 * hp / max)) : 0;
   const color = pct > 50 ? "var(--green)" : pct > 25 ? "var(--yellow)" : "var(--red)";
-  return `<div class="hpbar"><div style="width:${pct}%;background:${color}"></div></div>`;
+  return `<div class="hpbar"${id ? ` data-hpbar="${esc(id)}"` : ""}><div style="width:${pct}%;background:${color}"></div></div>`;
 }
 function partyStrip() {
   if (!S.party) return "";
@@ -469,14 +596,15 @@ function mapHtml(m, selId) {
 function mapDetailCard(m) {
   const a = m.anchors.find(x => x.id === ui.mapSel);
   if (!a) return "";
+  const primary = `class="primary" style="width:auto;flex:0 0 auto"`;
   let btn = "";
   switch (a.tap_action) {
     case "enter_zone":
-      btn = `<button class="primary" data-a="enter-zone" data-id="${esc(a.id)}">${a.status === "cleared" ? "Re-enter" : "Embark"}</button>`; break;
+      btn = `<button ${primary} data-a="enter-zone" data-id="${esc(a.id)}">${a.status === "cleared" ? "Re-enter" : "Embark"}</button>`; break;
     case "enter_town":
       btn = `<button class="gold" data-a="enter-town" data-id="${esc(a.id)}">⌂ Visit</button>`; break;
     case "fight":
-      btn = `<button class="primary" data-a="fight">⚔ Fight</button>`; break;
+      btn = `<button ${primary} data-a="fight">⚔ Fight</button>`; break;
     case "leave_zone":
       btn = `<button data-a="leave-zone">← Leave</button>`; break;
     case "leave_town":
@@ -611,15 +739,18 @@ function screenZone() {
     <div class="sticky-bottom"><button style="width:100%" data-a="leave-zone">← Leave Zone</button></div>`;
 }
 function enemyCards() {
-  return (S.combat?.enemies || []).map(e => `
-    <div class="card" style="${e.is_alive ? "" : "opacity:.35"}">
+  return (S.combat?.enemies || []).map(e => {
+    const d = dispHp(e);
+    return `
+    <div class="card" style="${d.alive ? "" : "opacity:.35"}">
       <div class="row"><div class="grow"><span class="name small">${esc(e.name)}</span>
         <span class="dim">Lv${e.level}</span></div>
-        <span class="small">${e.is_alive ? e.hp + "/" + e.max_hp : "✝"}</span></div>
-      ${e.is_alive ? hpbar(e.hp, e.max_hp) : ""}
+        <span class="small" data-hptext="${esc(e.id)}">${d.alive ? d.hp + "/" + e.max_hp : "✝"}</span></div>
+      ${d.alive ? hpbar(d.hp, e.max_hp, e.id) : ""}
       ${e.charging ? `<div class="charge">⚡ ${esc(e.charging)}</div>` : ""}
       ${e.statuses.length ? `<div class="status">${e.statuses.map(esc).join(" · ")}</div>` : ""}
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 function abilityChipLabel(a) {
   return `${esc(a.name)}${a.cooldown_remaining > 0 ? " ⏳" + a.cooldown_remaining : ""}` +
@@ -730,10 +861,11 @@ function decisionCard(p) {
   } else {
     body = `<div class="dim small" style="margin-top:8px">Braced: damage halved, +1 AP banked.</div>`;
   }
+  const dh = dispHp(p);
   return `<div class="card">
     <div class="row"><div class="grow"><span class="name">${esc(p.name)}</span>${badges}</div>
-      <span class="small">${p.hp}/${p.max_hp}</span></div>
-    ${hpbar(p.hp, p.max_hp)}
+      <span class="small" data-hptext="${esc(p.id)}">${dh.hp}/${p.max_hp}</span></div>
+    ${hpbar(dh.hp, p.max_hp, p.id)}
     ${p.statuses.length ? `<div class="status">${p.statuses.map(esc).join(" · ")}</div>` : ""}
     <div class="seg">
       <button class="${d.mode === "normal" ? "sel" : ""}" data-a="set-mode" data-c="${esc(p.id)}" data-id="normal">Act</button>
@@ -746,14 +878,32 @@ function decisionCard(p) {
 function screenCombat() {
   const c = S.combat;
   if (!c) return topbar() + `<div class="card">No combat state.</div>`;
-  const log = c.log_lines.length
-    ? `<details open><summary>Round log</summary><div class="log" id="log">${c.log_lines.map(esc).join("\n")}</div></details>` : "";
+  const evs = ui.verbose ? (S.events || []) : (S.events_summary || []);
+  const log = (evs.length || ui.pb)
+    ? `<div class="row" style="margin-top:10px"><span class="section grow" style="margin:0 2px">ROUND LOG</span>
+        <button class="small" data-a="toggle-verbose">Aa ${ui.verbose ? "verbose" : "summary"}</button></div>
+       <div class="log" id="log">${ui.pb ? "" : evs.map(evLine).join("")}</div>`
+    : "";
+  const bottom = ui.pb
+    ? `<button class="primary" data-a="pb-skip">⏩ Skip</button>`
+    : `<div class="row">
+        ${c.auto_available && !c.auto_halt && !ui.auto
+          ? `<button class="gold" data-a="auto-start">▶ Auto</button>` : ""}
+        ${ui.auto ? `<button class="danger" data-a="auto-stop">⏹ Stop</button>` : ""}
+        <button class="primary grow" data-a="submit-round" ${ui.auto ? "disabled" : ""}>⚔ Resolve Round</button>
+      </div>`;
   return topbar() + `
     <div class="section">ROUND ${c.round_number + 1} — ENEMIES</div>${enemyCards()}
     ${log}
     <div class="section">YOUR MOVE</div>
     ${livingPlayers().map(decisionCard).join("")}
-    <div class="sticky-bottom"><button class="primary" data-a="submit-round">⚔ Resolve Round</button></div>`;
+    <div class="sticky-bottom">${bottom}</div>`;
+}
+function finalRoundLog() {
+  // The round that ended the fight, replayed paced on the next screen
+  const evs = ui.verbose ? (S.events || []) : (S.events_summary || []);
+  if (!evs.length && !ui.pb) return "";
+  return `<div class="log" id="log" style="margin:8px 0">${ui.pb ? "" : evs.map(evLine).join("")}</div>`;
 }
 function screenLoot() {
   const loot = S.loot || {money: 0, items: []};
@@ -765,6 +915,7 @@ function screenLoot() {
   return topbar() + `
     <div class="card"><div class="name" style="color:var(--gold)">Won the fight</div>
       <div class="small">+${loot.money}g</div></div>
+    ${finalRoundLog()}
     ${S.text ? `<details><summary>Battle report</summary><pre class="text">${esc(S.text)}</pre></details>` : ""}
     ${loot.items.length ? `<div class="section">LOOT — tap to toggle</div><div class="chips">${chips}</div>` : `<div class="dim small" style="margin:10px 2px">No drops.</div>`}
     ${overflow ? `<div class="dim small" style="margin:6px 2px;color:var(--yellow)">⚠ ${ui.lootSel.size} picked, ${free} stash slots free — drop something below or deselect.</div>` : ""}
@@ -833,6 +984,7 @@ function recapCard() {
 function screenDead() {
   return `
     <h1 style="color:var(--red)">FALLEN</h1>
+    ${finalRoundLog()}
     ${recapCard()}
     ${screenSetup(`<div class="section">RISE AGAIN</div>`)}`;
 }
@@ -966,6 +1118,15 @@ document.addEventListener("click", (ev) => {
       if (dec) act("submit_decisions", {decisions: dec});
       break;
     }
+    case "pb-skip": pbSkip(); break;
+    case "toggle-verbose": {
+      if (ui.pb) pbSkip();  // settle the running playback first
+      ui.verbose = !ui.verbose;
+      localStorage.setItem("hx_log", ui.verbose ? "verbose" : "summary");
+      render(); break;
+    }
+    case "auto-start": ui.auto = true; act("auto_battle_round"); break;
+    case "auto-stop": ui.auto = false; render(); break;
     case "toggle-loot": {
       const n = Number(i);
       ui.lootSel.has(n) ? ui.lootSel.delete(n) : ui.lootSel.add(n);

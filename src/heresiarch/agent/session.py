@@ -96,7 +96,7 @@ _PHASE_TOOLS: dict[Phase, set[str]] = {
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
     },
     Phase.COMBAT: {
-        "submit_decisions", "get_combat_state",
+        "submit_decisions", "auto_battle_round", "get_combat_state",
         "lookup_job", "lookup_ability", "lookup_item", "lookup_enemy",
         "lookup_zone", "lookup_formula", "get_state",
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
@@ -162,6 +162,9 @@ class GameSession:
         self._current_enemies: list[EnemyInstance] = []
         self._enemy_combatant_templates: dict[str, str] = {}  # combatant_id -> template_id
         self._round_events: list[CombatEvent] = []
+        # HP per combatant at the start of the last processed round —
+        # lets clients animate HP bars down as they replay round events.
+        self._round_start_hp: dict[str, int] = {}
         self._encounter_rounds: list[RoundRecord] = []
         self._encounter_decisions: dict[str, PlayerTurnDecision] = {}
 
@@ -444,6 +447,13 @@ class GameSession:
 
         self._round_events = []
         self._encounter_rounds = []
+        self._round_start_hp = {
+            c.id: c.current_hp
+            for c in (
+                self._combat_state.player_combatants
+                + self._combat_state.enemy_combatants
+            )
+        }
         self.phase = Phase.COMBAT
 
         return S.summarize_combat(
@@ -465,6 +475,56 @@ class GameSession:
         except (ValueError, KeyError) as e:
             raise AgentError(f"Invalid decisions: {e}") from e
 
+        return self._run_combat_round(player_decisions, run, gl, combat)
+
+    def auto_battle_round(self) -> str:
+        """Replay one round from the last recorded victory vs this enemy group.
+
+        Mirrors the TUI's auto-battle: decisions are validated against the
+        live combat (dead targets remapped, cooldowns respected, cheat AP
+        capped). Raises if no matching record or the strategy is exhausted.
+        """
+        self._require_phase("auto_battle_round")
+        run = self._require_run()
+        gl = self._require_game_loop()
+        combat = self._combat_state
+        if combat is None:
+            raise AgentError("No active combat.")
+
+        from heresiarch.engine.replay import (
+            build_replay_decisions,
+            find_matching_record,
+        )
+
+        record = find_matching_record(
+            run.battle_record.encounters,
+            list(self._enemy_combatant_templates.values()),
+        )
+        if record is None:
+            raise AgentError(
+                "No recorded victory against this enemy group — "
+                "auto-battle needs a past win to replay."
+            )
+        if combat.round_number >= len(record.rounds):
+            raise AgentError(
+                "Auto-battle strategy exhausted — decide this round manually."
+            )
+
+        round_record = record.rounds[combat.round_number]
+        player_decisions = build_replay_decisions(
+            round_record, combat, self.game_data.abilities,
+            list(run.party.stash),
+        )
+        return self._run_combat_round(player_decisions, run, gl, combat)
+
+    def _run_combat_round(
+        self,
+        player_decisions: dict[str, PlayerTurnDecision],
+        run: RunState,
+        gl: GameLoop,
+        combat: CombatState,
+    ) -> str:
+        """Process one combat round: engine call, bookkeeping, resolution."""
         # Build enemy template lookup for AI
         enemy_templates = {}
         for enemy in self._current_enemies:
@@ -473,6 +533,12 @@ class GameSession:
 
         # Snapshot pre-round events count to extract this round's events
         pre_event_count = len(combat.log)
+
+        # Snapshot HP so clients can animate bars while replaying events
+        self._round_start_hp = {
+            c.id: c.current_hp
+            for c in combat.player_combatants + combat.enemy_combatants
+        }
 
         # Process the round
         new_combat = gl.combat_engine.process_round(

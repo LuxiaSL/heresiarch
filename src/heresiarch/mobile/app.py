@@ -32,7 +32,7 @@ ALLOWED_TOOLS: frozenset[str] = frozenset({
     "list_zones", "enter_zone", "leave_zone", "get_zone_status",
     "enter_town", "leave_town", "rest_at_lodge",
     "shop_browse", "shop_buy", "shop_sell",
-    "fight", "submit_decisions", "get_combat_state",
+    "fight", "submit_decisions", "auto_battle_round", "get_combat_state",
     "pick_loot",
     "inspect_candidate", "recruit",
     "party_status", "equip", "unequip", "swap_roster", "dismiss",

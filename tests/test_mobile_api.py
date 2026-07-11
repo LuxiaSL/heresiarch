@@ -343,6 +343,129 @@ def test_recruit_view_is_cha_gated(client: TestClient) -> None:
     assert recruit["party_full"] is False
 
 
+def test_round_events_are_structured_and_paced(client: TestClient) -> None:
+    _act(client, "new_run", {"name": "Pacer", "job_id": "berserker", "seed": 7})
+    _act(client, "enter_zone", {"zone_id": "zone_01"})
+    payload = _act(client, "fight")
+    combat = payload["combat"]
+    assert payload["events"] == [], "no events before the first round resolves"
+    assert payload["hp_start"], "hp_start snapshots at fight start"
+
+    decisions = {
+        p["id"]: _default_decision(p, combat["enemies"])
+        for p in combat["players"]
+        if p["is_alive"]
+    }
+    payload = _act(client, "submit_decisions", {"decisions": decisions})
+    assert payload["error"] is None, payload["error"]
+
+    events = payload["events"]
+    assert events, "resolved round must produce structured events"
+    for e in events:
+        assert e["type"] and e["text"]
+        assert e["delay_ms"] > 0
+        assert e["color"] in ("damage", "heal", "buff", "debuff", "death", "neutral")
+    assert any(e["type"] == "DAMAGE_DEALT" for e in events)
+    # Names in event text are display names, not combatant ids
+    dmg = next(e for e in events if e["type"] == "DAMAGE_DEALT")
+    assert "mc_berserker" not in dmg["text"]
+
+    summary = payload["events_summary"]
+    assert summary, "summary collapse must be present"
+    assert len(summary) <= len(events)
+
+    # hp_start covers every combatant that started the round
+    hp_start = payload["hp_start"]
+    if payload["phase"] == "COMBAT":
+        for c in payload["combat"]["players"] + payload["combat"]["enemies"]:
+            assert c["id"] in hp_start
+
+
+def test_final_round_events_survive_combat_end(client: TestClient) -> None:
+    """The killing round's events must reach the post-combat screen."""
+    _act(client, "new_run", {"name": "Closer", "job_id": "einherjar", "seed": 42})
+    _act(client, "enter_zone", {"zone_id": "zone_01"})
+    payload = _act(client, "fight")
+    for _ in range(60):
+        if payload["phase"] != "COMBAT":
+            break
+        combat = payload["combat"]
+        decisions = {
+            p["id"]: _default_decision(p, combat["enemies"])
+            for p in combat["players"]
+            if p["is_alive"]
+        }
+        payload = _act(client, "submit_decisions", {"decisions": decisions})
+        assert payload["error"] is None, payload["error"]
+    assert payload["phase"] in ("POST_COMBAT", "DEAD")
+    assert payload["events"], "final round events missing after combat end"
+    assert any(
+        e["type"] in ("DEATH", "COMBAT_END") for e in payload["events"]
+    )
+
+
+def test_auto_battle_requires_matching_record(client: TestClient) -> None:
+    _act(client, "new_run", {"name": "NoAuto", "job_id": "einherjar", "seed": 5})
+    _act(client, "enter_zone", {"zone_id": "zone_01"})
+    payload = _act(client, "fight")
+    assert payload["combat"]["auto_available"] is False
+    payload = _act(client, "auto_battle_round")
+    assert payload["error"] is not None
+    assert "No recorded victory" in payload["error"]
+
+
+def test_auto_battle_replays_matching_record(client: TestClient) -> None:
+    """With a matching victory on record, auto_battle_round runs a round."""
+    _act(client, "new_run", {"name": "Auto", "job_id": "berserker", "seed": 7})
+    _act(client, "enter_zone", {"zone_id": "zone_01"})
+    payload = _act(client, "fight")
+
+    # Win the first encounter manually so a record exists
+    for _ in range(60):
+        if payload["phase"] != "COMBAT":
+            break
+        combat = payload["combat"]
+        decisions = {
+            p["id"]: _default_decision(p, combat["enemies"])
+            for p in combat["players"]
+            if p["is_alive"]
+        }
+        payload = _act(client, "submit_decisions", {"decisions": decisions})
+        assert payload["error"] is None, payload["error"]
+    if payload["phase"] != "POST_COMBAT":
+        pytest.skip("seed lost the first encounter; can't record a victory")
+    payload = _act(client, "pick_loot", {"item_ids": []})
+    if payload["phase"] == "RECRUITING":
+        payload = _act(client, "recruit", {"accept": False})
+
+    # Start the next encounter, then graft the recorded rounds onto a
+    # record matching THIS encounter's enemy group (different group ids).
+    payload = _act(client, "fight")
+    assert payload["phase"] == "COMBAT"
+    session = client.app.state.session
+    won = session.run.battle_record.encounters[-1]
+    assert won.result == "victory" and won.rounds
+    grafted = won.model_copy(update={
+        "enemy_template_ids": list(session._enemy_combatant_templates.values()),
+    })
+    from heresiarch.engine.models.battle_record import BattleRecord
+    session.run = session.run.model_copy(update={
+        "battle_record": BattleRecord(
+            encounters=list(session.run.battle_record.encounters) + [grafted],
+        ),
+    })
+
+    payload = client.get("/api/state").json()
+    assert payload["combat"]["auto_available"] is True
+
+    round_before = payload["combat"]["round_number"]
+    payload = _act(client, "auto_battle_round")
+    assert payload["error"] is None, payload["error"]
+    assert payload["events"], "auto round must produce events"
+    if payload["phase"] == "COMBAT":
+        assert payload["combat"]["round_number"] == round_before + 1
+
+
 def test_town_view_has_priced_shop(client: TestClient) -> None:
     payload = _act(client, "new_run", {"name": "Spike", "job_id": "onmyoji", "seed": 3})
     towns = payload["zone_select"]["towns"]
