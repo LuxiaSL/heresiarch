@@ -33,18 +33,27 @@ src/heresiarch/
     loot.py            # Drop resolution (CHA bonuses, overstay penalty)
     shop.py            # Buy/sell with CHA pricing
     recruitment.py     # Candidate generation, CHA-gated inspection
+    replay.py          # Auto-battle: validate/retarget recorded decisions
     save_manager.py    # JSON save/load, permadeath deletion
+
+  views/               # Shared structured-view layer (no framework imports)
+    map_builder.py     # MapVM: anchor statuses, path frontier, tap actions
+    event_renderer.py  # CombatEvent → display text + per-type delays
 
   tui/                 # Textual TUI — renders engine state, collects player input
     app.py             # App shell: holds RunState, GameLoop, screen routing
     screens/           # 16 screens (title through death)
-    event_renderer.py  # CombatEvent → display text (verbose/summary)
     widgets/           # Map viewer
 
   agent/               # MCP server for LLM-as-player
     server.py          # 39 MCP tools, pure pass-through to session
     session.py         # Game session state management, phase gating
     summarizer.py      # Engine state → text for LLM consumption
+
+  mobile/              # LAN phone UI (FastAPI + single-file client)
+    app.py             # Whitelist dispatch over GameSession
+    views.py           # StatePayload: structured views for the phone
+    static/index.html  # The entire phone client
 
   tools/               # CLI balance tools
     sim.py             # Sweep, DPR, economy, progression sims + CLI entry
