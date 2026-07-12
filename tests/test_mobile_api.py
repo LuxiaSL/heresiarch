@@ -234,6 +234,9 @@ def test_character_view_has_stats_and_xp(client: TestClient) -> None:
     assert set(char["base_stats"]) == {"STR", "MAG", "DEF", "RES", "SPD"}
     assert set(char["effective_stats"]) == {"STR", "MAG", "DEF", "RES", "SPD"}
     assert char["xp_next"] > char["xp"]
+    # Stat sheet lists display names, not raw ability ids
+    assert "Basic Attack" in char["abilities"]
+    assert "basic_attack" not in char["abilities"]
 
 
 def test_equip_preview_endpoint(client: TestClient) -> None:

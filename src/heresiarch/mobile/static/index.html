@@ -125,6 +125,15 @@ const ui = {
 function esc(s) {
   return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
+const SLOT_LABELS = {WEAPON: "Weapon", ARMOR: "Armor", ACCESSORY_1: "Accessory 1", ACCESSORY_2: "Accessory 2"};
+const slotLabel = (s) => SLOT_LABELS[s] || s;
+function hpSpan(c) {
+  // Inline hp/max, tinted by band — for target chips where the ally
+  // cards aren't visible
+  const pct = c.max_hp > 0 ? 100 * c.hp / c.max_hp : 0;
+  const col = pct > 50 ? "var(--green)" : pct > 25 ? "var(--yellow)" : "var(--red)";
+  return `<span style="color:${col}">${c.hp}/${c.max_hp}</span>`;
+}
 function toast(msg) {
   const t = document.getElementById("toast");
   t.textContent = msg; t.style.display = "block";
@@ -439,7 +448,7 @@ function equipPreviewPanel() {
   const hpColor = d.preview_max_hp > d.current_max_hp ? "var(--green)"
     : d.preview_max_hp < d.current_max_hp ? "var(--red)" : "var(--dim)";
   return `<div class="card" style="border-color:var(--accent)">
-    <div class="name small">${esc(it.name)} → ${esc(ch.name)} <span class="dim">(${esc(d.slot)})</span></div>
+    <div class="name small">${esc(it.name)} → ${esc(ch.name)} <span class="dim">(${esc(slotLabel(d.slot))})</span></div>
     ${d.replacing ? `<div class="dim small">replaces ${esc(d.replacing)}</div>` : ""}
     <div style="margin-top:6px">${rows}
       <div class="row small"><span class="dim grow">Max HP</span>
@@ -521,7 +530,7 @@ function partyDetails() {
       <div class="dim small" style="margin-top:6px">HP ${c.hp}/${c.max_hp} · XP ${c.xp}/${c.xp_next}</div>
       ${statGrid(c)}
       <div class="small" style="margin-top:6px">${Object.entries(c.equipment).map(([slot, n]) =>
-        `<div class="row"><span class="dim grow">${esc(slot)}</span><span>${esc(n || "—")}</span>
+        `<div class="row"><span class="dim grow">${esc(slotLabel(slot))}</span><span>${esc(n || "—")}</span>
          ${n ? `<button class="small" data-a="unequip" data-c="${esc(c.id)}" data-slot="${esc(slot)}">✕</button>` : ""}</div>`).join("")}
       </div>
       <div class="dim small" style="margin-top:6px">${c.abilities.map(esc).join(" · ")}</div>
@@ -614,7 +623,9 @@ function mapDetailCard(m) {
     case "enter_town":
       btn = `<button class="gold" data-a="enter-town" data-id="${esc(a.id)}">⌂ Visit</button>`; break;
     case "fight":
-      btn = `<button ${primary} data-a="fight">⚔ Fight</button>`; break;
+      // No button: the zone screen always shows the primary Fight
+      // right below — two ⚔ buttons on one screen read as a mistake
+      break;
     case "leave_zone":
       btn = `<button data-a="leave-zone">← Leave</button>`; break;
     case "leave_town":
@@ -786,7 +797,7 @@ function slotEditor(p, d, key) {
   } else if (ab && ab.target === "SINGLE_ALLY" && livingPlayers().length > 1) {
     tchips = `<div class="chips">` + livingPlayers().map(x =>
       `<button class="chip ${resolveTargetFor(p, aid, slot.target) === x.id ? "sel" : ""}"
-        data-a="slot-tgt" data-c="${esc(p.id)}" data-k="${key}" data-id="${esc(x.id)}">${esc(x.name)}</button>`).join("") + `</div>`;
+        data-a="slot-tgt" data-c="${esc(p.id)}" data-k="${key}" data-id="${esc(x.id)}">${esc(x.name)} ${hpSpan(x)}</button>`).join("") + `</div>`;
   }
   return `<div class="slotedit"><div class="chips">${chips}</div>${tchips}</div>`;
 }
@@ -842,7 +853,7 @@ function decisionCard(p) {
       if (livingPlayers().length > 1) {
         body += `<div class="dim small" style="margin-top:6px">on:</div><div class="chips">` +
           livingPlayers().map(x =>
-            `<button class="chip ${d.itemTarget === x.id ? "sel" : ""}" data-a="set-itemtgt" data-c="${esc(p.id)}" data-id="${esc(x.id)}">${esc(x.name)}</button>`).join("") + `</div>`;
+            `<button class="chip ${d.itemTarget === x.id ? "sel" : ""}" data-a="set-itemtgt" data-c="${esc(p.id)}" data-id="${esc(x.id)}">${esc(x.name)} ${hpSpan(x)}</button>`).join("") + `</div>`;
       }
     } else if (ab && ab.target === "SINGLE_ENEMY" && livingEnemies().length > 1) {
       const targets = taunters.length
@@ -855,7 +866,7 @@ function decisionCard(p) {
     } else if (ab && ab.target === "SINGLE_ALLY" && livingPlayers().length > 1) {
       body += `<div class="dim small" style="margin-top:6px">ally:</div><div class="chips">` +
         livingPlayers().map(x =>
-          `<button class="chip ${resolveTargetFor(p, d.ability, d.target) === x.id ? "sel" : ""}" data-a="set-tgt" data-c="${esc(p.id)}" data-id="${esc(x.id)}">${esc(x.name)}</button>`).join("") + `</div>`;
+          `<button class="chip ${resolveTargetFor(p, d.ability, d.target) === x.id ? "sel" : ""}" data-a="set-tgt" data-c="${esc(p.id)}" data-id="${esc(x.id)}">${esc(x.name)} ${hpSpan(x)}</button>`).join("") + `</div>`;
     }
     if (d.mode === "cheat") {
       body += `<div class="row" style="margin-top:10px"><span class="dim small grow">extra actions (AP)</span>

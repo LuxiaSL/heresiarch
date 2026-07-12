@@ -481,11 +481,18 @@ class GameLoop:
 
         return max(floor, int(missing_hp * town.lodge_gold_per_hp))
 
-    def get_lodge_cost(self, run: RunState) -> int | None:
-        """Return the lodge rest cost for the current town, or None."""
-        if not run.current_town_id:
+    def get_lodge_cost(
+        self, run: RunState, town_id: str | None = None,
+    ) -> int | None:
+        """Return the lodge rest cost for a town (default: current), or None.
+
+        Cost depends only on party state, so it can be quoted for any
+        town — e.g. on map cards before entering.
+        """
+        resolved = town_id or run.current_town_id
+        if not resolved:
             return None
-        town = self.game_data.towns.get(run.current_town_id)
+        town = self.game_data.towns.get(resolved)
         if not town:
             return None
         return self._compute_lodge_cost(run, town)

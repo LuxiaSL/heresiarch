@@ -144,9 +144,13 @@ def build_region_map_vm(
                 status = AnchorState.AVAILABLE
                 navigable.append(aid)
                 tap_action = "enter_town"
-                lodge_cost = game_loop.get_lodge_cost(run)
+                lodge_cost = game_loop.get_lodge_cost(run, town_id=aid)
                 shop_count = len(game_loop.resolve_town_shop(run))
-                detail = f"Lodge rest {lodge_cost}g · shop {shop_count} items"
+                rest = (
+                    f"Lodge rest {lodge_cost}g · "
+                    if lodge_cost is not None else ""
+                )
+                detail = f"{rest}shop {shop_count} items"
             else:
                 status = AnchorState.LOCKED
         else:

@@ -412,7 +412,10 @@ def _character_view(
         is_active=char.id in run.party.active,
         base_stats=_stats_dict(char.base_stats),
         effective_stats=_stats_dict(char.effective_stats),
-        abilities=char.get_all_abilities(),
+        abilities=[
+            _ability_name(game_data, aid) or aid
+            for aid in char.get_all_abilities()
+        ],
         equipment=equipment_names,
         equipment_ids=dict(char.equipment),
     )
