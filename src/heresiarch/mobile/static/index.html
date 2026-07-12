@@ -321,8 +321,11 @@ function rebuildDecisions() {
   const D = {};
   for (const p of (S.combat?.players || []).filter(p => p.is_alive)) {
     const prev = ui.D[p.id] || {};
-    const abil = p.abilities.some(a => a.id === prev.ability && a.cooldown_remaining === 0)
-      ? prev.ability : defaultAbility(p);
+    // Mid-windup the turn is committed to the charge — default the
+    // primary to Wait (the only honest choice; engine ignores the rest).
+    const abil = p.charging ? "__wait__"
+      : p.abilities.some(a => a.id === prev.ability && a.cooldown_remaining === 0)
+        ? prev.ability : defaultAbility(p);
     D[p.id] = {
       mode: "normal", ability: abil, target: null, useItem: false,
       item: null, itemTarget: p.id, ap: Math.min(1, p.ap) || 1,
@@ -378,6 +381,8 @@ function buildDecisions() {
     if (d.useItem) {
       if (!d.item) { toast(p.name + ": pick an item"); return null; }
       e.action = "use_item"; e.item_id = d.item; e.target = d.itemTarget || p.id;
+    } else if (d.ability === "__wait__") {
+      e.action = "wait"; // windup push: let the charge tick
     } else {
       if (!d.ability) { toast(p.name + ": pick an ability"); return null; }
       e.action = d.ability;
@@ -883,16 +888,23 @@ function decisionCard(p) {
     (taunters.length ? `<span class="badge frz">TAUNTED → ${esc(combatantName(taunters[0]))}</span>` : "");
   let body = "";
   if (d.mode !== "survive") {
-    const chips = p.abilities.map(a => {
+    let chips = p.abilities.map(a => {
       const cd = a.cooldown_remaining > 0;
       return `<button class="chip ${!d.useItem && d.ability === a.id ? "sel" : ""} ${cd ? "cd" : ""}"
         ${cd ? "disabled" : ""} data-a="set-abil" data-c="${esc(p.id)}" data-id="${esc(a.id)}">${abilityChipLabel(a)}</button>`;
     }).join("");
+    // Windup push (TUI parity): while charging, Wait is a primary choice
+    if (p.charging) {
+      chips = `<button class="chip ${!d.useItem && d.ability === "__wait__" ? "sel" : ""}"
+        data-a="set-abil" data-c="${esc(p.id)}" data-id="__wait__">⏳ Wait</button>` + chips;
+    }
     // Taunt forces attacks onto the taunter — items would be wasted input
     const itemChip = (S.combat?.consumables || []).length && !taunters.length
       ? `<button class="chip ${d.useItem ? "sel" : ""}" data-a="set-useitem" data-c="${esc(p.id)}">🧪 Item</button>` : "";
     body += `<div class="chips">${chips}${itemChip}</div>`;
-    if (ab && !d.useItem && ab.description) {
+    if (d.ability === "__wait__" && !d.useItem) {
+      body += `<div class="dim small" style="margin-top:4px">Hold steady — the windup continues on its own.</div>`;
+    } else if (ab && !d.useItem && ab.description) {
       body += `<div class="dim small" style="margin-top:4px">${esc(ab.description)}</div>`;
     }
     if (d.useItem) {
@@ -936,11 +948,12 @@ function decisionCard(p) {
     <div class="row"><div class="grow"><span class="name">${esc(p.name)}</span>${badges}</div>
       <span class="small" data-hptext="${esc(p.id)}">${dh.hp}/${p.max_hp}</span></div>
     ${hpbar(dh.hp, p.max_hp, p.id)}
+    ${p.charging ? `<div class="charge">⚡ ${esc(p.charging)}</div>` : ""}
     ${p.statuses.length ? `<div class="status">${p.statuses.map(esc).join(" · ")}</div>` : ""}
     <div class="seg">
       <button class="${d.mode === "normal" ? "sel" : ""}" data-a="set-mode" data-c="${esc(p.id)}" data-id="normal">Act</button>
-      <button class="${d.mode === "survive" ? "sel" : ""}" ${taunters.length ? "disabled" : ""} data-a="set-mode" data-c="${esc(p.id)}" data-id="survive">Survive</button>
-      <button class="${d.mode === "cheat" ? "sel" : ""}" ${p.ap > 0 ? "" : "disabled"} data-a="set-mode" data-c="${esc(p.id)}" data-id="cheat">Cheat</button>
+      <button class="${d.mode === "survive" ? "sel" : ""}" ${taunters.length || p.charging ? "disabled" : ""} data-a="set-mode" data-c="${esc(p.id)}" data-id="survive">Survive</button>
+      <button class="${d.mode === "cheat" ? "sel" : ""}" ${p.ap > 0 && !p.charging ? "" : "disabled"} data-a="set-mode" data-c="${esc(p.id)}" data-id="cheat">Cheat</button>
     </div>
     ${body}
   </div>`;
@@ -975,6 +988,16 @@ function finalRoundLog() {
   if (!evs.length && !ui.pb) return "";
   return `<div class="log" id="log" style="margin:8px 0">${ui.pb ? "" : evs.map(evLine).join("")}</div>`;
 }
+function xpSummary(loot) {
+  if (!loot.xp_awards || !loot.xp_awards.length) return "";
+  const rows = loot.xp_awards.map(a => `
+    <div class="row small">
+      <span class="grow">${esc(a.name)} <span class="dim">${esc(a.job_name)} Lv${a.level}</span>
+        ${a.levels_gained ? `<span class="badge frz">LEVEL UP${a.levels_gained > 1 ? " ×" + a.levels_gained : ""}</span>` : ""}</span>
+      <span>+${a.xp_gained} XP <span class="dim">${a.xp}/${a.xp_next}</span></span>
+    </div>`).join("");
+  return `<div class="card"><div class="dim small">XP &amp; LEVELS</div>${rows}</div>`;
+}
 function screenLoot() {
   const loot = S.loot || {money: 0, items: []};
   const chips = loot.items.map((it, i) =>
@@ -985,6 +1008,7 @@ function screenLoot() {
   return topbar() + `
     <div class="card"><div class="name" style="color:var(--gold)">Won the fight</div>
       <div class="small">+${loot.money}g</div></div>
+    ${xpSummary(loot)}
     ${finalRoundLog()}
     ${S.text ? `<details><summary>Battle report</summary><pre class="text">${esc(S.text)}</pre></details>` : ""}
     ${loot.items.length ? `<div class="section">LOOT — tap to toggle</div><div class="chips">${chips}</div>` : `<div class="dim small" style="margin:10px 2px">No drops.</div>`}

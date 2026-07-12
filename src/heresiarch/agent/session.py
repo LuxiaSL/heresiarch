@@ -11,12 +11,10 @@ import json
 import random
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
-from heresiarch.engine.combat import CombatEngine
 from heresiarch.engine.data_loader import GameData, load_all
 from heresiarch.engine.formulas import (
-    calculate_speed_bonus,
     calculate_buy_price,
     calculate_sell_price,
 )
@@ -33,11 +31,8 @@ from heresiarch.engine.models.combat_state import (
 from heresiarch.engine.models.enemies import EnemyInstance
 from heresiarch.engine.models.loot import LootResult
 from heresiarch.engine.models.run_state import CombatResult, RunState
-from heresiarch.engine.models.zone import ZoneTemplate
 from heresiarch.engine.recruitment import (
-    MAX_PARTY_SIZE,
     RecruitCandidate,
-    RecruitmentEngine,
 )
 from heresiarch.engine.shop import ShopInventory
 
@@ -55,6 +50,13 @@ class Phase(str, Enum):
     RECRUITING = "RECRUITING"
     DEAD = "DEAD"
     VICTORY = "VICTORY"
+
+
+class XpAward(NamedTuple):
+    """Per-character XP/level delta from the last resolved victory."""
+
+    xp_gained: int
+    levels_gained: int
 
 
 class AgentError(Exception):
@@ -171,9 +173,32 @@ class GameSession:
         # Post-combat
         self._last_loot: LootResult | None = None
         self._last_combat_result: CombatResult | None = None
+        # Per-character XP/level deltas from the last victory, keyed by
+        # character id — structured data for frontends (loot screen).
+        self._last_xp_awards: dict[str, XpAward] = {}
 
         # Recruitment
         self._current_candidate: RecruitCandidate | None = None
+
+    # ------------------------------------------------------------------
+    # Read-only state accessors — the structured-view layer (mobile
+    # views.py, future frontends) reads these instead of private fields.
+    # ------------------------------------------------------------------
+
+    @property
+    def combat_state(self) -> CombatState | None:
+        """Live combat state, or None outside combat."""
+        return self._combat_state
+
+    @property
+    def last_loot(self) -> LootResult | None:
+        """Loot from the last victory, until it is picked."""
+        return self._last_loot
+
+    @property
+    def last_xp_awards(self) -> dict[str, XpAward]:
+        """XP/level deltas per surviving character from the last victory."""
+        return dict(self._last_xp_awards)
 
     def _require_phase(self, tool_name: str) -> None:
         """Raise AgentError if the tool isn't valid for the current phase."""
@@ -397,7 +422,7 @@ class GameSession:
 
         lines = [
             f"Rested at the lodge. Paid {cost}g.",
-            f"All party members healed to full HP.",
+            "All party members healed to full HP.",
             f"Gold remaining: {self.run.party.money}",
         ]
         if self.run.lodge_reset_zones:
@@ -608,6 +633,8 @@ class GameSession:
         combat_result = self._build_combat_result(combat, run)
         self._last_combat_result = combat_result
 
+        self._last_xp_awards = {}
+
         if not combat_result.player_won:
             # Defeat — format events BEFORE clearing combat state
             final_events = self._format_round_events()
@@ -627,6 +654,18 @@ class GameSession:
 
         new_run, loot = gl.resolve_combat_result(run, combat_result)
         self._last_loot = loot
+
+        # XP/level deltas for survivors: before-run vs after-run compare,
+        # so frontends can show "+N XP" and "LEVEL UP" without re-deriving
+        # the reward math.
+        for cid in combat_result.surviving_character_ids:
+            before = run.party.characters.get(cid)
+            after = new_run.party.characters.get(cid)
+            if before is not None and after is not None:
+                self._last_xp_awards[cid] = XpAward(
+                    xp_gained=max(0, after.xp - before.xp),
+                    levels_gained=max(0, after.level - before.level),
+                )
 
         # Advance zone (increment encounter or overstay counter)
         new_run = gl.advance_zone(new_run)
@@ -827,6 +866,14 @@ class GameSession:
                 primary_action = self._validate_item_action(
                     cid, dec, combat, remaining_stash,
                 )
+            elif action_id == "wait":
+                # Windup push as the primary action (TUI parity). While a
+                # character is charging, the engine consumes their turn
+                # with the charge tick; "wait" is the honest way to say
+                # "let it happen" instead of submitting a discarded attack.
+                primary_action = CombatAction(
+                    actor_id=cid, is_windup_push=True,
+                )
             elif action_id:
                 # Ability use
                 if action_id not in combatant.ability_ids:
@@ -978,6 +1025,7 @@ class GameSession:
             raise AgentError(str(e)) from e
 
         self._last_loot = None
+        self._last_xp_awards = {}
 
         # Region victory: final zone fully cleared. The TUI detects this
         # inside its post-combat screen; the session must do it here or
@@ -1129,7 +1177,6 @@ class GameSession:
             raise AgentError(str(e)) from e
 
         char = self.run.party.characters[character_id]
-        job_name = S._job_name(char.job_id, self.game_data)
         return (
             f"Equipped {item_id} on {char.name} ({slot}).\n\n"
             f"Updated stats: {S._stat_line(char)}\n"
