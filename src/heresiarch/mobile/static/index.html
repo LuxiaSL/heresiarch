@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#0d0d12">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Heresiarch">
+<!-- Relative URLs so the same bundle serves at the LAN root and under
+     a subpath (GitHub Pages /heresiarch/) -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>Heresiarch</title>
 <style>
   :root {
@@ -123,13 +130,20 @@ function toast(msg) {
   t.textContent = msg; t.style.display = "block";
   clearTimeout(toast._h); toast._h = setTimeout(() => t.style.display = "none", 4000);
 }
+// Transport seam: LAN mode fetches the FastAPI server; Pyodide mode
+// (engine-in-wasm) installs window.HX_LOCAL_DISPATCH before this script
+// runs and the whole client works serverless, unchanged.
+async function transport(path, body) {
+  if (window.HX_LOCAL_DISPATCH) return window.HX_LOCAL_DISPATCH(path, body || null);
+  const res = await fetch(path, body ? {
+    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
+  } : undefined);
+  return res.json();
+}
 async function api(path, body) {
   if (ui.busy) return; ui.busy = true;
   try {
-    const res = await fetch(path, body ? {
-      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
-    } : undefined);
-    const payload = await res.json();
+    const payload = await transport(path, body);
     onPayload(payload);
   } catch (e) {
     toast("Connection lost: " + e.message);
@@ -271,11 +285,7 @@ function autoContinue() {
 }
 async function fetchEquipPreview(cid, itemId) {
   try {
-    const res = await fetch("/api/preview_equip", {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({character_id: cid, item_id: itemId}),
-    });
-    const p = await res.json();
+    const p = await transport("/api/preview_equip", {character_id: cid, item_id: itemId});
     if (!p.ok) { toast(p.error || "Preview failed"); return; }
     ui.equipPreview = {cid, item_id: itemId, data: p};
     ui.pickUse = null;
@@ -1146,6 +1156,14 @@ function playerAP(cid) {
 }
 
 api("/api/state");
+
+// PWA shell. Service workers need a secure context: https, localhost,
+// or (Android over LAN) chrome://flags/#unsafely-treat-insecure-origin-as-secure
+// with this origin added. iOS installs fullscreen from the apple-* metas
+// regardless.
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
 </script>
 </body>
 </html>

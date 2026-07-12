@@ -50,10 +50,12 @@ src/heresiarch/
     session.py         # Game session state management, phase gating
     summarizer.py      # Engine state → text for LLM consumption
 
-  mobile/              # LAN phone UI (FastAPI + single-file client)
-    app.py             # Whitelist dispatch over GameSession
+  mobile/              # Phone UI: one client, two transports (LAN / wasm)
+    dispatch.py        # Framework-free whitelist dispatch over GameSession
+    app.py             # FastAPI wrapper: HTTP + lock + PWA shell routes
     views.py           # StatePayload: structured views for the phone
-    static/index.html  # The entire phone client
+    static/index.html  # The entire phone client (transport() seam for wasm)
+    static/            # + manifest.webmanifest, sw.js, icons/ (PWA shell)
 
   tools/               # CLI balance tools
     sim.py             # Sweep, DPR, economy, progression sims + CLI entry
@@ -69,6 +71,10 @@ src/heresiarch/
     core/config_model.py    # Config pydantic models
     core/response_models.py # API response models
     api/               # HTTP endpoints (sim_routes, config_routes, data_routes)
+
+spikes/pyodide/        # Serverless build: engine in wasm CPython (Pyodide)
+                       # build.py stages dist/, serve.py hosts, verify_node.mjs
+                       # is the headless conformance check. See its README.
 
 data/                  # YAML game data (shared + per-region)
   jobs/                # 4 starter jobs

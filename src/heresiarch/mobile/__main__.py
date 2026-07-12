@@ -29,9 +29,16 @@ def main() -> None:
 
     from heresiarch.mobile.app import create_app
 
+    origin = f"http://{_lan_ip()}:{args.port}"
     print()
     print("  Heresiarch mobile — open on your phone:")
-    print(f"    http://{_lan_ip()}:{args.port}")
+    print(f"    {origin}")
+    print()
+    print("  Install to homescreen (fullscreen launch):")
+    print("    iOS: Share → Add to Home Screen (works over plain http)")
+    print("    Android: needs a secure context for install + offline shell —")
+    print("      add this origin under chrome://flags/#unsafely-treat-insecure-origin-as-secure")
+    print(f"      ({origin}), relaunch Chrome, then menu → Add to Home screen")
     print()
 
     uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")

@@ -1,45 +1,28 @@
-"""FastAPI app for the mobile sniff test.
+"""FastAPI app for the mobile frontend (LAN transport).
 
 One GameSession, one player (the designer's phone on the LAN).
-POST /api/action dispatches {tool, args} through a whitelist to
-GameSession methods; every response is a full StatePayload so the
-client is a dumb renderer. AgentError surfaces as payload.error,
-never a 500.
+All behavior lives in dispatch.py — this file only adds HTTP, a
+lock, and static-asset routes. The Pyodide wasm page drives the same
+dispatch functions with no server at all.
 """
 
 from __future__ import annotations
 
 import threading
-import traceback
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from heresiarch.agent.session import AgentError, GameSession
-from heresiarch.mobile.views import (
-    EquipPreview,
-    StatePayload,
-    build_equip_preview,
-    build_state_payload,
+from heresiarch.agent.session import GameSession
+from heresiarch.mobile.dispatch import (
+    current_state,
+    dispatch_action,
+    dispatch_preview,
 )
-
-# Session methods the phone may call. Anything else is rejected.
-ALLOWED_TOOLS: frozenset[str] = frozenset({
-    "new_run", "get_state",
-    "list_zones", "enter_zone", "leave_zone", "get_zone_status",
-    "enter_town", "leave_town", "rest_at_lodge",
-    "shop_browse", "shop_buy", "shop_sell",
-    "fight", "submit_decisions", "auto_battle_round", "get_combat_state",
-    "pick_loot",
-    "inspect_candidate", "recruit",
-    "party_status", "equip", "unequip", "swap_roster", "dismiss",
-    "use_scroll", "use_consumable", "mc_swap_job", "drop_item",
-    "get_battle_record", "get_run_summary",
-    "save_run", "load_run", "list_saves",
-})
+from heresiarch.mobile.views import EquipPreview, StatePayload
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -77,52 +60,19 @@ def create_app(
     @app.get("/api/state", response_model=StatePayload)
     def get_current_state() -> StatePayload:
         with lock:
-            text = ""
-            if session.run is not None:
-                try:
-                    text = session.get_state()
-                except AgentError:
-                    text = ""
-            return build_state_payload(session, text=text)
+            return current_state(session)
 
     @app.post("/api/action", response_model=StatePayload)
     def post_action(req: ActionRequest) -> StatePayload:
         with lock:
-            if req.tool not in ALLOWED_TOOLS:
-                return build_state_payload(
-                    session, error=f"Unknown tool: {req.tool!r}",
-                )
-            method = getattr(session, req.tool, None)
-            if method is None:
-                return build_state_payload(
-                    session, error=f"Tool not available: {req.tool!r}",
-                )
-            try:
-                text = method(**req.args)
-            except AgentError as e:
-                return build_state_payload(session, error=str(e))
-            except TypeError as e:
-                # Bad/missing kwargs from the client
-                return build_state_payload(session, error=f"Bad arguments: {e}")
-            except Exception as e:  # noqa: BLE001 — spike: report, don't 500
-                traceback.print_exc()
-                return build_state_payload(
-                    session, error=f"Internal error: {type(e).__name__}: {e}",
-                )
-            return build_state_payload(session, text=text)
+            return dispatch_action(session, req.tool, req.args)
 
     @app.post("/api/preview_equip", response_model=EquipPreview)
     def preview_equip(req: PreviewRequest) -> EquipPreview:
         with lock:
-            try:
-                return build_equip_preview(
-                    session, req.character_id, req.item_id, req.slot,
-                )
-            except Exception as e:  # noqa: BLE001 — spike: report, don't 500
-                traceback.print_exc()
-                return EquipPreview(
-                    ok=False, error=f"Internal error: {type(e).__name__}: {e}",
-                )
+            return dispatch_preview(
+                session, req.character_id, req.item_id, req.slot,
+            )
 
     @app.get("/")
     def index() -> FileResponse:
@@ -130,5 +80,35 @@ def create_app(
             _STATIC_DIR / "index.html",
             headers={"Cache-Control": "no-store"},
         )
+
+    # --- PWA shell (manifest / service worker / icons) ---
+
+    @app.get("/manifest.webmanifest")
+    def manifest() -> FileResponse:
+        return FileResponse(
+            _STATIC_DIR / "manifest.webmanifest",
+            media_type="application/manifest+json",
+        )
+
+    @app.get("/sw.js")
+    def service_worker() -> FileResponse:
+        # no-store so a new SW version is picked up on next launch
+        return FileResponse(
+            _STATIC_DIR / "sw.js",
+            media_type="text/javascript",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.get("/icons/{name}")
+    def icon(name: str) -> FileResponse:
+        path = _STATIC_DIR / "icons" / name
+        # resolve() guards traversal; icons dir only holds PNGs
+        if (
+            not path.resolve().is_relative_to((_STATIC_DIR / "icons").resolve())
+            or path.suffix != ".png"
+            or not path.is_file()
+        ):
+            raise HTTPException(status_code=404)
+        return FileResponse(path, media_type="image/png")
 
     return app

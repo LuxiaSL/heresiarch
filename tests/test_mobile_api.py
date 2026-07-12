@@ -34,6 +34,40 @@ def test_index_serves_html(client: TestClient) -> None:
     assert "HERESIARCH" in res.text
 
 
+def test_pwa_shell_assets_served(client: TestClient) -> None:
+    manifest = client.get("/manifest.webmanifest")
+    assert manifest.status_code == 200
+    assert manifest.headers["content-type"].startswith("application/manifest+json")
+    data = manifest.json()
+    assert data["display"] == "fullscreen"
+    icon_srcs = [i["src"] for i in data["icons"]]
+    # Relative so the bundle also works under a subpath (GitHub Pages)
+    assert "icons/icon-512.png" in icon_srcs
+    assert not any(src.startswith("/") for src in icon_srcs)
+    assert data["start_url"] == "./"
+
+    sw = client.get("/sw.js")
+    assert sw.status_code == 200
+    assert "no-store" in sw.headers["cache-control"]
+
+    for src in icon_srcs:
+        res = client.get("/" + src)
+        assert res.status_code == 200, src
+        assert res.headers["content-type"] == "image/png"
+        assert res.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_icon_route_rejects_traversal_and_unknown(client: TestClient) -> None:
+    assert client.get("/icons/nope.png").status_code == 404
+    assert client.get("/icons/..%2Findex.html").status_code in (400, 404)
+
+
+def test_index_links_pwa_shell(client: TestClient) -> None:
+    html = client.get("/").text
+    assert 'rel="manifest"' in html
+    assert "serviceWorker" in html
+
+
 def test_initial_state_lists_jobs(client: TestClient) -> None:
     res = client.get("/api/state")
     assert res.status_code == 200
