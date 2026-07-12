@@ -276,6 +276,31 @@ def test_wait_primary_accepted_when_not_charging(client: TestClient) -> None:
     assert payload["error"] is None, payload["error"]
 
 
+def test_taunt_constraint_flows_to_combat_view(client: TestClient) -> None:
+    """The taunt lock the client applies to EVERY target picker (primary,
+    cheat-extra, bonus slots) is driven by CombatantView.taunted_by — the
+    payload must name living taunters so all pickers filter identically."""
+    _act(client, "new_run", {"name": "Locked", "job_id": "einherjar", "seed": 42})
+    _act(client, "enter_zone", {"zone_id": "zone_01"})
+    payload = _act(client, "fight")
+    assert payload["phase"] == "COMBAT"
+
+    session = client.app.state.session
+    combat = session.combat_state
+    assert combat is not None
+    mc = combat.player_combatants[0]
+    enemy = next(e for e in combat.enemy_combatants if e.is_alive)
+    mc.taunted_by.append(enemy.id)
+
+    payload = client.get("/api/state").json()
+    view = payload["combat"]["players"][0]
+    assert view["taunted_by"] == [enemy.id]
+    # The taunter is present (and alive) in the enemy views, so the
+    # client can resolve the lock against real target chips
+    enemy_views = {e["id"]: e for e in payload["combat"]["enemies"]}
+    assert enemy.id in enemy_views and enemy_views[enemy.id]["is_alive"]
+
+
 def test_loot_view_reports_xp_awards(client: TestClient) -> None:
     """Victory loot payload carries per-character XP gains (TUI parity)."""
     _act(client, "new_run", {"name": "Leveler", "job_id": "einherjar", "seed": 42})

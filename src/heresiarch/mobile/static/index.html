@@ -356,11 +356,22 @@ function combatantName(id) {
   const all = [...(S.combat?.players || []), ...(S.combat?.enemies || [])];
   return (all.find(c => c.id === id) || {name: id}).name;
 }
+// Taunt lock, shared by EVERY target picker (primary, cheat-extra and
+// bonus slots) so no part of the UI offers a target the engine would
+// redirect away from.
+function taunterIdsFor(p) {
+  return (p.taunted_by || []).filter(id => livingEnemies().some(e => e.id === id));
+}
+function enemyTargetsFor(p) {
+  const taunters = taunterIdsFor(p);
+  const es = livingEnemies();
+  return taunters.length ? es.filter(e => taunters.includes(e.id)) : es;
+}
 function resolveTargetFor(p, abilityId, wanted) {
   const ab = abilityOf(p, abilityId);
   if (!ab) return null;
   if (ab.target === "SINGLE_ENEMY") {
-    const es = livingEnemies();
+    const es = enemyTargetsFor(p); // taunt-locked, same rule as the pickers
     return es.some(e => e.id === wanted) ? wanted : (es[0]?.id ?? null);
   }
   if (ab.target === "SINGLE_ALLY") {
@@ -910,7 +921,9 @@ function slotEditor(p, d, key) {
   let tchips = "";
   const ab = abilityOf(p, aid);
   if (ab && ab.target === "SINGLE_ENEMY" && livingEnemies().length > 1) {
-    tchips = `<div class="chips">` + livingEnemies().map(en =>
+    // Same taunt lock as the primary picker — never offer a target the
+    // engine would redirect away from
+    tchips = `<div class="chips">` + enemyTargetsFor(p).map(en =>
       `<button class="chip ${resolveTargetFor(p, aid, slot.target) === en.id ? "sel" : ""}"
         data-a="slot-tgt" data-c="${esc(p.id)}" data-k="${key}" data-id="${esc(en.id)}">
         ${esc(en.name)} <span class="dim">${en.hp}</span></button>`).join("") + `</div>`;
@@ -944,7 +957,7 @@ function decisionCard(p) {
   const d = ui.D[p.id];
   if (!d) return "";
   const ab = abilityOf(p, d.ability);
-  const taunters = (p.taunted_by || []).filter(id => livingEnemies().some(e => e.id === id));
+  const taunters = taunterIdsFor(p);
   const badges =
     `<span class="badge ap">AP ${p.ap}</span>` +
     (p.cheat_debt ? `<span class="badge debt">debt ${p.cheat_debt}</span>` : "") +
@@ -989,9 +1002,7 @@ function decisionCard(p) {
             `<button class="chip ${d.itemTarget === x.id ? "sel" : ""}" data-a="set-itemtgt" data-c="${esc(p.id)}" data-id="${esc(x.id)}">${esc(x.name)} ${hpSpan(x)}</button>`).join("") + `</div>`;
       }
     } else if (ab && ab.target === "SINGLE_ENEMY" && livingEnemies().length > 1) {
-      const targets = taunters.length
-        ? livingEnemies().filter(e => taunters.includes(e.id))
-        : livingEnemies();
+      const targets = enemyTargetsFor(p);
       body += `<div class="dim small" style="margin-top:6px">target:</div><div class="chips">` +
         targets.map(e =>
           `<button class="chip ${resolveTargetFor(p, d.ability, d.target) === e.id ? "sel" : ""}" data-a="set-tgt" data-c="${esc(p.id)}" data-id="${esc(e.id)}">
