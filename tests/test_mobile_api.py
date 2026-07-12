@@ -515,3 +515,73 @@ def test_town_view_has_priced_shop(client: TestClient) -> None:
     assert town is not None
     assert town["shop_items"], "town shop is empty"
     assert all(it["price"] is not None for it in town["shop_items"])
+
+
+def test_title_saves_list_and_load(tmp_path: Path) -> None:
+    """Autosaves show up in the title-screen browser and load from it."""
+    notes = tmp_path / "notes.json"
+    first = TestClient(create_app(notes_path=notes))
+    payload = _act(first, "new_run", {"name": "Keeper", "job_id": "einherjar", "seed": 9})
+    assert payload["phase"] == "ZONE_SELECT"  # new_run autosaved
+
+    # Fresh session over the same storage = app relaunch
+    second = TestClient(create_app(notes_path=notes))
+    payload = second.get("/api/state").json()
+    assert payload["phase"] == "SETUP"
+    slots = {s["slot"]: s for s in payload["saves"]}
+    assert "autosave" in slots
+    assert slots["autosave"]["mc_name"] == "Keeper"
+    assert slots["autosave"]["level"] >= 1
+
+    payload = _act(second, "load_run", {"slot": "autosave"})
+    assert payload["error"] is None, payload["error"]
+    assert payload["phase"] == "ZONE_SELECT"
+    names = [c["name"] for c in payload["party"]["characters"]]
+    assert "Keeper" in names
+
+
+def test_missing_save_reports_in_text(client: TestClient) -> None:
+    payload = _act(client, "load_run", {"slot": "autosave"})
+    assert payload["phase"] == "SETUP"
+    assert "not found" in payload["text"].lower()
+
+
+def test_export_import_round_trip(tmp_path: Path) -> None:
+    """Export from one device, import on another, keep playing."""
+    src = TestClient(create_app(notes_path=tmp_path / "src" / "notes.json"))
+    _act(src, "new_run", {"name": "Traveler", "job_id": "berserker", "seed": 11})
+    res = src.post("/api/export_save", json={"slot": "autosave"})
+    assert res.status_code == 200
+    exported = res.json()
+    assert exported["ok"], exported
+    assert exported["data"]["run"]
+
+    dst = TestClient(create_app(notes_path=tmp_path / "dst" / "notes.json"))
+    res = dst.post(
+        "/api/import_save", json={"slot": "autosave", "data": exported["data"]},
+    )
+    assert res.status_code == 200
+    payload = res.json()
+    assert payload["error"] is None, payload["error"]
+    assert any(s["slot"] == "autosave" for s in payload["saves"])
+
+    payload = _act(dst, "load_run", {"slot": "autosave"})
+    assert payload["phase"] == "ZONE_SELECT"
+    assert "Traveler" in [c["name"] for c in payload["party"]["characters"]]
+
+
+def test_import_rejects_garbage(client: TestClient) -> None:
+    res = client.post("/api/import_save", json={"slot": "evil", "data": {"nope": 1}})
+    payload = res.json()
+    assert payload["error"] is not None
+
+    res = client.post(
+        "/api/import_save",
+        json={"slot": "../../etc/passwd", "data": {"run": {"bad": True}}},
+    )
+    payload = res.json()
+    assert payload["error"] is not None  # fails validation before any write
+
+    res = client.post("/api/export_save", json={"slot": "../secrets"})
+    exported = res.json()
+    assert exported["ok"] is False

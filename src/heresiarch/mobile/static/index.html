@@ -166,6 +166,9 @@ function onPayload(p) {
   S = p;
   ui.confirm = null; ui.equipPreview = null;
   if (p.error) { toast(p.error); ui.auto = false; }
+  // A failed load_run reports via text, not error (e.g. "Save not
+  // found") — on the title screen that must not be a silent no-op
+  else if (p.phase === "SETUP" && prevPhase === "SETUP" && p.text) toast(p.text);
   if (p.phase !== ui.lastPhase) {
     ui.pickUse = null;
     if (p.phase === "POST_COMBAT") ui.lootSel = new Set((p.loot?.items || []).map((_, i) => i));
@@ -695,8 +698,54 @@ function screenSetup(headerHtml) {
       <div class="chips">${jobs}</div>
       <div style="margin-top:14px"><button class="primary" data-a="start-run">Begin Run</button></div>
     </div>
-    <div class="card"><button style="width:100%" data-a="load-save">Load autosave</button></div>`;
+    ${savesCard()}`;
 }
+function savesCard() {
+  const rows = (S.saves || []).map(s => `
+    <div class="row" style="margin-top:8px">
+      <div class="grow"><span class="name small">${esc(s.slot)}</span>
+        <div class="dim small">${esc(s.mc_name)} Lv${s.level}${s.zones_completed ? ` · zones ${s.zones_completed}` : ""}${s.saved_at ? ` · ${esc(s.saved_at.replace("T", " "))}` : ""}</div></div>
+      <button class="small" data-a="export-save" data-slot="${esc(s.slot)}" title="Export">⇩</button>
+      <button class="gold" data-a="load-save" data-slot="${esc(s.slot)}">Load</button>
+    </div>`).join("");
+  return `<div class="card">
+    <div class="dim small">SAVES · this device</div>
+    ${rows || `<div class="dim small" style="margin-top:6px">No saves on this device yet.</div>`}
+    <div style="margin-top:10px"><button style="width:100%" data-a="import-save">⇪ Import save file…</button></div>
+    <input type="file" id="import-file" accept=".json,application/json" style="display:none">
+  </div>`;
+}
+function downloadJSON(name, obj) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {type: "application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+async function exportSave(slot) {
+  try {
+    const p = await transport("/api/export_save", {slot});
+    if (!p.ok) { toast(p.error || "Export failed"); return; }
+    downloadJSON(`heresiarch-${p.slot}.json`, p.data);
+  } catch (e) { toast("Export failed: " + e.message); }
+}
+async function importSaveFile(file) {
+  try {
+    const data = JSON.parse(await file.text());
+    const slot = file.name.replace(/\.json$/i, "").replace(/^heresiarch-/, "");
+    const p = await transport("/api/import_save", {slot, data});
+    if (p.error) { toast(p.error); return; }
+    if (p.text) toast(p.text);
+    onPayload(p);
+  } catch (e) { toast("Import failed: " + e.message); }
+}
+document.addEventListener("change", (ev) => {
+  if (ev.target.id === "import-file" && ev.target.files?.[0]) {
+    importSaveFile(ev.target.files[0]);
+    ev.target.value = "";
+  }
+});
 function screenZoneSelect() {
   const zs = S.zone_select || {zones: [], towns: []};
   const towns = zs.towns.map(t =>
@@ -1060,8 +1109,12 @@ document.addEventListener("click", (ev) => {
       const name = (document.getElementById("mc-name")?.value || "Wanderer").trim() || "Wanderer";
       act("new_run", {name, job_id: ui.selJob}); break;
     }
-    case "load-save": act("load_run", {slot: "autosave"}); break;
-    case "save": act("save_run", {slot: "autosave"}); break;
+    case "load-save": act("load_run", {slot: el.dataset.slot || "autosave"}); break;
+    case "export-save": exportSave(el.dataset.slot); break;
+    case "import-save": document.getElementById("import-file")?.click(); break;
+    // Manual saves get their own slot — "autosave" is overwritten on
+    // every transition, so saving there would be pointless
+    case "save": act("save_run", {slot: "manual"}); break;
     case "enter-zone": act("enter_zone", {zone_id: id}); break;
     case "leave-zone": act("leave_zone"); break;
     case "enter-town": act("enter_town", {town_id: id}); break;

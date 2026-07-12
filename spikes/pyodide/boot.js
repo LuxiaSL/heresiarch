@@ -74,19 +74,41 @@
     status("boot failed: " + e.message);
   });
 
-  function schedulePersist() {
-    // Debounced IndexedDB flush; losing the last 500ms on tab-kill is fine
-    if (persistTimer) return;
-    persistTimer = setTimeout(function () {
-      persistTimer = null;
-      if (py) py.FS.syncfs(false, function () {});
-    }, 500);
+  var syncBusy = false;
+  var syncAgain = false;
+  function flushPersist() {
+    if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
+    if (!py) return;
+    if (syncBusy) { syncAgain = true; return; } // serialize; rerun after
+    syncBusy = true;
+    py.FS.syncfs(false, function (e) {
+      syncBusy = false;
+      if (e) console.error("persist sync failed:", e);
+      if (syncAgain) { syncAgain = false; flushPersist(); }
+    });
   }
+
+  function schedulePersist() {
+    // Debounced IndexedDB flush; the visibility hooks below close the
+    // window where swiping the app away could lose the last action
+    if (persistTimer) return;
+    persistTimer = setTimeout(flushPersist, 500);
+  }
+
+  // Mobile browsers kill background PWAs without warning — flush the
+  // moment we stop being visible
+  window.addEventListener("pagehide", flushPersist);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") flushPersist();
+  });
 
   window.HX_LOCAL_DISPATCH = async function (path, body) {
     await boot;
     var out = handle(path, body ? JSON.stringify(body) : "");
-    schedulePersist();
+    // Imports are rare and explicit — make them durable right now;
+    // everything else rides the debounce
+    if (path === "/api/import_save") flushPersist();
+    else schedulePersist();
     return JSON.parse(out);
   };
 })();

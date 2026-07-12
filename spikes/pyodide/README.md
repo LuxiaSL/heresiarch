@@ -60,6 +60,10 @@ packages from the vendored index (no CDN).
   insecure-origin flag (same caveat as the LAN PWA, printed by
   `python -m heresiarch.mobile`). The Pages deployment is https, so
   none of that applies there.
-- One session per page; no cross-device save sync.
-- iOS may evict IndexedDB for rarely-used sites; export/import of
-  saves is future work if this graduates.
+- One session per page; no automatic cross-device save sync — but the
+  title screen has per-slot export (downloads the save JSON) and
+  import (validated before write), which doubles as device transfer
+  and as insurance against browser storage eviction. LAN-server saves
+  live in `artifacts/mobile/agent_saves/*.json` and import directly.
+- Persistence details: saves flush to IndexedDB debounced 500 ms after
+  each action, immediately on import, and on pagehide/hidden.

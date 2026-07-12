@@ -33,5 +33,11 @@ def hx_handle(path: str, body_json: str) -> str:
             body.get("item_id", ""),
             body.get("slot"),
         ).model_dump_json()
+    if path == "/api/export_save":
+        return _D.export_save(_session, body.get("slot", "")).model_dump_json()
+    if path == "/api/import_save":
+        return _D.import_save(
+            _session, body.get("slot", ""), body.get("data") or {},
+        ).model_dump_json()
     # Unknown path → the dispatcher's own "Unknown tool" error payload
     return _D.dispatch_action(_session, "", {}).model_dump_json()

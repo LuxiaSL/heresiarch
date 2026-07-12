@@ -21,8 +21,10 @@ from heresiarch.mobile.dispatch import (
     current_state,
     dispatch_action,
     dispatch_preview,
+    export_save,
+    import_save,
 )
-from heresiarch.mobile.views import EquipPreview, StatePayload
+from heresiarch.mobile.views import EquipPreview, SaveTransfer, StatePayload
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -36,6 +38,15 @@ class PreviewRequest(BaseModel):
     character_id: str
     item_id: str
     slot: str | None = None
+
+
+class ExportRequest(BaseModel):
+    slot: str
+
+
+class ImportRequest(BaseModel):
+    slot: str
+    data: dict[str, Any]
 
 
 def create_app(
@@ -73,6 +84,16 @@ def create_app(
             return dispatch_preview(
                 session, req.character_id, req.item_id, req.slot,
             )
+
+    @app.post("/api/export_save", response_model=SaveTransfer)
+    def post_export_save(req: ExportRequest) -> SaveTransfer:
+        with lock:
+            return export_save(session, req.slot)
+
+    @app.post("/api/import_save", response_model=StatePayload)
+    def post_import_save(req: ImportRequest) -> StatePayload:
+        with lock:
+            return import_save(session, req.slot, req.data)
 
     @app.get("/")
     def index() -> FileResponse:

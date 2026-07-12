@@ -264,6 +264,26 @@ class PartyView(BaseModel):
     characters: list[CharacterView] = Field(default_factory=list)
 
 
+class SaveSlotView(BaseModel):
+    """One save file, summarized for the title-screen browser."""
+
+    slot: str
+    mc_name: str = "?"
+    level: int = 0
+    phase: str = ""
+    zones_completed: int = 0
+    saved_at: str = ""  # ISO timestamp from file mtime, "" if unknown
+
+
+class SaveTransfer(BaseModel):
+    """Export payload: the raw save JSON plus enough to name the file."""
+
+    ok: bool
+    slot: str = ""
+    data: dict | None = None
+    error: str | None = None
+
+
 class StatePayload(BaseModel):
     """Everything the phone UI needs to render one screen."""
 
@@ -287,6 +307,8 @@ class StatePayload(BaseModel):
     events: list[CombatEventView] = Field(default_factory=list)
     events_summary: list[CombatEventView] = Field(default_factory=list)
     hp_start: dict[str, int] = Field(default_factory=dict)
+    # Save browser — populated on the title screen (SETUP) only
+    saves: list[SaveSlotView] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -884,6 +906,43 @@ def build_map_view(session: GameSession) -> MapVM | None:
             return None
 
 
+def build_saves_view(session: GameSession) -> list[SaveSlotView]:
+    """Summarize every save file for the title-screen browser.
+
+    Reads save JSON directly (metadata only, no RunState validation) so
+    a corrupt file degrades to a bare slot entry instead of vanishing.
+    """
+    import json as _json
+    from datetime import datetime
+
+    saves_dir = session._get_saves_dir()  # noqa: SLF001 — spike-sanctioned
+    out: list[SaveSlotView] = []
+    for path in sorted(saves_dir.glob("*.json")):
+        view = SaveSlotView(slot=path.stem)
+        try:
+            view.saved_at = datetime.fromtimestamp(
+                path.stat().st_mtime,
+            ).isoformat(timespec="minutes")
+        except OSError:
+            pass
+        try:
+            data = _json.loads(path.read_text())
+            view.phase = str(data.get("phase", ""))
+            run = data.get("run", {})
+            view.zones_completed = len(run.get("zones_completed", []))
+            for char in run.get("party", {}).get("characters", {}).values():
+                if char.get("is_mc"):
+                    view.mc_name = str(char.get("name", "?"))
+                    view.level = int(char.get("level", 0))
+                    break
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass  # unreadable metadata: keep the bare slot row
+        out.append(view)
+    # Newest first; autosave floats to the top within same-minute ties
+    out.sort(key=lambda s: (s.saved_at, s.slot == "autosave"), reverse=True)
+    return out
+
+
 def build_state_payload(
     session: GameSession, *, text: str = "", error: str | None = None,
 ) -> StatePayload:
@@ -921,4 +980,8 @@ def build_state_payload(
         events=_safe(build_round_events, default=[]),
         events_summary=_safe(build_round_events_summary, default=[]),
         hp_start=_safe(build_hp_start, default={}),
+        saves=(
+            _safe(build_saves_view, default=[])
+            if session.phase.value == "SETUP" else []
+        ),
     )
