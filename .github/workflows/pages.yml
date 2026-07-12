@@ -1,0 +1,54 @@
+# Deploy the serverless (engine-in-wasm) build to GitHub Pages.
+#
+# Every push to main restages spikes/pyodide/dist/ — engine wheel,
+# zipped YAML data, phone client, vendored Pyodide runtime — and
+# publishes it. Installed phones pick up the new version on their next
+# online launch (the service worker is network-first).
+
+name: Deploy to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Cache vendored pyodide runtime
+        uses: actions/cache@v4
+        with:
+          path: spikes/pyodide/dist/pyodide
+          # keep in sync with PYODIDE_VERSION in spikes/pyodide/build.py
+          key: pyodide-dist-314.0.2
+
+      - name: Stage serverless build
+        run: uv run python spikes/pyodide/build.py
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: spikes/pyodide/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
