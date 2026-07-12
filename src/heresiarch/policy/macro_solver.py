@@ -192,7 +192,7 @@ class MacroSolver:
 
         # Quick-skip: healthy party doesn't need to search
         hp_pct = _mean_party_hp_pct(run)
-        potions = _count_potions(run)
+        potions = _count_potions(run, self.game_data)
         if (
             hp_pct >= self.solver_config.skip_retreat_hp_pct
             and potions >= self.solver_config.skip_retreat_min_potions
@@ -270,7 +270,7 @@ class MacroSolver:
             has_sellable = any(
                 iid != POTION_ITEM_ID for iid in run.party.stash
             )
-            has_potions = _count_potions(run) > 0
+            has_potions = _count_potions(run, self.game_data) > 0
             if not has_gold and not has_sellable and not has_potions:
                 return False
 
@@ -692,7 +692,7 @@ class MacroSolver:
         if run.is_dead:
             return encounters_survived * cfg.encounter_weight
         hp_pct = _mean_party_hp_pct(run)
-        potions = _count_potions(run)
+        potions = _count_potions(run, self.game_data)
         return (
             encounters_survived * cfg.encounter_weight
             + hp_pct * cfg.hp_weight

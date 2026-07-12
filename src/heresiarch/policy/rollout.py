@@ -163,10 +163,15 @@ class HeuristicRolloutPolicy:
                     actor, enemies, ap_needed, bonus, best_ability_id, dmg_fn,
                 )
 
-        # Rule 2: heal if about to die
+        # Rule 2: heal if about to die — biggest heal in reach (the
+        # potion ladder: a 50 sip is noise on a pit frame, a 150/400
+        # is not).
         if incoming * self.config.heal_safety >= actor.current_hp:
-            if POTION_ITEM_ID in legal.available_consumable_ids:
-                return _build_heal(actor, bonus)
+            heal_iid = _best_heal_item(
+                legal.available_consumable_ids, actor, self.game_data,
+            )
+            if heal_iid is not None:
+                return _build_heal(actor, bonus, heal_iid)
 
         # Rule 3: continue frenzy chain — berserker's damage multiplier
         # persists across rounds as long as you keep attacking. Breaking
@@ -337,9 +342,28 @@ def _build_ap_dump(
     )
 
 
+def _best_heal_item(
+    available: list[str],
+    actor: CombatantState,
+    game_data,
+) -> str | None:
+    """Largest-heal consumable in the available list, or None."""
+    best: str | None = None
+    best_heal = 0
+    for iid in available:
+        item = game_data.items.get(iid)
+        if item is None or not item.is_consumable:
+            continue
+        heal = item.heal_amount or int(actor.max_hp * item.heal_percent)
+        if heal > best_heal:
+            best, best_heal = iid, heal
+    return best
+
+
 def _build_heal(
     actor: CombatantState,
     bonus: list[CombatAction],
+    item_id: str = POTION_ITEM_ID,
 ) -> PlayerTurnDecision:
     return PlayerTurnDecision(
         combatant_id=actor.id,
@@ -347,7 +371,7 @@ def _build_heal(
         primary_action=CombatAction(
             actor_id=actor.id,
             ability_id="use_item",
-            item_id=POTION_ITEM_ID,
+            item_id=item_id,
             target_ids=[actor.id],
         ),
         bonus_actions=bonus,

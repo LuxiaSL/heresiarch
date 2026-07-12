@@ -534,11 +534,24 @@ def _in_town_heal_loop(run: RunState, ctx: _RunContext) -> RunState:
     target_pct = getattr(config, 'in_town_heal_target_pct', 1.0) if config else 1.0
 
     available_items = gl.resolve_town_shop(run)
-    potion_id = "minor_potion"
-    if potion_id not in available_items:
+
+    def _heal_amt(iid: str) -> int:
+        item = ctx.game_data.items.get(iid)
+        if item is None or not item.is_consumable:
+            return 0
+        return item.heal_amount
+
+    # Flat-heal rungs the shop stocks, smallest first (ladder-aware:
+    # post-zone-3 shops sell 150s — a pit frame heals in 3 gulps, not 8
+    # sips; a Lv1 frame still zero-wastes minors).
+    shop_rungs = sorted(
+        {iid for iid in available_items if _heal_amt(iid) > 0},
+        key=_heal_amt,
+    )
+    if not shop_rungs:
         return run
 
-    max_iterations = 20
+    max_iterations = 30
     for _ in range(max_iterations):
         active = [
             run.party.characters[cid]
@@ -553,27 +566,53 @@ def _in_town_heal_loop(run: RunState, ctx: _RunContext) -> RunState:
         if not wounded:
             break
 
-        potion_in_stash = potion_id in run.party.stash
-        if not potion_in_stash:
-            item = ctx.game_data.items.get(potion_id)
+        target_char = min(wounded, key=lambda c: c.current_hp / max(1, c.max_hp))
+        missing = target_char.max_hp - target_char.current_hp
+
+        # Stash first: the largest held rung the missing HP fully
+        # absorbs (zero waste). Otherwise buy: largest fitting shop
+        # rung, degrading to the smallest rung for the final top-up
+        # (in-town waste on the last potion is doctrine-accepted).
+        held = sorted(
+            (iid for iid in run.party.stash if _heal_amt(iid) > 0),
+            key=_heal_amt,
+        )
+        potion_id = next(
+            (iid for iid in reversed(held) if _heal_amt(iid) <= missing), None,
+        )
+        if potion_id is None:
+            buy_id = next(
+                (iid for iid in reversed(shop_rungs) if _heal_amt(iid) <= missing),
+                shop_rungs[0],
+            )
+            item = ctx.game_data.items.get(buy_id)
             if item is None:
                 break
             price = calculate_buy_price(item.base_price, run.party.cha)
-            if run.party.money < price or len(run.party.stash) >= STASH_LIMIT:
+            if (
+                run.party.money >= price
+                and len(run.party.stash) < STASH_LIMIT
+            ):
+                try:
+                    new_party = gl.shop_engine.buy_item(run.party, buy_id, price)
+                except ValueError:
+                    break
+                run = run.model_copy(update={"party": new_party})
+                run = run.record_macro(
+                    "shop_buy",
+                    {"item_id": buy_id, "price": price, "offered": []},
+                )
+                ctx.metrics.gold_spent_shop += price
+                ctx.metrics.shop_purchases += 1
+                potion_id = buy_id
+            elif held:
+                # Can't buy the fitting rung: drink the smallest held
+                # one instead (waste accepted over leaving wounded).
+                potion_id = held[0]
+            else:
                 break
-            try:
-                new_party = gl.shop_engine.buy_item(run.party, potion_id, price)
-            except ValueError:
-                break
-            run = run.model_copy(update={"party": new_party})
-            run = run.record_macro(
-                "shop_buy",
-                {"item_id": potion_id, "price": price, "offered": []},
-            )
-            ctx.metrics.gold_spent_shop += price
-            ctx.metrics.shop_purchases += 1
 
-        target_char = min(wounded, key=lambda c: c.current_hp / max(1, c.max_hp))
+        target_char = run.party.characters.get(target_char.id) or target_char
         hp_before = target_char.current_hp
         try:
             run = gl.use_consumable(run, potion_id, target_char.id)

@@ -169,7 +169,7 @@ class GoldenMacroPolicy:
         if run.party.money < price:
             return False
 
-        potion_count = _count_potions(run)
+        potion_count = self._count_potions(run)
         stash_free = STASH_LIMIT - len(run.party.stash)
         if potion_count < self.config.potion_stockpile_target and stash_free >= 1:
             return True
@@ -279,7 +279,7 @@ class GoldenMacroPolicy:
         sold: set[str] = set()
         projected_gold = run.party.money
         for iid in list(run.party.stash):
-            if iid == POTION_ITEM_ID:
+            if self._is_heal_potion(iid):
                 continue
             if self._should_sell(iid, mc, run):
                 actions.append(ShopAction(action="sell", item_id=iid))
@@ -319,12 +319,18 @@ class GoldenMacroPolicy:
                 actions.append(ShopAction(action="buy", item_id=upgrade))
                 projected_gold -= price
 
-        # Potions: buy up to cap. If stash is full after sells above,
-        # sell the least useful remaining items to make room.
-        potion_count = _count_potions(run)
-        potion_price = self._potion_price(run)
+        # Potions: buy up to cap — climbing the LADDER, not just minors.
+        # Per unit: the biggest flat-heal potion the MC's frame can
+        # drink at zero waste (heal <= max_hp) that's also affordable
+        # right now. A 400-HP pit frame buys 150s (same HP/gold, a
+        # third of the slots and drinks); a Lv1 frame sticks to minors.
+        # Degrading by affordability keeps the shop in agreement with
+        # the trip predicate ("one affordable potion justifies the
+        # trip" — v2.0's deadlock lesson).
+        potion_count = self._count_potions(run)
         needed = max(0, self.config.potion_stash_cap - potion_count)
-        if needed > 0 and POTION_ITEM_ID in available_items:
+        ladder = self._potion_ladder(available_items)
+        if needed > 0 and ladder:
             stash_headroom = (
                 STASH_LIMIT - len(run.party.stash) + len(sold)
             )
@@ -335,8 +341,24 @@ class GoldenMacroPolicy:
                     actions.append(ShopAction(action="sell", item_id=sid))
                     sold.add(sid)
             for _ in range(needed):
-                actions.append(ShopAction(action="buy", item_id=POTION_ITEM_ID))
-                projected_gold -= potion_price
+                pick: tuple[str, int] | None = None
+                for item in ladder:  # biggest heal first
+                    price = calculate_buy_price(item.base_price, run.party.cha)
+                    if item.heal_amount <= mc.max_hp and price <= projected_gold:
+                        pick = (item.id, price)
+                        break
+                if pick is None:
+                    # Nothing zero-waste-sized is affordable: take the
+                    # cheapest rung we CAN pay for rather than nothing.
+                    for item in reversed(ladder):
+                        price = calculate_buy_price(item.base_price, run.party.cha)
+                        if price <= projected_gold:
+                            pick = (item.id, price)
+                            break
+                if pick is None:
+                    break
+                actions.append(ShopAction(action="buy", item_id=pick[0]))
+                projected_gold -= pick[1]
 
         # Recruits last: gear the whole party once the lifeline is
         # secured. Join-time gear is otherwise frozen for the entire run
@@ -434,7 +456,7 @@ class GoldenMacroPolicy:
         budget = run.party.money + sum(
             self._item_sell_price(iid)
             for iid in run.party.stash
-            if iid != POTION_ITEM_ID and self._should_sell(iid, mc, run)
+            if not self._is_heal_potion(iid) and self._should_sell(iid, mc, run)
         )
         members = _active_chars(run) or [mc]
         for member in members:
@@ -562,7 +584,7 @@ class GoldenMacroPolicy:
         useless: list[tuple[str, int]] = []
         useful: list[tuple[str, int]] = []
         for iid in run.party.stash:
-            if iid == POTION_ITEM_ID or iid in exclude:
+            if self._is_heal_potion(iid) or iid in exclude:
                 continue
             item = self.game_data.items.get(iid)
             if item is None:
@@ -695,7 +717,7 @@ class GoldenMacroPolicy:
            covers the refill — "buy an extra in case I slip up mid fight".
         """
         price = self._potion_price(run)
-        potion_count = _count_potions(run)
+        potion_count = self._count_potions(run)
         can_heal_in_town = potion_count > 0 or run.party.money >= price
 
         # Pre-boss rule — and endless zones are perpetual pre-boss:
@@ -721,9 +743,62 @@ class GoldenMacroPolicy:
         return self._town_trip_worthwhile(run)
 
     def _potion_price(self, run: RunState) -> int:
+        """Price of the BASELINE potion (the cheapest rung).
+
+        Trip predicates gate on this so 'one affordable potion justifies
+        the trip' stays true even when the shop stocks bigger rungs the
+        party can't afford yet.
+        """
         item = self.game_data.items.get(POTION_ITEM_ID)
         base = item.base_price if item else 25
         return calculate_buy_price(base, run.party.cha)
+
+    # -----------------------------------------------------------------
+    # Potion ladder (minor 50 → potion 150 → major 400; elixir is %-heal)
+    # -----------------------------------------------------------------
+
+    def _is_heal_potion(self, item_id: str) -> bool:
+        item = self.game_data.items.get(item_id)
+        return bool(
+            item
+            and item.is_consumable
+            and (item.heal_amount > 0 or item.heal_percent > 0)
+        )
+
+    def _heal_value(self, item_id: str, max_hp: int) -> int:
+        item = self.game_data.items.get(item_id)
+        if item is None:
+            return 0
+        if item.heal_amount > 0:
+            return item.heal_amount
+        if item.heal_percent > 0:
+            return int(max_hp * item.heal_percent)
+        return 0
+
+    def _count_potions(self, run: RunState) -> int:
+        """Heal potions of ANY rung in the stash."""
+        return _count_potions(run, self.game_data)
+
+    def _potion_ladder(self, available_items: list[str]) -> list[Item]:
+        """Flat-heal potions in the offer, biggest heal first.
+
+        Percent-heal items (elixir) are excluded: zero waste is
+        unreachable by construction (missing == full bar means dead),
+        so they never belong in the routine restock.
+        """
+        seen: set[str] = set()
+        rungs: list[Item] = []
+        for iid in available_items:
+            if iid in seen:
+                continue
+            seen.add(iid)
+            item = self.game_data.items.get(iid)
+            if item is None or not item.is_consumable:
+                continue
+            if item.heal_amount > 0:
+                rungs.append(item)
+        rungs.sort(key=lambda it: it.heal_amount, reverse=True)
+        return rungs
 
     def _expected_next_fight_damage(self, run: RunState) -> int:
         """Projected party-wide damage for the UPCOMING fight.
@@ -823,8 +898,8 @@ class GoldenMacroPolicy:
         Otherwise: save the potion. That's the whole rule; no threshold.
         """
         uses: list[ItemUse] = []
-        stash_potions = [iid for iid in run.party.stash if iid == POTION_ITEM_ID]
-        if not stash_potions:
+        held = [iid for iid in run.party.stash if self._is_heal_potion(iid)]
+        if not held:
             return uses
 
         active_chars = _active_chars(run)
@@ -840,30 +915,50 @@ class GoldenMacroPolicy:
         boss_next = self._next_encounter_is_boss(run) or self._in_endless_zone(run)
         boss_target = self.config.pre_boss_retreat_hp_pct
 
-        def drink(char_id: str) -> None:
-            uses.append(ItemUse(item_id=stash_potions.pop(0), character_id=char_id))
-            running_hp[char_id] = min(max_hp[char_id], running_hp[char_id] + POTION_HEAL)
+        def heal_of(iid: str, char_id: str) -> int:
+            return self._heal_value(iid, max_hp[char_id])
 
-        while len(stash_potions) > POTION_COMBAT_RESERVE:
+        def drink(char_id: str, iid: str) -> None:
+            held.remove(iid)
+            uses.append(ItemUse(item_id=iid, character_id=char_id))
+            running_hp[char_id] = min(
+                max_hp[char_id], running_hp[char_id] + heal_of(iid, char_id),
+            )
+
+        def largest_zero_waste(char_id: str) -> str | None:
+            """Biggest held potion fully absorbed by this char's missing HP."""
+            missing = max_hp[char_id] - running_hp[char_id]
+            fits = [iid for iid in held if 0 < heal_of(iid, char_id) <= missing]
+            if not fits:
+                return None
+            return max(fits, key=lambda iid: heal_of(iid, char_id))
+
+        while len(held) > POTION_COMBAT_RESERVE:
             hurt = [c for c in active_chars if running_hp[c.id] < max_hp[c.id]]
             if not hurt:
                 break
             hurt.sort(key=lambda c: running_hp[c.id] / max(1, max_hp[c.id]))
 
+            # Survival: largest heal held — mitigation over efficiency.
             dying = [c for c in hurt if running_hp[c.id] <= share]
             if dying:
-                drink(dying[0].id)
+                cid = dying[0].id
+                drink(cid, max(held, key=lambda iid: heal_of(iid, cid)))
                 continue
 
-            zero_waste = [
-                c for c in hurt if max_hp[c.id] - running_hp[c.id] >= POTION_HEAL
-            ]
+            # Zero waste, ladder-aware: drink the biggest potion the
+            # frame's missing HP fully absorbs.
+            zero_waste = [c for c in hurt if largest_zero_waste(c.id)]
             if zero_waste:
-                drink(zero_waste[0].id)
+                cid = zero_waste[0].id
+                pick = largest_zero_waste(cid)
+                assert pick is not None
+                drink(cid, pick)
                 continue
 
             # Per-job risk threshold: pre-boss/endless target dominates;
             # otherwise the config's between-fight target (0.0 = off).
+            # Waste is accepted here, so the SMALLEST held rung tops up.
             target = boss_target if boss_next else self.config.between_fight_heal_target
             if target > 0:
                 below_target = [
@@ -871,7 +966,8 @@ class GoldenMacroPolicy:
                     if running_hp[c.id] / max(1, max_hp[c.id]) < target
                 ]
                 if below_target:
-                    drink(below_target[0].id)
+                    cid = below_target[0].id
+                    drink(cid, min(held, key=lambda iid: heal_of(iid, cid)))
                     continue
 
             break
@@ -993,12 +1089,24 @@ def _active_chars(run: RunState) -> list:
     ]
 
 
+def _count_potions(run: RunState, game_data: GameData | None = None) -> int:
+    """Heal potions in the stash — ladder-aware when game_data is given,
+    minor-only otherwise (legacy callers)."""
+    if game_data is None:
+        return sum(1 for iid in run.party.stash if iid == POTION_ITEM_ID)
+    count = 0
+    for iid in run.party.stash:
+        item = game_data.items.get(iid)
+        if item and item.is_consumable and (
+            item.heal_amount > 0 or item.heal_percent > 0
+        ):
+            count += 1
+    return count
+
+
 def _mean_party_hp_pct(run: RunState) -> float:
     active = _active_chars(run)
     if not active:
         return 1.0
     return sum(c.current_hp / max(1, c.max_hp) for c in active) / len(active)
 
-
-def _count_potions(run: RunState) -> int:
-    return sum(1 for iid in run.party.stash if iid == POTION_ITEM_ID)

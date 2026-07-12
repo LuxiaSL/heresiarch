@@ -480,6 +480,81 @@ class TestAutoEquipUpgrade:
 
 
 # ---------------------------------------------------------------------------
+# Potion ladder (pit lever 2: a 400-HP frame heals in gulps, not sips)
+# ---------------------------------------------------------------------------
+
+
+class TestPotionLadder:
+    def test_big_frame_buys_the_bigger_rung(self, game_data: GameData):
+        """Post-zone-3 shop stocks 'potion' (150): a pit-sized frame
+        restocks with those, not 50-HP minors."""
+        gl, run = _new_run(game_data)
+        run = _set_mc_hp(run, 400, max_hp=400)
+        run = _with_gold(run, 5000)
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        actions = macro.decide_shop(run, ["minor_potion", "potion"])
+        buys = [a.item_id for a in actions if a.action == "buy"]
+        assert "potion" in buys
+        assert "minor_potion" not in buys
+
+    def test_small_frame_sticks_to_minors(self, game_data: GameData):
+        """A Lv1 frame (65 HP) can never zero-waste a 150 heal."""
+        gl, run = _new_run(game_data)
+        run = _with_gold(run, 5000)
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        actions = macro.decide_shop(run, ["minor_potion", "potion"])
+        buys = [a.item_id for a in actions if a.action == "buy"]
+        assert "minor_potion" in buys
+        assert "potion" not in buys
+
+    def test_ladder_degrades_by_affordability(self, game_data: GameData):
+        """Big frame, small purse: an affordable minor beats no potion —
+        the shop must agree with the 'one affordable potion justifies
+        the trip' predicate."""
+        gl, run = _new_run(game_data)
+        run = _set_mc_hp(run, 400, max_hp=400)
+        run = _with_gold(run, 40)
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        actions = macro.decide_shop(run, ["minor_potion", "potion"])
+        buys = [a.item_id for a in actions if a.action == "buy"]
+        assert buys == ["minor_potion"]
+
+    def test_zero_waste_picks_the_fitting_rung(self, game_data: GameData):
+        """Missing 160 absorbs the 150; missing 60 only absorbs the 50."""
+        gl, run = _new_run(game_data)
+        run = gl.enter_zone(run, "zone_01")
+        run = _with_stash(run, ["minor_potion", "potion"])
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+
+        deep = _set_mc_hp(run, 240, max_hp=400)  # missing 160
+        uses = macro.decide_between_encounter_items(deep)
+        assert [u.item_id for u in uses][:1] == ["potion"]
+
+        shallow = _set_mc_hp(run, 340, max_hp=400)  # missing 60
+        uses = macro.decide_between_encounter_items(shallow)
+        assert [u.item_id for u in uses] == ["minor_potion"]
+
+    def test_projected_death_drinks_the_largest(self, game_data: GameData):
+        """Survival beats efficiency: the biggest held heal goes down."""
+        gl, run = _new_run(game_data)
+        run = gl.enter_zone(run, "zone_01")
+        run = _set_mc_hp(run, 30, max_hp=400)
+        run = _with_stash(run, ["minor_potion", "potion"])
+        run = _with_last_fight_damage(run, taken=40)
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        uses = macro.decide_between_encounter_items(run)
+        assert uses and uses[0].item_id == "potion"
+
+    def test_stockpile_counts_every_rung(self, game_data: GameData):
+        """Three 150s satisfy a stockpile target of 3 — no restock trip."""
+        gl, run = _new_run(game_data)
+        run = _with_stash(run, ["potion", "potion", "potion"])
+        run = _with_gold(run, 1000)
+        macro = _macro(game_data, potion_stockpile_target=3)
+        assert macro._town_trip_worthwhile(run) is False
+
+
+# ---------------------------------------------------------------------------
 # Party-wide gearing (pit lever 1: join-time recruit gear must not freeze)
 # ---------------------------------------------------------------------------
 
