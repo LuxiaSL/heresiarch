@@ -1053,7 +1053,7 @@ function screenCombat() {
   const bottom = ui.pb
     ? `<button class="primary" data-a="pb-skip">⏩ Skip</button>`
     : `<div class="row">
-        ${c.auto_available && !c.auto_halt && !ui.auto
+        ${c.auto_available && !ui.auto
           ? `<button class="gold" data-a="auto-start">▶ Auto</button>` : ""}
         ${ui.auto ? `<button class="danger" data-a="auto-stop">⏹ Stop</button>` : ""}
         <button class="primary grow" data-a="submit-round" ${ui.auto ? "disabled" : ""}>⚔ Resolve Round</button>

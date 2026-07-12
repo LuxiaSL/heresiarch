@@ -139,9 +139,15 @@ class CombatView(BaseModel):
     enemies: list[CombatantView] = Field(default_factory=list)
     consumables: list[ItemView] = Field(default_factory=list)
     log_lines: list[str] = Field(default_factory=list)
-    # Auto-battle: a recorded victory vs this enemy group has rounds left
+    # Auto-battle: a recorded victory vs this enemy group has rounds left.
+    # This ALONE decides whether the Auto button is offered (TUI parity:
+    # starting auto-battle is never HP-gated).
     auto_available: bool = False
-    # Set when the TUI's halt rule applies (client stops the auto loop)
+    # TUI halt rule (party HP below 50%): stops a RUNNING auto loop only.
+    # Clients must not use it to hide the start button — party HP
+    # persists in saves, so gating the start on it makes auto-battle
+    # vanish "permanently" once the party is worn down (incl. across
+    # app restarts).
     auto_halt: str | None = None
 
 
