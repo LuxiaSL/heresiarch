@@ -20,7 +20,16 @@ after first load. See design/mobile-spike.md for the decision context.
 - Saves and notes live under `/persist`, an IndexedDB mount — runs
   survive page reloads.
 
-## Build + serve
+## Live deployment
+
+**https://luxiasl.github.io/heresiarch/** — deployed by
+`.github/workflows/pages.yml` on every push to main. Being https, the
+install is first-class on Android: Chrome menu → Add to Home screen →
+Install → fullscreen, offline-capable, saves in IndexedDB. Installed
+phones pick up new deploys automatically on their next online launch
+(network-first service worker).
+
+## Build + serve locally
 
 ```bash
 uv run python spikes/pyodide/build.py    # stage dist/ (~18 MiB, self-contained)
@@ -28,7 +37,9 @@ uv run python spikes/pyodide/serve.py    # static host on :8643, prints LAN URL
 ```
 
 `build.py --refresh` re-downloads the pyodide runtime (version pinned
-in the script). dist/ is gitignored.
+in the script — keep the workflow's cache key in sync). dist/ is
+gitignored. All client URLs are relative, so the same bundle works at
+the LAN root and under the Pages subpath.
 
 ## Headless verification
 
@@ -45,9 +56,10 @@ packages from the vendored index (no CDN).
 
 ## Known limits (spike cuts)
 
-- The service worker needs a secure context to cache for offline
-  (https, localhost, or Chrome's insecure-origin flag for a LAN IP) —
-  same caveat as the LAN PWA, printed by `python -m heresiarch.mobile`.
+- Over plain-http LAN serving, the service worker needs Chrome's
+  insecure-origin flag (same caveat as the LAN PWA, printed by
+  `python -m heresiarch.mobile`). The Pages deployment is https, so
+  none of that applies there.
 - One session per page; no cross-device save sync.
 - iOS may evict IndexedDB for rarely-used sites; export/import of
   saves is future work if this graduates.
