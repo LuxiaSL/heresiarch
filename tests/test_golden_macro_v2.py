@@ -237,6 +237,66 @@ class TestOverstay:
 
 
 # ---------------------------------------------------------------------------
+# Endless zones: perpetual pre-boss (v2.2 — 33/48 einherjar died in the pit)
+# ---------------------------------------------------------------------------
+
+
+class TestEndlessZones:
+    def _pit_run(self, game_data: GameData) -> RunState:
+        from heresiarch.engine.models.zone import ZoneState
+
+        gl, run = _new_run(game_data)
+        return run.model_copy(update={
+            "current_zone_id": "the_pit",
+            "zone_state": ZoneState(template_id="the_pit", is_cleared=True),
+        })
+
+    def test_pack_size_uses_observed_fights_not_one(self, game_data: GameData):
+        """`encounters: []` made v2.1 project ONE-enemy pit fights."""
+        run = self._pit_run(game_data)
+        rec = EncounterRecord(
+            zone_id="the_pit", encounter_index=0, result="victory",
+            enemy_template_ids=["brute_oni", "slime", "slime"],
+            total_damage_taken=60,
+        )
+        run = run.model_copy(
+            update={"battle_record": BattleRecord(encounters=[rec])},
+        )
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        assert macro._next_encounter_enemy_count(run) >= 3
+
+    def test_pack_size_floor_two_with_no_history(self, game_data: GameData):
+        run = self._pit_run(game_data)
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        assert macro._next_encounter_enemy_count(run) >= 2
+
+    def test_pit_fights_entered_near_full(self, game_data: GameData):
+        """Every endless fight gets the pre-boss top-up (waste accepted)."""
+        run = self._pit_run(game_data)
+        run = _set_mc_hp(run, 96, max_hp=120)  # 80% < 0.90, missing 24 < gate
+        run = _with_stash(run, [POTION_ITEM_ID])
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        uses = macro.decide_between_encounter_items(run)
+        assert len(uses) == 1
+
+    def test_pit_retreats_below_preboss_target(self, game_data: GameData):
+        run = self._pit_run(game_data)
+        run = _set_mc_hp(run, 96, max_hp=120)  # 80%
+        run = _with_stash(run, [])
+        run = _with_gold(run, 1000)
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        assert macro.decide_retreat_to_town(run) is True
+
+    def test_pit_no_retreat_when_healthy(self, game_data: GameData):
+        run = self._pit_run(game_data)
+        run = _set_mc_hp(run, 118, max_hp=120)
+        run = _with_stash(run, [POTION_ITEM_ID])
+        run = _with_gold(run, 1000)
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        assert macro.decide_retreat_to_town(run) is False
+
+
+# ---------------------------------------------------------------------------
 # Upgrade-aware shopping
 # ---------------------------------------------------------------------------
 

@@ -618,7 +618,10 @@ class GoldenMacroPolicy:
         potion_count = _count_potions(run)
         can_heal_in_town = potion_count > 0 or run.party.money >= price
 
-        if self._next_encounter_is_boss(run):
+        # Pre-boss rule — and endless zones are perpetual pre-boss:
+        # fight a few, cycle to town, heal to full, return. The pit's
+        # sizable gold funds the rhythm.
+        if self._next_encounter_is_boss(run) or self._in_endless_zone(run):
             if _mean_party_hp_pct(run) < self.config.pre_boss_retreat_hp_pct:
                 if can_heal_in_town:
                     return True
@@ -669,18 +672,42 @@ class GoldenMacroPolicy:
         return int(-(-(per_enemy * next_count) // 1))  # ceil
 
     def _next_encounter_enemy_count(self, run: RunState) -> int:
-        """Enemy count of the upcoming encounter (1 if unknowable)."""
+        """Enemy count of the upcoming encounter.
+
+        Scripted zones read the template. Endless zones spawn
+        dynamically (`encounters: []`) — v2.1 fell back to 1 there,
+        so the pit projected one-enemy fights and 33/48 einherjar
+        runs died inside it. Fallback is now the observed pack size
+        from recent fights in this zone (floor 2 for endless).
+        """
         if not run.current_zone_id or not run.zone_state:
             return 1
         zone = self.game_data.zones.get(run.current_zone_id)
         if zone is None:
             return 1
         idx = run.zone_state.current_encounter_index
-        if run.zone_state.is_cleared or idx >= len(zone.encounters):
-            # Overstay / endless: assume a typical pack for this zone.
-            counts = [sum(e.enemy_counts) for e in zone.encounters if not e.is_boss]
-            return max(1, round(sum(counts) / len(counts))) if counts else 1
-        return max(1, sum(zone.encounters[idx].enemy_counts))
+        if not run.zone_state.is_cleared and idx < len(zone.encounters):
+            return max(1, sum(zone.encounters[idx].enemy_counts))
+        # Overstay / endless: typical scripted pack, else observed packs.
+        counts = [sum(e.enemy_counts) for e in zone.encounters if not e.is_boss]
+        if counts:
+            return max(1, round(sum(counts) / len(counts)))
+        observed = [
+            len(e.enemy_template_ids)
+            for e in run.battle_record.encounters
+            if e.zone_id == run.current_zone_id
+        ][-EXPECTED_DAMAGE_WINDOW:]
+        floor = 2 if zone.is_endless else 1
+        if not observed:
+            return floor
+        mean = sum(observed) / len(observed)
+        return max(floor, int(-(-mean // 1)))  # ceil
+
+    def _in_endless_zone(self, run: RunState) -> bool:
+        if not run.current_zone_id:
+            return False
+        zone = self.game_data.zones.get(run.current_zone_id)
+        return bool(zone and zone.is_endless)
 
     def _expected_damage_share(self, run: RunState) -> int:
         """Per-character share of the projected next-fight damage."""
@@ -727,7 +754,10 @@ class GoldenMacroPolicy:
         running_hp: dict[str, int] = {c.id: c.current_hp for c in active_chars}
         max_hp: dict[str, int] = {c.id: c.max_hp for c in active_chars}
         share = self._expected_damage_share(run)
-        boss_next = self._next_encounter_is_boss(run)
+        # Endless zones are perpetual pre-boss (designer-confirmed):
+        # spawn levels swing wildly (the pit: 18-28), so every fight is
+        # entered near the pre-boss target — gold is moot by then.
+        boss_next = self._next_encounter_is_boss(run) or self._in_endless_zone(run)
         boss_target = self.config.pre_boss_retreat_hp_pct
 
         def drink(char_id: str) -> None:
