@@ -79,6 +79,23 @@ def _efficient_heal_gate(max_hp: int) -> int:
     return min(POTION_HEAL, max(1, max_hp // 2))
 
 
+def useful_growth_stats(job_id: str, game_data: GameData) -> set[str]:
+    """Stats a job actually grows (growth > 1).
+
+    Module-level because the run driver's auto-equip shares it: policy
+    shopping and driver equipping must agree on what gear a character
+    can scale, or the shop buys upgrades the driver refuses to wear.
+    """
+    job = game_data.jobs.get(job_id)
+    if job is None:
+        return {"STR", "DEF"}
+    stats: set[str] = set()
+    for stat in ("STR", "MAG", "DEF", "RES", "SPD"):
+        if getattr(job.growth, stat, 0) > 1:
+            stats.add(stat)
+    return stats or {"STR", "DEF"}
+
+
 @dataclass
 class GoldenMacroConfig:
     """Per-job knobs: stat preferences + risk appetite. The doctrine
@@ -305,6 +322,7 @@ class GoldenMacroPolicy:
         # Potions: buy up to cap. If stash is full after sells above,
         # sell the least useful remaining items to make room.
         potion_count = _count_potions(run)
+        potion_price = self._potion_price(run)
         needed = max(0, self.config.potion_stash_cap - potion_count)
         if needed > 0 and POTION_ITEM_ID in available_items:
             stash_headroom = (
@@ -318,6 +336,32 @@ class GoldenMacroPolicy:
                     sold.add(sid)
             for _ in range(needed):
                 actions.append(ShopAction(action="buy", item_id=POTION_ITEM_ID))
+                projected_gold -= potion_price
+
+        # Recruits last: gear the whole party once the lifeline is
+        # secured. Join-time gear is otherwise frozen for the entire run
+        # (the pit autopsy: Lv20+ recruits swinging zone-3 tier gear,
+        # some slots empty since recruitment). Doctrine: "keeping
+        # recruits up" — leftover gold only; MC and potions come first.
+        for char in _active_chars(run):
+            if char.is_mc:
+                continue
+            for equip_type, slot in (
+                (EquipType.WEAPON, "WEAPON"),
+                (EquipType.ARMOR, "ARMOR"),
+            ):
+                upgrade = self._best_upgrade(
+                    run, char, available_items, equip_type, slot,
+                )
+                if upgrade is None:
+                    continue
+                price = calculate_buy_price(
+                    self._item_base_price(upgrade), run.party.cha,
+                )
+                if projected_gold < price:
+                    continue
+                actions.append(ShopAction(action="buy", item_id=upgrade))
+                projected_gold -= price
 
         return actions
 
@@ -336,13 +380,14 @@ class GoldenMacroPolicy:
     def _best_upgrade(
         self,
         run: RunState,
-        mc,
+        char,
         available_items: list[str],
         equip_type: EquipType,
         slot: str,
     ) -> str | None:
         """Best shop item strictly better than the equipped one, honoring
-        stat preference for weapons (a MAG frame never buys a STR sword).
+        the character's stat preference for weapons (a MAG frame never
+        buys a STR sword). Works for MC and recruits alike.
 
         UPGRADES additionally require the weapon's scaling stat to be one
         the job actually grows: martyr (0 STR growth) fills its empty slot
@@ -350,11 +395,12 @@ class GoldenMacroPolicy:
         thousands into higher-tier STR weapons it can't scale — the first
         v2 eval showed exactly that (final gold 1370→1011, deaths 8→15).
         """
-        current_rank = self._gear_rank(self._equipped_item(run, mc, slot))
+        current_rank = self._gear_rank(self._equipped_item(run, char, slot))
         upgrading = current_rank > (0, 0)
-        useful = self._useful_stats(mc) if upgrading else None
+        useful = self._useful_stats(char) if upgrading else None
+        preferred_stat = self._preferred_weapon_stat(char)
         ranked = (
-            self._ranked_weapons(available_items)
+            self._ranked_weapons(available_items, preferred_stat)
             if equip_type == EquipType.WEAPON
             else self._ranked_armor(available_items)
         )
@@ -363,7 +409,7 @@ class GoldenMacroPolicy:
             if item is None:
                 continue
             if equip_type == EquipType.WEAPON and item.scaling and not (
-                self._scales_with_stat(iid, self.config.preferred_weapon_stat)
+                self._scales_with_stat(iid, preferred_stat)
             ):
                 continue
             if (
@@ -390,29 +436,33 @@ class GoldenMacroPolicy:
             for iid in run.party.stash
             if iid != POTION_ITEM_ID and self._should_sell(iid, mc, run)
         )
-        useful = self._useful_stats(mc)
-        for equip_type, slot, stat in (
-            (EquipType.WEAPON, "WEAPON", self.config.preferred_weapon_stat),
-            (EquipType.ARMOR, "ARMOR", None),
-        ):
-            current_rank = self._gear_rank(self._equipped_item(run, mc, slot))
-            upgrading = current_rank > (0, 0)
-            for item in self.game_data.items.values():
-                if item.equip_type != equip_type:
-                    continue
-                if stat and item.scaling and item.scaling.stat.value != stat:
-                    continue
-                if (
-                    upgrading
-                    and equip_type == EquipType.WEAPON
-                    and item.scaling
-                    and item.scaling.stat.value not in useful
-                ):
-                    continue
-                if self._gear_rank(item) <= current_rank:
-                    continue
-                if calculate_buy_price(item.base_price, run.party.cha) <= budget:
-                    return True
+        members = _active_chars(run) or [mc]
+        for member in members:
+            useful = self._useful_stats(member)
+            for equip_type, slot, stat in (
+                (EquipType.WEAPON, "WEAPON", self._preferred_weapon_stat(member)),
+                (EquipType.ARMOR, "ARMOR", None),
+            ):
+                current_rank = self._gear_rank(
+                    self._equipped_item(run, member, slot),
+                )
+                upgrading = current_rank > (0, 0)
+                for item in self.game_data.items.values():
+                    if item.equip_type != equip_type:
+                        continue
+                    if stat and item.scaling and item.scaling.stat.value != stat:
+                        continue
+                    if (
+                        upgrading
+                        and equip_type == EquipType.WEAPON
+                        and item.scaling
+                        and item.scaling.stat.value not in useful
+                    ):
+                        continue
+                    if self._gear_rank(item) <= current_rank:
+                        continue
+                    if calculate_buy_price(item.base_price, run.party.cha) <= budget:
+                        return True
         return False
 
     def _item_sell_price(self, item_id: str) -> int:
@@ -422,16 +472,23 @@ class GoldenMacroPolicy:
     def _should_sell(self, item_id: str, mc, run: RunState | None = None) -> bool:
         """True if this item has no value for the current roster.
 
-        Checks item effects/scaling against MC's growth curve. Items
-        that scale with stats the MC doesn't grow in are dead weight,
-        and so is gear strictly worse than what the MC already wears
-        (displaced by an upgrade — sell it, the designer does).
+        Roster-aware: an item is dead weight only when NO active member
+        can use it — a MAG staff is kept while an onmyoji recruit is on
+        the roster even if the MC swings STR. Gear strictly worse than
+        what EVERY member already wears (an empty slot counts as
+        upgradeable) is sellable — displaced upgrades land in the stash
+        and the designer sells them.
         """
         item = self.game_data.items.get(item_id)
         if item is None:
             return False
 
-        useful_stats = self._useful_stats(mc)
+        members = _active_chars(run) if run is not None else []
+        if not members:
+            members = [mc]
+        useful_stats: set[str] = set()
+        for member in members:
+            useful_stats |= self._useful_stats(member)
 
         if not item.is_consumable:
             if item.equip_type == EquipType.WEAPON:
@@ -441,11 +498,13 @@ class GoldenMacroPolicy:
                 EquipType.WEAPON, EquipType.ARMOR,
             ):
                 slot = item.equip_type.value
-                equipped = self._equipped_item(run, mc, slot)
-                if equipped is not None and (
-                    self._gear_rank(item) < self._gear_rank(equipped)
-                ):
-                    return True
+                for member in members:
+                    equipped = self._equipped_item(run, member, slot)
+                    if equipped is None or (
+                        self._gear_rank(item) >= self._gear_rank(equipped)
+                    ):
+                        return False  # someone could still wear it
+                return True
             return False
 
         if item.teaches_ability_id:
@@ -472,16 +531,25 @@ class GoldenMacroPolicy:
 
         return False
 
-    def _useful_stats(self, mc) -> set[str]:
-        """Stats with growth > 1 for the MC's job."""
-        job = self.game_data.jobs.get(mc.job_id)
+    def _useful_stats(self, char) -> set[str]:
+        """Stats with growth > 1 for this character's job."""
+        return useful_growth_stats(char.job_id, self.game_data)
+
+    def _preferred_weapon_stat(self, char) -> str:
+        """Weapon-stat preference per character.
+
+        The MC uses the config preference (the designer's pick); recruits
+        derive theirs from job growth — a mage recruit shops MAG staves
+        regardless of what the MC swings.
+        """
+        if char.is_mc:
+            return self.config.preferred_weapon_stat
+        job = self.game_data.jobs.get(char.job_id)
         if job is None:
-            return {"STR", "DEF"}
-        stats: set[str] = set()
-        for stat in ("STR", "MAG", "DEF", "RES", "SPD"):
-            if getattr(job.growth, stat, 0) > 1:
-                stats.add(stat)
-        return stats or {"STR", "DEF"}
+            return "STR"
+        if getattr(job.growth, "MAG", 0) > getattr(job.growth, "STR", 0):
+            return "MAG"
+        return "STR"
 
     def _least_useful_sellable(
         self, run: RunState, mc, count: int, exclude: set[str] | None = None,
@@ -510,15 +578,18 @@ class GoldenMacroPolicy:
             result.extend(iid for iid, _ in useful[:count - len(result)])
         return result[:count]
 
-    def _ranked_weapons(self, available_items: list[str]) -> list[str]:
+    def _ranked_weapons(
+        self, available_items: list[str], preferred_stat: str,
+    ) -> list[str]:
         weapons = [
             iid for iid in available_items
             if self._item_equip_type(iid) == EquipType.WEAPON
         ]
-        # Primary key: matches preferred_weapon_stat. Secondary: base_price (tier proxy).
+        # Primary key: matches the character's preferred weapon stat.
+        # Secondary: base_price (tier proxy).
         weapons.sort(
             key=lambda iid: (
-                1 if self._scales_with_stat(iid, self.config.preferred_weapon_stat) else 0,
+                1 if self._scales_with_stat(iid, preferred_stat) else 0,
                 self._item_base_price(iid),
             ),
             reverse=True,

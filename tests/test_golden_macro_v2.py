@@ -75,6 +75,54 @@ def _macro(game_data: GameData, **cfg) -> GoldenMacroPolicy:
     return GoldenMacroPolicy(GoldenMacroConfig(**cfg), game_data)
 
 
+def _with_recruit(
+    game_data: GameData,
+    run: RunState,
+    job_id: str = "onmyoji",
+    level: int = 5,
+    equipment: dict[str, str | None] | None = None,
+) -> tuple[RunState, str]:
+    """Add an active recruit with explicit (default: empty) equipment."""
+    from heresiarch.engine.formulas import (
+        calculate_effective_stats,
+        calculate_max_hp,
+        calculate_stats_at_level,
+    )
+    from heresiarch.engine.models.jobs import CharacterInstance
+
+    job = game_data.jobs[job_id]
+    stats = calculate_stats_at_level(job.growth, level)
+    slots: dict[str, str | None] = {
+        "WEAPON": None, "ARMOR": None, "ACCESSORY_1": None, "ACCESSORY_2": None,
+    }
+    slots.update(equipment or {})
+    equipped_items = [
+        game_data.items[iid] for iid in slots.values()
+        if iid and iid in game_data.items
+    ]
+    effective = calculate_effective_stats(stats, equipped_items, [])
+    max_hp = calculate_max_hp(job.base_hp, job.hp_growth, level, effective.DEF)
+    char = CharacterInstance(
+        id=f"recruit_{job_id}",
+        name=f"{job.name} Recruit",
+        job_id=job_id,
+        level=level,
+        base_stats=stats,
+        effective_stats=effective,
+        current_hp=max_hp,
+        max_hp=max_hp,
+        abilities=["basic_attack", job.innate_ability_id],
+        equipment=slots,
+    )
+    chars = dict(run.party.characters)
+    chars[char.id] = char
+    party = run.party.model_copy(update={
+        "characters": chars,
+        "active": list(run.party.active) + [char.id],
+    })
+    return run.model_copy(update={"party": party}), char.id
+
+
 # ---------------------------------------------------------------------------
 # Zero-waste heal rule
 # ---------------------------------------------------------------------------
@@ -400,7 +448,7 @@ class TestUpgradeShopping:
 
 class TestAutoEquipUpgrade:
     def test_equips_better_weapon_and_displaces_old(self, game_data: GameData):
-        from heresiarch.tools.run_driver import _auto_equip_new_weapon
+        from heresiarch.tools.run_driver import _auto_equip_party
 
         gl, run = _new_run(game_data)
         run = _with_stash(run, ["iron_blade"])
@@ -409,14 +457,14 @@ class TestAutoEquipUpgrade:
         run = _with_stash(run, ["runic_edge"])
 
         ctx = SimpleNamespace(game_loop=gl, game_data=game_data)
-        run = _auto_equip_new_weapon(run, ctx)
+        run = _auto_equip_party(run, ctx)
 
         mc = run.party.characters[mc.id]
         assert mc.equipment["WEAPON"] == "runic_edge"
         assert "iron_blade" in run.party.stash
 
     def test_leaves_better_equipped_gear_alone(self, game_data: GameData):
-        from heresiarch.tools.run_driver import _auto_equip_new_weapon
+        from heresiarch.tools.run_driver import _auto_equip_party
 
         gl, run = _new_run(game_data)
         run = _with_stash(run, ["runic_edge"])
@@ -425,10 +473,125 @@ class TestAutoEquipUpgrade:
         run = _with_stash(run, ["iron_blade"])
 
         ctx = SimpleNamespace(game_loop=gl, game_data=game_data)
-        run = _auto_equip_new_weapon(run, ctx)
+        run = _auto_equip_party(run, ctx)
 
         mc = run.party.characters[mc.id]
         assert mc.equipment["WEAPON"] == "runic_edge"
+
+
+# ---------------------------------------------------------------------------
+# Party-wide gearing (pit lever 1: join-time recruit gear must not freeze)
+# ---------------------------------------------------------------------------
+
+
+class TestPartyGearing:
+    def test_shop_buys_recruit_weapon_with_leftover_gold(
+        self, game_data: GameData,
+    ):
+        """MAG recruit on an einherjar roster: the shop buys it a staff
+        once potions are covered."""
+        gl, run = _new_run(game_data)
+        run, _rid = _with_recruit(game_data, run, "onmyoji")
+        run = _with_gold(run, 5000)
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        actions = macro.decide_shop(run, ["spirit_lens", POTION_ITEM_ID])
+        buys = [a.item_id for a in actions if a.action == "buy"]
+        assert "spirit_lens" in buys
+        # Potions (the lifeline) are queued before recruit gear.
+        assert buys.index(POTION_ITEM_ID) < buys.index("spirit_lens")
+
+    def test_potions_beat_recruit_gear_when_gold_tight(
+        self, game_data: GameData,
+    ):
+        gl, run = _new_run(game_data)
+        run, _rid = _with_recruit(game_data, run, "onmyoji")
+        run = _with_gold(run, 30)  # one potion, nothing more
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        actions = macro.decide_shop(run, ["spirit_lens", POTION_ITEM_ID])
+        buys = [a.item_id for a in actions if a.action == "buy"]
+        assert "spirit_lens" not in buys
+        assert POTION_ITEM_ID in buys
+
+    def test_keeps_stash_gear_a_recruit_can_use(self, game_data: GameData):
+        """A MAG staff is dead weight for a solo einherjar but must NOT
+        be sold while an onmyoji recruit could wear it."""
+        gl, run = _new_run(game_data)
+        run = _with_stash(run, ["spirit_lens"])
+        macro = make_golden_macro_for_job(game_data, "einherjar")
+        solo_actions = macro.decide_shop(run, [POTION_ITEM_ID])
+        assert any(
+            a.action == "sell" and a.item_id == "spirit_lens"
+            for a in solo_actions
+        )
+        run, _rid = _with_recruit(game_data, run, "onmyoji")
+        roster_actions = macro.decide_shop(run, [POTION_ITEM_ID])
+        assert not any(
+            a.action == "sell" and a.item_id == "spirit_lens"
+            for a in roster_actions
+        )
+
+    def test_auto_equip_gears_recruit_from_stash(self, game_data: GameData):
+        from heresiarch.tools.run_driver import _auto_equip_party
+
+        gl, run = _new_run(game_data)
+        run = _with_stash(run, ["iron_blade", "warding_mail"])
+        mc = next(c for c in run.party.characters.values() if c.is_mc)
+        run = gl.equip_item(run, mc.id, "iron_blade", "WEAPON")
+        run = gl.equip_item(run, mc.id, "warding_mail", "ARMOR")
+        run, rid = _with_recruit(game_data, run, "onmyoji")
+        run = _with_stash(run, ["spirit_lens", "iron_guard"])
+
+        ctx = SimpleNamespace(game_loop=gl, game_data=game_data)
+        run = _auto_equip_party(run, ctx)
+
+        recruit = run.party.characters[rid]
+        assert recruit.equipment["WEAPON"] == "spirit_lens"
+        assert recruit.equipment["ARMOR"] == "iron_guard"
+        # MC kept its equal-rank blade — no pointless swap.
+        assert run.party.characters[mc.id].equipment["WEAPON"] == "iron_blade"
+
+    def test_auto_equip_mc_gets_first_pick(self, game_data: GameData):
+        """One upgrade both could wear: doctrine gives it to the MC."""
+        from heresiarch.tools.run_driver import _auto_equip_party
+
+        gl, run = _new_run(game_data)
+        run = _with_stash(run, ["iron_blade"])
+        mc = next(c for c in run.party.characters.values() if c.is_mc)
+        run = gl.equip_item(run, mc.id, "iron_blade", "WEAPON")
+        run, rid = _with_recruit(
+            game_data, run, "berserker", equipment={"WEAPON": "iron_blade"},
+        )
+        run = _with_stash(run, ["runic_edge"])
+
+        ctx = SimpleNamespace(game_loop=gl, game_data=game_data)
+        run = _auto_equip_party(run, ctx)
+
+        assert run.party.characters[mc.id].equipment["WEAPON"] == "runic_edge"
+        assert run.party.characters[rid].equipment["WEAPON"] == "iron_blade"
+
+    def test_auto_equip_growth_gates_recruit_upgrades(
+        self, game_data: GameData,
+    ):
+        """A 0-STR-growth recruit never upgrades INTO expensive STR gear
+        (empty slots still take anything — flat damage beats none)."""
+        from heresiarch.tools.run_driver import _auto_equip_party
+
+        gl, run = _new_run(game_data)
+        run = _with_stash(run, ["runic_edge"])
+        mc = next(c for c in run.party.characters.values() if c.is_mc)
+        run = gl.equip_item(run, mc.id, "runic_edge", "WEAPON")
+        run, rid = _with_recruit(
+            game_data, run, "martyr", equipment={"WEAPON": "iron_blade"},
+        )
+        run = _with_stash(run, ["runic_edge"])
+
+        ctx = SimpleNamespace(game_loop=gl, game_data=game_data)
+        run = _auto_equip_party(run, ctx)
+
+        # MC already wears equal-rank runic_edge; martyr must not take
+        # the stash one as an "upgrade" it can't scale.
+        assert run.party.characters[rid].equipment["WEAPON"] == "iron_blade"
+        assert "runic_edge" in run.party.stash
 
 
 # ---------------------------------------------------------------------------

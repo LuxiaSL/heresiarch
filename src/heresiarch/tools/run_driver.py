@@ -57,7 +57,9 @@ _rate_limited = RateLimitedLogger()
 
 DEFAULT_MAX_ENCOUNTERS: int = 400
 DEFAULT_MAX_COMBAT_ROUNDS: int = 200  # circuit-breaker against infinite loops
-DEFAULT_MAX_SHOP_PURCHASES: int = 10   # circuit-breaker per town visit
+DEFAULT_MAX_SHOP_PURCHASES: int = 16   # circuit-breaker per town visit
+# (16, not 10: party-wide gearing adds up to 2 recruit-gear buys per
+# recruit after sells + MC gear + potions; 10 starved them.)
 DEFAULT_MAX_STUCK_ITERS: int = 8       # outer-loop iters without encounter progress
 
 
@@ -431,29 +433,33 @@ def _apply_shop_actions(
         ctx.metrics.shop_purchases += 1
         count += 1
 
-    # Auto-equip weapon onto MC if they're holding one and have no weapon slot filled.
-    run = _auto_equip_new_weapon(run, ctx)
+    # Auto-equip best stash gear onto the whole active roster.
+    run = _auto_equip_party(run, ctx)
     return run
 
 
-def _auto_equip_new_weapon(run: RunState, ctx: _RunContext) -> RunState:
-    """Equip the best WEAPON and ARMOR from stash onto the MC.
+def _auto_equip_party(run: RunState, ctx: _RunContext) -> RunState:
+    """Equip the best WEAPON and ARMOR from stash onto every active member.
 
     Upgrade-aware (macro doctrine): a stash item strictly better than
     the equipped one — by (tier, base_price) — gets equipped, and the
     engine returns the displaced item to the stash where the next shop
-    pass sells it. Kept to MC + these two slots; accessories and
-    party-wide equip are out of scope.
+    pass sells it. MC picks first (doctrine priority), recruits follow
+    in roster order — their join-time gear is otherwise frozen for the
+    whole run. Weapon UPGRADES require a scaling stat the character's
+    job grows (mirrors the macro's shop gating); an EMPTY slot takes
+    anything — flat damage beats none. Accessories stay out of scope.
     """
     from heresiarch.engine.models.items import EquipType
+    from heresiarch.policy.builtin.golden_macro import useful_growth_stats
 
     gl = ctx.game_loop
-    mc = None
-    for char in run.party.characters.values():
-        if char.is_mc:
-            mc = char
-            break
-    if mc is None:
+    member_ids = [
+        cid for cid in run.party.active if cid in run.party.characters
+    ]
+    # MC first; stable sort keeps roster order for the rest.
+    member_ids.sort(key=lambda cid: not run.party.characters[cid].is_mc)
+    if not member_ids:
         return run
 
     slot_types: list[tuple[str, EquipType]] = [
@@ -464,43 +470,53 @@ def _auto_equip_new_weapon(run: RunState, ctx: _RunContext) -> RunState:
     def _rank(item) -> tuple[int, int]:
         return (item.tier, item.base_price) if item else (0, 0)
 
-    for slot, equip_type in slot_types:
-        equipped_id = mc.equipment.get(slot)
-        equipped = None
-        if equipped_id:
-            equipped = ctx.game_data.items.get(equipped_id) or run.party.items.get(equipped_id)
-        current_rank = _rank(equipped)
+    for char_id in member_ids:
+        for slot, equip_type in slot_types:
+            char = run.party.characters.get(char_id)
+            if char is None:
+                break
+            equipped_id = char.equipment.get(slot)
+            equipped = None
+            if equipped_id:
+                equipped = ctx.game_data.items.get(equipped_id) or run.party.items.get(equipped_id)
+            current_rank = _rank(equipped)
+            upgrading = current_rank > (0, 0)
+            growable = useful_growth_stats(char.job_id, ctx.game_data)
 
-        best_iid = None
-        best_rank = current_rank
-        for iid in list(run.party.stash):
-            item = ctx.game_data.items.get(iid) or run.party.items.get(iid)
-            if item is None or item.is_consumable:
-                continue
-            if item.equip_type != equip_type:
-                continue
-            if _rank(item) > best_rank:
-                best_iid = iid
-                best_rank = _rank(item)
+            best_iid = None
+            best_rank = current_rank
+            for iid in list(run.party.stash):
+                item = ctx.game_data.items.get(iid) or run.party.items.get(iid)
+                if item is None or item.is_consumable:
+                    continue
+                if item.equip_type != equip_type:
+                    continue
+                if (
+                    upgrading
+                    and equip_type == EquipType.WEAPON
+                    and item.scaling
+                    and item.scaling.stat.value not in growable
+                ):
+                    continue
+                if _rank(item) > best_rank:
+                    best_iid = iid
+                    best_rank = _rank(item)
 
-        if best_iid is None:
-            continue
-        try:
-            run = gl.equip_item(run, mc.id, best_iid, slot)
-        except ValueError:
-            continue
-        run = run.record_macro(
-            "equip",
-            {
-                "character_id": mc.id,
-                "slot": slot,
-                "item_id": best_iid,
-                "displaced_item_id": equipped_id,
-            },
-        )
-        mc = run.party.characters.get(mc.id)
-        if mc is None:
-            return run
+            if best_iid is None:
+                continue
+            try:
+                run = gl.equip_item(run, char_id, best_iid, slot)
+            except ValueError:
+                continue
+            run = run.record_macro(
+                "equip",
+                {
+                    "character_id": char_id,
+                    "slot": slot,
+                    "item_id": best_iid,
+                    "displaced_item_id": equipped_id,
+                },
+            )
 
     return run
 
