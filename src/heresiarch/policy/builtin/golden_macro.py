@@ -66,6 +66,18 @@ IN_TOWN_HEAL_TARGET_PCT: float = 1.00
 EXPECTED_DAMAGE_WINDOW: int = 3
 
 
+def _efficient_heal_gate(max_hp: int) -> int:
+    """The zero-waste point, small-frame adjusted.
+
+    A frame with max_hp < 2×potion can never reach missing == heal —
+    the v2.0 gate starved 40-HP onmyoji to death against fodder (25/48
+    deaths to fodder_slime on the first eval). For frames smaller than
+    two potions, "efficient enough" is half the bar — the designer's
+    observed glass-frame behavior.
+    """
+    return min(POTION_HEAL, max(1, max_hp // 2))
+
+
 @dataclass
 class GoldenMacroConfig:
     """Per-job knobs: stat preferences + risk appetite. The doctrine
@@ -136,10 +148,12 @@ class GoldenMacroPolicy:
         if potion_count < self.config.potion_stockpile_target and stash_free >= 1:
             return True
 
-        # Efficient heal: someone is a full potion's worth down —
-        # potions are the zero-waste town heal (buy-1-drink-1).
+        # Efficient heal: someone is an efficient-heal's worth down —
+        # potions are the zero-waste town heal (buy-1-drink-1). Gate is
+        # small-frame adjusted (half bar for frames under two potions).
         return any(
-            c.max_hp - c.current_hp >= POTION_HEAL for c in _active_chars(run)
+            c.max_hp - c.current_hp >= _efficient_heal_gate(c.max_hp)
+            for c in _active_chars(run)
         )
 
     def decide_zone(
@@ -319,8 +333,17 @@ class GoldenMacroPolicy:
         slot: str,
     ) -> str | None:
         """Best shop item strictly better than the equipped one, honoring
-        stat preference for weapons (a MAG frame never buys a STR sword)."""
+        stat preference for weapons (a MAG frame never buys a STR sword).
+
+        UPGRADES additionally require the weapon's scaling stat to be one
+        the job actually grows: martyr (0 STR growth) fills its empty slot
+        with a cheap starter for the flat damage, but must never sink
+        thousands into higher-tier STR weapons it can't scale — the first
+        v2 eval showed exactly that (final gold 1370→1011, deaths 8→15).
+        """
         current_rank = self._gear_rank(self._equipped_item(run, mc, slot))
+        upgrading = current_rank > (0, 0)
+        useful = self._useful_stats(mc) if upgrading else None
         ranked = (
             self._ranked_weapons(available_items)
             if equip_type == EquipType.WEAPON
@@ -332,6 +355,14 @@ class GoldenMacroPolicy:
                 continue
             if equip_type == EquipType.WEAPON and item.scaling and not (
                 self._scales_with_stat(iid, self.config.preferred_weapon_stat)
+            ):
+                continue
+            if (
+                upgrading
+                and equip_type == EquipType.WEAPON
+                and item.scaling
+                and useful is not None
+                and item.scaling.stat.value not in useful
             ):
                 continue
             if self._gear_rank(item) > current_rank:
@@ -350,15 +381,24 @@ class GoldenMacroPolicy:
             for iid in run.party.stash
             if iid != POTION_ITEM_ID and self._should_sell(iid, mc, run)
         )
+        useful = self._useful_stats(mc)
         for equip_type, slot, stat in (
             (EquipType.WEAPON, "WEAPON", self.config.preferred_weapon_stat),
             (EquipType.ARMOR, "ARMOR", None),
         ):
             current_rank = self._gear_rank(self._equipped_item(run, mc, slot))
+            upgrading = current_rank > (0, 0)
             for item in self.game_data.items.values():
                 if item.equip_type != equip_type:
                     continue
                 if stat and item.scaling and item.scaling.stat.value != stat:
+                    continue
+                if (
+                    upgrading
+                    and equip_type == EquipType.WEAPON
+                    and item.scaling
+                    and item.scaling.stat.value not in useful
+                ):
                     continue
                 if self._gear_rank(item) <= current_rank:
                     continue
@@ -706,7 +746,8 @@ class GoldenMacroPolicy:
                 continue
 
             zero_waste = [
-                c for c in hurt if max_hp[c.id] - running_hp[c.id] >= POTION_HEAL
+                c for c in hurt
+                if max_hp[c.id] - running_hp[c.id] >= _efficient_heal_gate(max_hp[c.id])
             ]
             if zero_waste:
                 drink(zero_waste[0].id)

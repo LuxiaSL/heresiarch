@@ -121,6 +121,21 @@ class TestZeroWasteHeal:
         macro = make_golden_macro_for_job(game_data, "einherjar")
         assert macro.decide_between_encounter_items(run) == []
 
+    def test_small_frame_drinks_at_half_bar(self, game_data: GameData):
+        """A frame smaller than two potions can never hit missing==heal;
+        its efficiency gate is half the bar (v2.0 starved onmyoji into
+        fodder-slime deaths with six potions banked)."""
+        gl, run = _new_run(game_data, job="onmyoji")
+        run = gl.enter_zone(run, "zone_01")
+        run = _with_stash(run, [POTION_ITEM_ID])
+        macro = make_golden_macro_for_job(game_data, "onmyoji")
+
+        run40 = _set_mc_hp(run, 21, max_hp=40)  # missing 19 < 20 → save it
+        assert macro.decide_between_encounter_items(run40) == []
+        run40 = _set_mc_hp(run, 20, max_hp=40)  # missing 20 >= 20 → drink
+        uses = macro.decide_between_encounter_items(run40)
+        assert len(uses) == 1
+
     def test_boss_topup_accepts_waste(self, game_data: GameData):
         """Below the pre-boss target with the boss up next → top up."""
         gl, run = _new_run(game_data)
@@ -278,6 +293,36 @@ class TestUpgradeShopping:
         actions = macro.decide_shop(run, ["runic_edge", POTION_ITEM_ID])
         buys = [a.item_id for a in actions if a.action == "buy"]
         assert "runic_edge" not in buys
+
+    def test_no_growth_job_skips_expensive_weapon_upgrades(
+        self, game_data: GameData,
+    ):
+        """Martyr (0 STR growth) fills its empty slot with a cheap starter
+        but must not sink thousands into STR weapons it can't scale —
+        v2.0 did, and paid 1370→1011 gold / 8→15 deaths for it."""
+        gl, run = _new_run(game_data, job="martyr")
+        run = _with_gold(run, 50_000)
+        macro = make_golden_macro_for_job(game_data, "martyr")
+
+        # Empty slot: the cheap starter is still worth its flat damage.
+        actions = macro.decide_shop(run, ["iron_blade", POTION_ITEM_ID])
+        buys = [a.item_id for a in actions if a.action == "buy"]
+        assert "iron_blade" in buys
+
+        # Equipped: the tier-2 STR sword is a museum piece for martyr.
+        run = _with_stash(run, ["iron_blade"])
+        mc = next(c for c in run.party.characters.values() if c.is_mc)
+        run = gl.equip_item(run, mc.id, "iron_blade", "WEAPON")
+        actions = macro.decide_shop(run, ["runic_edge", POTION_ITEM_ID])
+        buys = [a.item_id for a in actions if a.action == "buy"]
+        assert "runic_edge" not in buys
+        # And it doesn't burn town trips chasing one either (top armor
+        # equipped so the armor slot can't justify the visit instead).
+        run = _with_stash(run, ["void_bastion"])
+        mc = next(c for c in run.party.characters.values() if c.is_mc)
+        run = gl.equip_item(run, mc.id, "void_bastion", "ARMOR")
+        run = run.model_copy(update={"zones_completed": ["zone_01"]})
+        assert macro._affordable_upgrade_exists(run) is False
 
 
 # ---------------------------------------------------------------------------
