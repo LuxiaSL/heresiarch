@@ -74,11 +74,18 @@
     status("boot failed: " + e.message);
   });
 
+  // The IDBFS sync is a whole-mirror push: it DELETES store entries
+  // missing from this instance's in-memory view. An instance that has
+  // never written game state (fresh title screen, an unfrozen stale
+  // tab) must therefore never sync — one push from a pre-run mirror
+  // would wipe every save. `dirty` flips on the first state-changing
+  // dispatch and is the sole gate on all sync paths.
+  var dirty = false;
   var syncBusy = false;
   var syncAgain = false;
   function flushPersist() {
     if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
-    if (!py) return;
+    if (!py || !dirty) return;
     if (syncBusy) { syncAgain = true; return; } // serialize; rerun after
     syncBusy = true;
     py.FS.syncfs(false, function (e) {
@@ -102,13 +109,28 @@
     if (document.visibilityState === "hidden") flushPersist();
   });
 
+  // Ask the browser not to evict our IndexedDB under storage pressure
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().then(function (granted) {
+      if (!granted) console.warn("persistent storage denied — saves are evictable");
+    }).catch(function () {});
+  }
+
   window.HX_LOCAL_DISPATCH = async function (path, body) {
     await boot;
-    var out = handle(path, body ? JSON.stringify(body) : "");
-    // Imports are rare and explicit — make them durable right now;
-    // everything else rides the debounce
-    if (path === "/api/import_save") flushPersist();
-    else schedulePersist();
-    return JSON.parse(out);
+    var payload = JSON.parse(handle(path, body ? JSON.stringify(body) : ""));
+    if (path === "/api/import_save") {
+      // Imports are rare and explicit — make them durable right now
+      dirty = true;
+      flushPersist();
+    } else if (path === "/api/action" && payload.phase !== "SETUP") {
+      // Only a session with an actual run writes save files; actions
+      // that bounce off the title screen (failed loads, bad input)
+      // must not promote this instance to a sync writer
+      dirty = true;
+      schedulePersist();
+    }
+    // Reads (/api/state, previews, exports) never trigger a sync
+    return payload;
   };
 })();

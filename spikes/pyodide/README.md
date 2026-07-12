@@ -66,4 +66,12 @@ packages from the vendored index (no CDN).
   and as insurance against browser storage eviction. LAN-server saves
   live in `artifacts/mobile/agent_saves/*.json` and import directly.
 - Persistence details: saves flush to IndexedDB debounced 500 ms after
-  each action, immediately on import, and on pagehide/hidden.
+  each action, immediately on import, and on pagehide/hidden. The
+  IDBFS sync is a whole-mirror push (it deletes store entries missing
+  from the instance's memory), so syncing is gated on the instance
+  actually having a run — a stale pre-run tab can never wipe saves.
+  `navigator.storage.persist()` is requested at boot so the browser
+  treats the store as non-evictable. Suspected cause of the one
+  known save loss (2026-07-11, zone-2 run): pre-guard, ANY dispatch
+  scheduled a sync, so an unfrozen stale tab could push its empty
+  mirror; that path is now closed and regression-tested.
