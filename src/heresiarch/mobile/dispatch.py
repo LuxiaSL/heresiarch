@@ -3,7 +3,7 @@
 This is the whole behavior of the mobile frontend, minus HTTP: a
 whitelist of session methods, error-to-payload conversion, and the
 StatePayload build. The FastAPI LAN server (app.py) and the Pyodide
-engine-in-wasm page (spikes/pyodide) both drive these exact functions,
+engine-in-wasm page (wasm/) both drive these exact functions,
 so the two transports cannot drift.
 """
 

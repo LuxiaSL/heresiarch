@@ -1,15 +1,15 @@
 """Stage a fully self-contained, serverless Heresiarch web build.
 
-Output: spikes/pyodide/dist/ — the real mobile client (index.html,
+Output: wasm/dist/ — the real mobile client (index.html,
 PWA shell) plus boot.js, the engine wheel, zipped YAML data, and a
 vendored Pyodide runtime with the pydantic/pyyaml wheel closure.
 Everything is local: after the first page load the game runs with no
 server and no network (the service worker caches what it fetched).
 
 Usage:
-    uv run python spikes/pyodide/build.py             # stage dist/
-    uv run python spikes/pyodide/build.py --refresh   # re-download pyodide
-    uv run python spikes/pyodide/serve.py             # then serve it
+    uv run python wasm/build.py             # stage dist/
+    uv run python wasm/build.py --refresh   # re-download pyodide
+    uv run python wasm/serve.py             # then serve it
 """
 
 from __future__ import annotations
@@ -38,9 +38,9 @@ CORE_FILES = [
 # Engine dependency roots; the lockfile closure is vendored from these
 PACKAGE_ROOTS = ["pydantic", "pyyaml"]
 
-SPIKE_DIR = Path(__file__).parent
-REPO = SPIKE_DIR.parent.parent
-DIST = SPIKE_DIR / "dist"
+WASM_DIR = Path(__file__).parent
+REPO = WASM_DIR.parent
+DIST = WASM_DIR / "dist"
 STATIC = REPO / "src" / "heresiarch" / "mobile" / "static"
 
 BOOT_TAG = '<script src="./boot.js"></script>'
@@ -81,8 +81,8 @@ def stage_client() -> None:
             sys.exit("could not inject boot.js: <body> tag not found")
     (DIST / "index.html").write_text(html, encoding="utf-8")
 
-    shutil.copy(SPIKE_DIR / "boot.js", DIST / "boot.js")
-    shutil.copy(SPIKE_DIR / "bootstrap.py", DIST / "bootstrap.py")
+    shutil.copy(WASM_DIR / "boot.js", DIST / "boot.js")
+    shutil.copy(WASM_DIR / "bootstrap.py", DIST / "bootstrap.py")
     for name in ("manifest.webmanifest", "sw.js"):
         shutil.copy(STATIC / name, DIST / name)
     shutil.copytree(STATIC / "icons", DIST / "icons", dirs_exist_ok=True)
@@ -154,7 +154,7 @@ def main() -> None:
     vendor_pyodide(refresh=args.refresh)
     total = sum(f.stat().st_size for f in DIST.rglob("*") if f.is_file())
     print(f"Done: {DIST} ({total / 1_048_576:.1f} MiB)")
-    print("Serve it:  uv run python spikes/pyodide/serve.py")
+    print("Serve it:  uv run python wasm/serve.py")
 
 
 if __name__ == "__main__":

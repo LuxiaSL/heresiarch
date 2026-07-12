@@ -1,10 +1,10 @@
-"""Serve the staged serverless build (spikes/pyodide/dist/) on the LAN.
+"""Serve the staged serverless build (wasm/dist/) on the LAN.
 
 A plain static file server — no game logic, no session, no API. The
 stdlib http.server guesses some MIME types wrong for wasm-era assets,
 which breaks module loading; this pins the ones that matter.
 
-    uv run python spikes/pyodide/serve.py [--port 8643]
+    uv run python wasm/serve.py [--port 8643]
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def main() -> None:
 
     if not (DIST / "index.html").exists():
         raise SystemExit(
-            "dist/ is not staged — run: uv run python spikes/pyodide/build.py"
+            "dist/ is not staged — run: uv run python wasm/build.py"
         )
 
     print()
