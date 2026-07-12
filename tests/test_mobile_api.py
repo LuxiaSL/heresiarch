@@ -610,6 +610,121 @@ def test_auto_battle_replays_matching_record(client: TestClient) -> None:
         assert payload["combat"]["round_number"] == round_before + 1
 
 
+def _finish_current_combat(client: TestClient) -> dict[str, Any]:
+    """Drive the current COMBAT phase to its end with default decisions."""
+    payload = client.get("/api/state").json()
+    for _ in range(60):
+        if payload["phase"] != "COMBAT":
+            break
+        combat = payload["combat"]
+        decisions = {
+            p["id"]: _default_decision(p, combat["enemies"])
+            for p in combat["players"]
+            if p["is_alive"]
+        }
+        payload = _act(client, "submit_decisions", {"decisions": decisions})
+        assert payload["error"] is None, payload["error"]
+    return payload
+
+
+def test_battle_record_survives_pwa_relaunch(tmp_path: Path) -> None:
+    """Auto-battle after app restart: battle records (incl. per-round
+    decisions) must survive the save -> fresh-session -> load path the
+    wasm PWA uses, and the replay lookup must still match."""
+    from heresiarch.engine.replay import find_matching_record
+
+    notes = tmp_path / "notes.json"
+    first = TestClient(create_app(notes_path=notes))
+    _act(first, "new_run", {"name": "Grinder", "job_id": "einherjar", "seed": 42})
+    _act(first, "enter_zone", {"zone_id": "zone_01"})
+    _act(first, "fight")
+    payload = _finish_current_combat(first)
+    if payload["phase"] != "POST_COMBAT":
+        pytest.skip("seed lost the first encounter; nothing to record")
+    payload = _act(first, "pick_loot", {"item_ids": []})  # autosaves
+
+    won = first.app.state.session.run.battle_record.encounters[-1]
+    assert won.result == "victory" and won.rounds, "pre-save record malformed"
+
+    # App relaunch: fresh session over the same storage
+    second = TestClient(create_app(notes_path=notes))
+    payload = _act(second, "load_run", {"slot": "autosave"})
+    assert payload["error"] is None, payload["error"]
+
+    loaded = second.app.state.session.run.battle_record.encounters
+    assert loaded, "battle record lost across save/load"
+    restored = loaded[-1]
+    assert restored.result == "victory"
+    assert restored.enemy_template_ids == won.enemy_template_ids
+    assert len(restored.rounds) == len(won.rounds), "round records lost"
+    assert restored.rounds[0].player_decisions, "recorded decisions lost"
+    assert find_matching_record(loaded, won.enemy_template_ids) is not None
+
+
+def test_auto_start_offered_after_reload_at_low_hp(tmp_path: Path) -> None:
+    """Regression: 'auto-battle unavailable after restarting the game'.
+
+    Root cause: the CLIENT hid the Auto start button whenever auto_halt
+    (party HP <= 50%) was set — and HP persists in saves, so a worn-down
+    party could never start auto again, restart or not. The TUI never
+    HP-gates STARTING auto; the halt rule only stops a running loop.
+    Contract: auto_available is independent of HP, auto_halt is advisory
+    for the running loop, and auto_battle_round works at low HP.
+    """
+    from heresiarch.engine.models.battle_record import BattleRecord
+
+    notes = tmp_path / "notes.json"
+    first = TestClient(create_app(notes_path=notes))
+    _act(first, "new_run", {"name": "Worn", "job_id": "einherjar", "seed": 42})
+    _act(first, "enter_zone", {"zone_id": "zone_01"})
+    _act(first, "fight")
+    payload = _finish_current_combat(first)
+    if payload["phase"] != "POST_COMBAT":
+        pytest.skip("seed lost the first encounter; can't record a victory")
+    _act(first, "pick_loot", {"item_ids": []})
+
+    # Grinding wore the party below half HP — then the app was closed
+    session = first.app.state.session
+    run = session.run
+    chars = {
+        cid: char.model_copy(update={"current_hp": max(1, char.max_hp // 3)})
+        for cid, char in run.party.characters.items()
+    }
+    session.run = run.model_copy(
+        update={"party": run.party.model_copy(update={"characters": chars})},
+    )
+    payload = _act(first, "save_run", {"slot": "autosave"})
+    assert payload["error"] is None, payload["error"]
+
+    # Relaunch + load + fight; graft the won record onto this encounter's
+    # enemy group (same pattern as the auto-battle replay test above)
+    second = TestClient(create_app(notes_path=notes))
+    payload = _act(second, "load_run", {"slot": "autosave"})
+    assert payload["error"] is None, payload["error"]
+    payload = _act(second, "fight")
+    assert payload["phase"] == "COMBAT"
+
+    s2 = second.app.state.session
+    won = s2.run.battle_record.encounters[-1]
+    grafted = won.model_copy(update={
+        "enemy_template_ids": list(s2._enemy_combatant_templates.values()),
+    })
+    s2.run = s2.run.model_copy(update={
+        "battle_record": BattleRecord(
+            encounters=list(s2.run.battle_record.encounters) + [grafted],
+        ),
+    })
+
+    combat = second.get("/api/state").json()["combat"]
+    assert combat["auto_available"] is True, (
+        "auto start must be offered regardless of party HP"
+    )
+    assert combat["auto_halt"], "halt rule should still be advertised"
+
+    payload = _act(second, "auto_battle_round")
+    assert payload["error"] is None, payload["error"]
+
+
 def test_town_view_has_priced_shop(client: TestClient) -> None:
     payload = _act(client, "new_run", {"name": "Spike", "job_id": "onmyoji", "seed": 3})
     towns = payload["zone_select"]["towns"]
