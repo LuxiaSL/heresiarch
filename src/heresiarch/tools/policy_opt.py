@@ -89,6 +89,8 @@ PARAM_SPECS: tuple[ParamSpec, ...] = (
     ParamSpec("potion_stockpile_target", "int", 0, 5, "macro"),
     ParamSpec("potion_stash_cap", "int", 1, 8, "macro"),
     ParamSpec("pre_boss_retreat_hp_pct", "float", 0.30, 1.00, "macro"),
+    # The doctrine's explicit per-job delta ("risk threshold"): 0 = off.
+    ParamSpec("between_fight_heal_target", "float", 0.0, 0.95, "macro"),
     ParamSpec("lodge_on", "bool", 0, 1, "macro"),
     ParamSpec("lodge_hp_threshold", "float", 0.10, 0.60, "macro"),
     ParamSpec("pit_level_buffer", "int", 0, 10, "macro"),

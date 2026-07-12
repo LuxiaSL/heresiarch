@@ -67,13 +67,14 @@ EXPECTED_DAMAGE_WINDOW: int = 3
 
 
 def _efficient_heal_gate(max_hp: int) -> int:
-    """The zero-waste point, small-frame adjusted.
+    """Town-trip heal gate, small-frame adjusted.
 
-    A frame with max_hp < 2×potion can never reach missing == heal —
-    the v2.0 gate starved 40-HP onmyoji to death against fodder (25/48
-    deaths to fodder_slime on the first eval). For frames smaller than
-    two potions, "efficient enough" is half the bar — the designer's
-    observed glass-frame behavior.
+    A frame with max_hp < 2×potion can never reach missing == heal,
+    so the TOWN-visit heal leg uses half the bar for them. (Between
+    fights this is handled by the per-job between_fight_heal_target
+    instead — a flat half-bar gate there crashed berserker, whose
+    survive-cycle wants its potions saved for the projected-death
+    moment.)
     """
     return min(POTION_HEAL, max(1, max_hp // 2))
 
@@ -88,6 +89,14 @@ class GoldenMacroConfig:
     potion_stockpile_target: int = 3         # carried potions = expected need + spare
     potion_stash_cap: int = 5                # shop: buy potions up to this count
     pre_boss_retreat_hp_pct: float = 0.90   # heal/retreat target when next encounter is a boss
+    # THE per-job risk threshold (doctrine: "what shifts per job is …
+    # your risk threshold internally"). 0.0 = off: drink only at
+    # zero-waste or projected death — measured best for survive-cycle
+    # frames (berserker v2.0 median 26 enc; the v2.1 half-bar gate
+    # crashed it to 4 by sipping the pack budget on ordinary chip).
+    # Glass casters want ~0.75: enter every fight topped, waste be
+    # damned (old-threshold onmyoji outran every v2 variant).
+    between_fight_heal_target: float = 0.0
     lodge_on: bool = False                   # potions are the efficient early heal
     lodge_hp_threshold: float = 0.30
     pit_level_buffer: int = 5               # grind endless zones until MC level >= next_zone_level + buffer
@@ -776,20 +785,22 @@ class GoldenMacroPolicy:
                 continue
 
             zero_waste = [
-                c for c in hurt
-                if max_hp[c.id] - running_hp[c.id] >= _efficient_heal_gate(max_hp[c.id])
+                c for c in hurt if max_hp[c.id] - running_hp[c.id] >= POTION_HEAL
             ]
             if zero_waste:
                 drink(zero_waste[0].id)
                 continue
 
-            if boss_next:
-                below_boss_target = [
+            # Per-job risk threshold: pre-boss/endless target dominates;
+            # otherwise the config's between-fight target (0.0 = off).
+            target = boss_target if boss_next else self.config.between_fight_heal_target
+            if target > 0:
+                below_target = [
                     c for c in hurt
-                    if running_hp[c.id] / max(1, max_hp[c.id]) < boss_target
+                    if running_hp[c.id] / max(1, max_hp[c.id]) < target
                 ]
-                if below_boss_target:
-                    drink(below_boss_target[0].id)
+                if below_target:
+                    drink(below_target[0].id)
                     continue
 
             break
@@ -838,6 +849,7 @@ ONMYOJI_GOLDEN_CONFIG = GoldenMacroConfig(
     potion_stockpile_target=3,
     potion_stash_cap=6,
     pre_boss_retreat_hp_pct=0.90,
+    between_fight_heal_target=0.75,  # glass: enter everything topped
     lodge_on=False,
 )
 
@@ -847,6 +859,7 @@ SACRIST_GOLDEN_CONFIG = GoldenMacroConfig(
     potion_stockpile_target=3,
     potion_stash_cap=6,
     pre_boss_retreat_hp_pct=0.90,
+    between_fight_heal_target=0.75,
     lodge_on=False,
 )
 
@@ -856,6 +869,7 @@ MARTYR_GOLDEN_CONFIG = GoldenMacroConfig(
     potion_stockpile_target=1,
     potion_stash_cap=5,
     pre_boss_retreat_hp_pct=0.90,
+    between_fight_heal_target=0.55,  # its old 83%-survival regime
     lodge_on=False,
 )
 

@@ -121,20 +121,28 @@ class TestZeroWasteHeal:
         macro = make_golden_macro_for_job(game_data, "einherjar")
         assert macro.decide_between_encounter_items(run) == []
 
-    def test_small_frame_drinks_at_half_bar(self, game_data: GameData):
-        """A frame smaller than two potions can never hit missing==heal;
-        its efficiency gate is half the bar (v2.0 starved onmyoji into
-        fodder-slime deaths with six potions banked)."""
+    def test_per_job_risk_threshold(self, game_data: GameData):
+        """The doctrine's one per-job delta. Glass (onmyoji, target 0.75)
+        enters every fight topped; survive-cycle frames (berserker,
+        target off) bank potions for the projected-death moment — the
+        v2.1 flat half-bar gate crashed berserker's median 26 → 4 by
+        sipping the pack budget on ordinary chip."""
         gl, run = _new_run(game_data, job="onmyoji")
         run = gl.enter_zone(run, "zone_01")
         run = _with_stash(run, [POTION_ITEM_ID])
-        macro = make_golden_macro_for_job(game_data, "onmyoji")
+        onmyoji = make_golden_macro_for_job(game_data, "onmyoji")
 
-        run40 = _set_mc_hp(run, 21, max_hp=40)  # missing 19 < 20 → save it
-        assert macro.decide_between_encounter_items(run40) == []
-        run40 = _set_mc_hp(run, 20, max_hp=40)  # missing 20 >= 20 → drink
-        uses = macro.decide_between_encounter_items(run40)
-        assert len(uses) == 1
+        low = _set_mc_hp(run, 20, max_hp=40)   # 50% < 0.75 → drink
+        assert len(onmyoji.decide_between_encounter_items(low)) == 1
+        high = _set_mc_hp(run, 31, max_hp=40)  # 77.5% ≥ 0.75, waste → save
+        assert onmyoji.decide_between_encounter_items(high) == []
+
+        glb, runb = _new_run(game_data, job="berserker")
+        runb = glb.enter_zone(runb, "zone_01")
+        runb = _with_stash(runb, [POTION_ITEM_ID])
+        berserker = make_golden_macro_for_job(game_data, "berserker")
+        lowb = _set_mc_hp(runb, 15, max_hp=30)  # 50%, no danger signal
+        assert berserker.decide_between_encounter_items(lowb) == []
 
     def test_boss_topup_accepts_waste(self, game_data: GameData):
         """Below the pre-boss target with the boss up next → top up."""
