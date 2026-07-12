@@ -3,7 +3,7 @@
 Executed by boot.js after the engine wheel and data are unpacked.
 hx_handle(path, body_json) mirrors the FastAPI routes exactly — the
 client cannot tell the transports apart. Runs identically under the
-Node verifier (spikes/pyodide/verify_node.mjs).
+Node verifier (wasm/verify_node.mjs).
 """
 
 import json

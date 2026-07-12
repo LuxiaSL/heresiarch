@@ -1,6 +1,6 @@
 # Deploy the serverless (engine-in-wasm) build to GitHub Pages.
 #
-# Every push to main restages spikes/pyodide/dist/ — engine wheel,
+# Every push to main restages wasm/dist/ — engine wheel,
 # zipped YAML data, phone client, vendored Pyodide runtime — and
 # publishes it. Installed phones pick up the new version on their next
 # online launch (the service worker is network-first).
@@ -32,16 +32,18 @@ jobs:
       - name: Cache vendored pyodide runtime
         uses: actions/cache@v4
         with:
-          path: spikes/pyodide/dist/pyodide
-          # keep in sync with PYODIDE_VERSION in spikes/pyodide/build.py
-          key: pyodide-dist-314.0.2
+          path: wasm/dist/pyodide
+          # keep in sync with PYODIDE_VERSION in wasm/build.py.
+          # ("-wasm" suffix: cache saved under the old spikes/ path can't
+          # restore to the new location — force a fresh save once)
+          key: pyodide-dist-314.0.2-wasm
 
       - name: Stage serverless build
-        run: uv run python spikes/pyodide/build.py
+        run: uv run python wasm/build.py
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: spikes/pyodide/dist
+          path: wasm/dist
 
   deploy:
     needs: build

@@ -6,8 +6,6 @@ Run with:
 
 from __future__ import annotations
 
-import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -147,9 +145,10 @@ TOOLS: list[Tool] = [
         name="submit_decisions",
         description=(
             "Submit one round of combat decisions for all living player characters. "
-            "Each character needs: mode (normal/cheat/survive), action (ability_id or 'use_item'), "
-            "target (combatant_id). To use an item instead of attacking, set action to 'use_item' "
-            "with item_id and target fields — this costs the character's action for the round."
+            "Each character needs: mode (normal/cheat/survive), action (ability_id, 'use_item', "
+            "or 'wait'), target (combatant_id). To use an item instead of attacking, set action to "
+            "'use_item' with item_id and target fields — this costs the character's action for the "
+            "round. A character mid-windup can set action to 'wait' to let the charge tick."
         ),
         inputSchema={
             "type": "object",
@@ -159,7 +158,8 @@ TOOLS: list[Tool] = [
                     "description": (
                         "Keyed by combatant_id. Each value: "
                         '{"mode": "normal"|"cheat"|"survive", '
-                        '"action": "ability_id" or "use_item", "target": "combatant_id", '
+                        '"action": "ability_id" or "use_item" or "wait" (push an active windup), '
+                        '"target": "combatant_id", '
                         '"item_id": "item_id" (only with use_item), '
                         '"ap_spend": int, '
                         '"cheat_extras": [{"ability": "id", "target": "id"} or {"ability": "wait"}], '

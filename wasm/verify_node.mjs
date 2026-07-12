@@ -7,9 +7,9 @@
 // phone client actually speaks. IDBFS doesn't exist in Node, so
 // /persist is plain MEMFS here; everything else is identical.
 //
-//   uv run python spikes/pyodide/build.py
+//   uv run python wasm/build.py
 //   npm install pyodide@<PYODIDE_VERSION from build.py>   (any dir)
-//   node spikes/pyodide/verify_node.mjs
+//   node wasm/verify_node.mjs
 //
 // Exit 0 = the browser build's engine path is good.
 

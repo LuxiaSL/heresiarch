@@ -72,7 +72,8 @@ src/heresiarch/
     core/response_models.py # API response models
     api/               # HTTP endpoints (sim_routes, config_routes, data_routes)
 
-spikes/pyodide/        # Serverless build: engine in wasm CPython (Pyodide)
+wasm/                  # PRODUCTION serverless build: engine in wasm CPython
+                       # (Pyodide), deployed to GitHub Pages by pages.yml.
                        # build.py stages dist/, serve.py hosts, verify_node.mjs
                        # is the headless conformance check. See its README.
 

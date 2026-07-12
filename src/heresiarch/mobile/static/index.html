@@ -43,7 +43,9 @@
   button { font: inherit; color: var(--fg); background: var(--card2);
     border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
     min-height: 44px; cursor: pointer; }
-  button:active { filter: brightness(1.3); }
+  /* Press feedback: obvious "this button is firing" visual while held */
+  button:active:not(:disabled) { filter: brightness(1.5); transform: scale(0.96); }
+  button { transition: filter .08s, transform .08s; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff;
     font-weight: 600; width: 100%; font-size: 16px; }
   button.gold { background: #3a3010; border-color: var(--gold); color: var(--gold); }
@@ -93,9 +95,17 @@
   .slotrow b { font-weight: 600; }
   .slotedit { margin: 8px 0 4px; padding: 8px; background: #12121a; border-radius: 8px;
     border: 1px solid var(--line); }
-  /* ASCII map: pannable <pre> with absolutely-positioned tap targets */
+  /* ASCII map: <pre> panned by the d-pad, with absolutely-positioned tap
+     targets. overflow:hidden = no drag-pan, so the map never hijacks the
+     page scroll; scrollLeft/Top still work programmatically. */
+  .mapbox { position: relative; margin: 8px 0; }
   .mapscroll { background: #0a0a10; border: 1px solid var(--line); border-radius: 10px;
-    overflow: auto; max-height: 44vh; margin: 8px 0; -webkit-overflow-scrolling: touch; }
+    overflow: hidden; max-height: 44vh; }
+  .dpad { position: absolute; right: 6px; bottom: 6px; z-index: 3; display: grid;
+    grid-template-areas: ". u ." "l . r" ". d ."; gap: 3px; opacity: 0.9; }
+  .dpad button { width: 36px; height: 36px; min-height: 36px; padding: 0;
+    border-radius: 8px; font-size: 13px; background: rgba(31,31,42,.88);
+    color: var(--dim); touch-action: none; }
   .mapwrap { position: relative; display: inline-block; font-size: 11px; line-height: 14px;
     padding: 0; }
   pre.map { margin: 6px; font-size: inherit; line-height: inherit; white-space: pre; }
@@ -117,6 +127,9 @@ const ui = {
   equipPreview: null,  // {cid, item_id, data: EquipPreview}
   mapKey: null, mapSel: null,          // ASCII map selection state
   mapScroll: null, mapScrolled: false, // pan position, kept across re-renders
+  disc: {},          // <details> open/closed by key — remembered across
+                     // re-renders and screen swaps (in-memory: resets on
+                     // app relaunch so each session starts at defaults)
   verbose: (localStorage.getItem("hx_log") || "verbose") !== "summary",
   pb: null,          // active event playback {evs, i, timer, hp, dead}
   auto: false,       // auto-battle loop engaged
@@ -321,8 +334,11 @@ function rebuildDecisions() {
   const D = {};
   for (const p of (S.combat?.players || []).filter(p => p.is_alive)) {
     const prev = ui.D[p.id] || {};
-    const abil = p.abilities.some(a => a.id === prev.ability && a.cooldown_remaining === 0)
-      ? prev.ability : defaultAbility(p);
+    // Mid-windup the turn is committed to the charge — default the
+    // primary to Wait (the only honest choice; engine ignores the rest).
+    const abil = p.charging ? "__wait__"
+      : p.abilities.some(a => a.id === prev.ability && a.cooldown_remaining === 0)
+        ? prev.ability : defaultAbility(p);
     D[p.id] = {
       mode: "normal", ability: abil, target: null, useItem: false,
       item: null, itemTarget: p.id, ap: Math.min(1, p.ap) || 1,
@@ -340,11 +356,22 @@ function combatantName(id) {
   const all = [...(S.combat?.players || []), ...(S.combat?.enemies || [])];
   return (all.find(c => c.id === id) || {name: id}).name;
 }
+// Taunt lock, shared by EVERY target picker (primary, cheat-extra and
+// bonus slots) so no part of the UI offers a target the engine would
+// redirect away from.
+function taunterIdsFor(p) {
+  return (p.taunted_by || []).filter(id => livingEnemies().some(e => e.id === id));
+}
+function enemyTargetsFor(p) {
+  const taunters = taunterIdsFor(p);
+  const es = livingEnemies();
+  return taunters.length ? es.filter(e => taunters.includes(e.id)) : es;
+}
 function resolveTargetFor(p, abilityId, wanted) {
   const ab = abilityOf(p, abilityId);
   if (!ab) return null;
   if (ab.target === "SINGLE_ENEMY") {
-    const es = livingEnemies();
+    const es = enemyTargetsFor(p); // taunt-locked, same rule as the pickers
     return es.some(e => e.id === wanted) ? wanted : (es[0]?.id ?? null);
   }
   if (ab.target === "SINGLE_ALLY") {
@@ -378,6 +405,8 @@ function buildDecisions() {
     if (d.useItem) {
       if (!d.item) { toast(p.name + ": pick an item"); return null; }
       e.action = "use_item"; e.item_id = d.item; e.target = d.itemTarget || p.id;
+    } else if (d.ability === "__wait__") {
+      e.action = "wait"; // windup push: let the charge tick
     } else {
       if (!d.ability) { toast(p.name + ": pick an ability"); return null; }
       e.action = d.ability;
@@ -428,14 +457,27 @@ function itemDetail(it) {
     bits.push(`+${v} ${k} for one fight`);
   return bits.join(" · ");
 }
-function confirmRow(key, label, action, extra) {
-  // Two-step destructive button: first tap arms, second confirms.
+function confirmRow(key, label, action, extra, confirmLabel) {
+  // Two-step destructive/consuming button: first tap arms, second confirms.
   if (ui.confirm === key) {
-    return `<button class="danger" data-a="${action}" ${extra || ""}>Confirm</button>
+    return `<button class="danger" data-a="${action}" ${extra || ""}>${confirmLabel || "Confirm"}</button>
       <button data-a="confirm-cancel">✕</button>`;
   }
   return `<button data-a="confirm-arm" data-key="${esc(key)}">${label}</button>`;
 }
+// Collapsible section that remembers its open/closed state (nit: drop
+// menus must not reset when the screen re-renders between fights).
+function det(key, defOpen, summary, inner) {
+  const open = key in ui.disc ? ui.disc[key] : defOpen;
+  return `<details data-d="${esc(key)}"${open ? " open" : ""}>
+    <summary>${summary}</summary>${inner}</details>`;
+}
+// 'toggle' doesn't bubble — capture it. Idempotent on programmatic
+// inserts: the DOM state it reports came from ui.disc in the first place.
+document.addEventListener("toggle", (ev) => {
+  const k = ev.target && ev.target.dataset ? ev.target.dataset.d : null;
+  if (k) ui.disc[k] = ev.target.open;
+}, true);
 function equipPreviewPanel() {
   const ep = ui.equipPreview;
   if (!ep) return "";
@@ -467,7 +509,7 @@ function stashPanel(opts) {
   const canUse = !!(opts && opts.use), canSell = !!(opts && opts.sell);
   const chars = S.party.characters;
   const header = `Stash (${S.party.stash_used}/${S.party.stash_limit})`;
-  if (!S.party.stash.length) return `<details><summary>${header}</summary><div class="dim small" style="padding:6px 2px">empty</div></details>`;
+  if (!S.party.stash.length) return det("stash", false, header, `<div class="dim small" style="padding:6px 2px">empty</div>`);
   const rows = S.party.stash.map((it, i) => {
     let actions = "";
     if (ui.pickUse === i) {
@@ -481,7 +523,8 @@ function stashPanel(opts) {
       if (canUse && it.kind === "heal") bits.push(`<button data-a="pick-use" data-i="${i}">Use</button>`);
       if (canUse && it.kind === "teach") bits.push(`<button data-a="pick-use" data-i="${i}">Teach</button>`);
       if (canUse && it.kind === "equip") bits.push(`<button data-a="pick-use" data-i="${i}">Equip</button>`);
-      if (canSell) bits.push(`<button data-a="sell" data-id="${esc(it.id)}">Sell ${it.sell_price ?? "?"}g</button>`);
+      if (canSell) bits.push(confirmRow(`sell:${i}`, `Sell ${it.sell_price ?? "?"}g`,
+        "sell", `data-id="${esc(it.id)}"`, `Confirm ${it.sell_price ?? "?"}g`));
       bits.push(confirmRow(`drop:${i}`, "🗑", "drop-item", `data-id="${esc(it.id)}"`));
       actions = bits.join(" ");
     }
@@ -490,7 +533,7 @@ function stashPanel(opts) {
         <div class="dim">${itemDetail(it)}</div></div>
       <div class="row">${actions}</div></div></div>`;
   }).join("");
-  return `<details open><summary>${header}</summary>${equipPreviewPanel()}${rows}</details>`;
+  return det("stash", true, header, equipPreviewPanel() + rows);
 }
 function statGrid(c) {
   return `<div style="margin-top:6px">` + Object.keys(c.base_stats).map(k => {
@@ -503,7 +546,7 @@ function statGrid(c) {
 function partyDetails() {
   if (!S.party) return "";
   const mcJobs = new Set(S.party.characters.filter(c => !c.is_mc).map(c => c.job_id));
-  return `<details><summary>Party details</summary>` + S.party.characters.map(c => {
+  return det("party", false, "Party details", S.party.characters.map(c => {
     const roster = [];
     if (!c.is_mc) {
       if (c.is_active) roster.push(`<button class="small" data-a="bench" data-c="${esc(c.id)}">Bench</button>`);
@@ -539,7 +582,7 @@ function partyDetails() {
       <div class="dim small" style="margin-top:6px">${c.abilities.map(esc).join(" · ")}</div>
       ${mimic}
     </div>`;
-  }).join("") + `</details>`;
+  }).join(""));
 }
 function topbar() {
   const gold = S.party ? `${S.party.gold}g` : "";
@@ -640,11 +683,16 @@ function mapDetailCard(m) {
     case "lodge":
       btn = `<button data-a="map-goto" data-id="lodge-card">Rest ▾</button>`; break;
   }
+  // Prev/next cycle the selectable anchors — swapping destination cards
+  // is deliberately independent of panning the map art.
+  const many = m.navigable_ids.length > 1;
   return `<div class="card"><div class="row">
+    ${many ? `<button class="small" data-a="map-prev" aria-label="previous destination">◀</button>` : ""}
     <div class="grow"><span class="name small">${esc(a.label || a.id)}</span>
       ${a.detail ? `<div class="dim small">${esc(a.detail)}</div>` : ""}
       ${a.status === "locked" ? `<div class="dim small">locked</div>` : ""}</div>
-    ${btn}</div></div>`;
+    ${btn}
+    ${many ? `<button class="small" data-a="map-next" aria-label="next destination">▶</button>` : ""}</div></div>`;
 }
 function mapPanel(m) {
   if (!m || !m.art.length) return "";
@@ -659,8 +707,38 @@ function mapPanel(m) {
     return `<div class="maptap" data-a="map-sel" data-id="${esc(id)}"
       style="left:calc(${a.col}ch + 0.5ch);top:${a.row * MAP_LINE_H + MAP_LINE_H / 2}px"></div>`;
   }).join("");
-  return `<div class="mapscroll" id="mapscroll"><div class="mapwrap">
-    <pre class="map">${mapHtml(m, ui.mapSel)}</pre>${taps}</div></div>` + mapDetailCard(m);
+  // Explicit pan controls (d-pad, hold to keep panning) — drag-pan is
+  // off so the map never fights the page scroll. Tap anchors still work.
+  const dpad = `<div class="dpad">
+    <button style="grid-area:u" data-pan="0,-1" aria-label="pan up">▲</button>
+    <button style="grid-area:l" data-pan="-1,0" aria-label="pan left">◀</button>
+    <button style="grid-area:r" data-pan="1,0" aria-label="pan right">▶</button>
+    <button style="grid-area:d" data-pan="0,1" aria-label="pan down">▼</button>
+  </div>`;
+  return `<div class="mapbox"><div class="mapscroll" id="mapscroll"><div class="mapwrap">
+    <pre class="map">${mapHtml(m, ui.mapSel)}</pre>${taps}</div></div>${dpad}</div>`
+    + mapDetailCard(m);
+}
+// D-pad panning: fires on press, repeats while held.
+let panTimer = null;
+function panMap(dx, dy) {
+  const sc = document.getElementById("mapscroll");
+  if (!sc) return;
+  sc.scrollLeft += dx; sc.scrollTop += dy;
+  ui.mapScroll = {left: sc.scrollLeft, top: sc.scrollTop};
+  ui.mapScrolled = true;
+}
+document.addEventListener("pointerdown", (ev) => {
+  const el = ev.target.closest("[data-pan]");
+  if (!el) return;
+  ev.preventDefault();
+  const [dx, dy] = el.dataset.pan.split(",").map(Number);
+  panMap(dx * 48, dy * 48);
+  clearInterval(panTimer);
+  panTimer = setInterval(() => panMap(dx * 26, dy * 26), 80);
+});
+for (const t of ["pointerup", "pointercancel"]) {
+  document.addEventListener(t, () => { clearInterval(panTimer); panTimer = null; });
 }
 function restoreMapScroll() {
   const sc = document.getElementById("mapscroll");
@@ -759,9 +837,9 @@ function screenZoneSelect() {
     </div>`).join("");
   const map = mapPanel(S.map);
   const list = map
-    ? `<details><summary>All destinations (list)</summary>
-        ${towns ? `<div class="section">TOWN</div>${towns}` : ""}
-        <div class="section">ZONES</div>${zones}</details>`
+    ? det("dest", false, "All destinations (list)",
+        (towns ? `<div class="section">TOWN</div>${towns}` : "") +
+        `<div class="section">ZONES</div>${zones}`)
     : (towns ? `<div class="section">TOWN</div>${towns}` : "") +
       `<div class="section">ZONES</div>${zones}`;
   return topbar() + map + partyStrip() + list +
@@ -772,10 +850,14 @@ function screenTown() {
   const t = S.town || {shop_items: []};
   const shop = t.shop_items.map(it => {
     const afford = S.party && S.party.gold >= (it.price ?? 0);
+    const btn = afford
+      ? confirmRow(`buy:${it.id}`, `${it.price}g`, "buy",
+          `data-id="${esc(it.id)}"`, `Buy ${it.price}g`)
+      : `<button disabled>${it.price}g</button>`;
     return `<div class="card"><div class="row">
       <div class="grow"><span class="name small">${esc(it.name)}</span>
         <div class="dim">${esc(it.type)}${it.description ? " · " + esc(it.description) : ""}</div></div>
-      <button ${afford ? "" : "disabled"} data-a="buy" data-id="${esc(it.id)}">${it.price}g</button>
+      ${btn}
     </div></div>`;
   }).join("");
   return topbar() + `
@@ -839,7 +921,9 @@ function slotEditor(p, d, key) {
   let tchips = "";
   const ab = abilityOf(p, aid);
   if (ab && ab.target === "SINGLE_ENEMY" && livingEnemies().length > 1) {
-    tchips = `<div class="chips">` + livingEnemies().map(en =>
+    // Same taunt lock as the primary picker — never offer a target the
+    // engine would redirect away from
+    tchips = `<div class="chips">` + enemyTargetsFor(p).map(en =>
       `<button class="chip ${resolveTargetFor(p, aid, slot.target) === en.id ? "sel" : ""}"
         data-a="slot-tgt" data-c="${esc(p.id)}" data-k="${key}" data-id="${esc(en.id)}">
         ${esc(en.name)} <span class="dim">${en.hp}</span></button>`).join("") + `</div>`;
@@ -873,7 +957,7 @@ function decisionCard(p) {
   const d = ui.D[p.id];
   if (!d) return "";
   const ab = abilityOf(p, d.ability);
-  const taunters = (p.taunted_by || []).filter(id => livingEnemies().some(e => e.id === id));
+  const taunters = taunterIdsFor(p);
   const badges =
     `<span class="badge ap">AP ${p.ap}</span>` +
     (p.cheat_debt ? `<span class="badge debt">debt ${p.cheat_debt}</span>` : "") +
@@ -883,31 +967,42 @@ function decisionCard(p) {
     (taunters.length ? `<span class="badge frz">TAUNTED → ${esc(combatantName(taunters[0]))}</span>` : "");
   let body = "";
   if (d.mode !== "survive") {
-    const chips = p.abilities.map(a => {
+    let chips = p.abilities.map(a => {
       const cd = a.cooldown_remaining > 0;
       return `<button class="chip ${!d.useItem && d.ability === a.id ? "sel" : ""} ${cd ? "cd" : ""}"
         ${cd ? "disabled" : ""} data-a="set-abil" data-c="${esc(p.id)}" data-id="${esc(a.id)}">${abilityChipLabel(a)}</button>`;
     }).join("");
+    // Windup push (TUI parity): while charging, Wait is a primary choice
+    if (p.charging) {
+      chips = `<button class="chip ${!d.useItem && d.ability === "__wait__" ? "sel" : ""}"
+        data-a="set-abil" data-c="${esc(p.id)}" data-id="__wait__">⏳ Wait</button>` + chips;
+    }
     // Taunt forces attacks onto the taunter — items would be wasted input
     const itemChip = (S.combat?.consumables || []).length && !taunters.length
       ? `<button class="chip ${d.useItem ? "sel" : ""}" data-a="set-useitem" data-c="${esc(p.id)}">🧪 Item</button>` : "";
     body += `<div class="chips">${chips}${itemChip}</div>`;
-    if (ab && !d.useItem && ab.description) {
+    if (d.ability === "__wait__" && !d.useItem) {
+      body += `<div class="dim small" style="margin-top:4px">Hold steady — the windup continues on its own.</div>`;
+    } else if (ab && !d.useItem && ab.description) {
       body += `<div class="dim small" style="margin-top:4px">${esc(ab.description)}</div>`;
     }
     if (d.useItem) {
       body += `<div class="chips">` + (S.combat?.consumables || []).map(it =>
         `<button class="chip ${d.item === it.id ? "sel" : ""}" data-a="set-item" data-c="${esc(p.id)}" data-id="${esc(it.id)}">
           ${esc(it.name)}</button>`).join("") + `</div>`;
+      // Selected item reads out like an ability: description + effect
+      const chosen = (S.combat?.consumables || []).find(x => x.id === d.item);
+      if (chosen) {
+        body += `<div class="dim small" style="margin-top:4px">${
+          chosen.description ? esc(chosen.description) + " · " : ""}${itemDetail(chosen)}</div>`;
+      }
       if (livingPlayers().length > 1) {
         body += `<div class="dim small" style="margin-top:6px">on:</div><div class="chips">` +
           livingPlayers().map(x =>
             `<button class="chip ${d.itemTarget === x.id ? "sel" : ""}" data-a="set-itemtgt" data-c="${esc(p.id)}" data-id="${esc(x.id)}">${esc(x.name)} ${hpSpan(x)}</button>`).join("") + `</div>`;
       }
     } else if (ab && ab.target === "SINGLE_ENEMY" && livingEnemies().length > 1) {
-      const targets = taunters.length
-        ? livingEnemies().filter(e => taunters.includes(e.id))
-        : livingEnemies();
+      const targets = enemyTargetsFor(p);
       body += `<div class="dim small" style="margin-top:6px">target:</div><div class="chips">` +
         targets.map(e =>
           `<button class="chip ${resolveTargetFor(p, d.ability, d.target) === e.id ? "sel" : ""}" data-a="set-tgt" data-c="${esc(p.id)}" data-id="${esc(e.id)}">
@@ -936,11 +1031,12 @@ function decisionCard(p) {
     <div class="row"><div class="grow"><span class="name">${esc(p.name)}</span>${badges}</div>
       <span class="small" data-hptext="${esc(p.id)}">${dh.hp}/${p.max_hp}</span></div>
     ${hpbar(dh.hp, p.max_hp, p.id)}
+    ${p.charging ? `<div class="charge">⚡ ${esc(p.charging)}</div>` : ""}
     ${p.statuses.length ? `<div class="status">${p.statuses.map(esc).join(" · ")}</div>` : ""}
     <div class="seg">
       <button class="${d.mode === "normal" ? "sel" : ""}" data-a="set-mode" data-c="${esc(p.id)}" data-id="normal">Act</button>
-      <button class="${d.mode === "survive" ? "sel" : ""}" ${taunters.length ? "disabled" : ""} data-a="set-mode" data-c="${esc(p.id)}" data-id="survive">Survive</button>
-      <button class="${d.mode === "cheat" ? "sel" : ""}" ${p.ap > 0 ? "" : "disabled"} data-a="set-mode" data-c="${esc(p.id)}" data-id="cheat">Cheat</button>
+      <button class="${d.mode === "survive" ? "sel" : ""}" ${taunters.length || p.charging ? "disabled" : ""} data-a="set-mode" data-c="${esc(p.id)}" data-id="survive">Survive</button>
+      <button class="${d.mode === "cheat" ? "sel" : ""}" ${p.ap > 0 && !p.charging ? "" : "disabled"} data-a="set-mode" data-c="${esc(p.id)}" data-id="cheat">Cheat</button>
     </div>
     ${body}
   </div>`;
@@ -975,6 +1071,16 @@ function finalRoundLog() {
   if (!evs.length && !ui.pb) return "";
   return `<div class="log" id="log" style="margin:8px 0">${ui.pb ? "" : evs.map(evLine).join("")}</div>`;
 }
+function xpSummary(loot) {
+  if (!loot.xp_awards || !loot.xp_awards.length) return "";
+  const rows = loot.xp_awards.map(a => `
+    <div class="row small">
+      <span class="grow">${esc(a.name)} <span class="dim">${esc(a.job_name)} Lv${a.level}</span>
+        ${a.levels_gained ? `<span class="badge frz">LEVEL UP${a.levels_gained > 1 ? " ×" + a.levels_gained : ""}</span>` : ""}</span>
+      <span>+${a.xp_gained} XP <span class="dim">${a.xp}/${a.xp_next}</span></span>
+    </div>`).join("");
+  return `<div class="card"><div class="dim small">XP &amp; LEVELS</div>${rows}</div>`;
+}
 function screenLoot() {
   const loot = S.loot || {money: 0, items: []};
   const chips = loot.items.map((it, i) =>
@@ -985,8 +1091,9 @@ function screenLoot() {
   return topbar() + `
     <div class="card"><div class="name" style="color:var(--gold)">Won the fight</div>
       <div class="small">+${loot.money}g</div></div>
+    ${xpSummary(loot)}
     ${finalRoundLog()}
-    ${S.text ? `<details><summary>Battle report</summary><pre class="text">${esc(S.text)}</pre></details>` : ""}
+    ${S.text ? det("report", false, "Battle report", `<pre class="text">${esc(S.text)}</pre>`) : ""}
     ${loot.items.length ? `<div class="section">LOOT — tap to toggle</div><div class="chips">${chips}</div>` : `<div class="dim small" style="margin:10px 2px">No drops.</div>`}
     ${overflow ? `<div class="dim small" style="margin:6px 2px;color:var(--yellow)">⚠ ${ui.lootSel.size} picked, ${free} stash slots free — drop something below or deselect.</div>` : ""}
     ${partyStrip()}
@@ -1049,7 +1156,7 @@ function recapCard() {
       ${row("ally deaths", r.character_deaths)}
       ${row("gold at end", r.gold + "g")}
     </div></div>
-    ${S.text ? `<details><summary>Full report</summary><pre class="text">${esc(S.text)}</pre></details>` : ""}`;
+    ${S.text ? det("report", false, "Full report", `<pre class="text">${esc(S.text)}</pre>`) : ""}`;
 }
 function screenDead() {
   return `
@@ -1119,6 +1226,16 @@ document.addEventListener("click", (ev) => {
     case "leave-zone": act("leave_zone"); break;
     case "enter-town": act("enter_town", {town_id: id}); break;
     case "map-sel": ui.mapSel = id; render(); break;
+    case "map-prev":
+    case "map-next": {
+      const m = S.map;
+      if (!m || !m.navigable_ids.length) break;
+      const ids = m.navigable_ids;
+      const cur = Math.max(0, ids.indexOf(ui.mapSel));
+      ui.mapSel = ids[(cur + (a === "map-next" ? 1 : ids.length - 1)) % ids.length];
+      ui.mapScrolled = false; // recenter the map on the new selection
+      render(); break;
+    }
     case "map-goto": document.getElementById(id)?.scrollIntoView({behavior: "smooth"}); break;
     case "map-travel": {
       // Boss travel tile: leave the cleared zone, then enter the next one.

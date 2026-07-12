@@ -1,9 +1,10 @@
-# Pyodide spike — Heresiarch serverless in the browser
+# wasm/ — Heresiarch serverless in the browser
 
-The Python engine compiled to nothing: the stock mobile client
+The production web build: the stock mobile client
 (`src/heresiarch/mobile/static/index.html`) running against wasm
-CPython in the page itself. No FastAPI, no LAN server, no network
-after first load. See design/mobile-spike.md for the decision context.
+CPython (Pyodide) in the page itself. No FastAPI, no LAN server, no
+network after first load. Graduated from spikes/pyodide/ — see
+design/mobile-spike.md for the decision history.
 
 ## How it fits together
 
@@ -32,8 +33,8 @@ phones pick up new deploys automatically on their next online launch
 ## Build + serve locally
 
 ```bash
-uv run python spikes/pyodide/build.py    # stage dist/ (~18 MiB, self-contained)
-uv run python spikes/pyodide/serve.py    # static host on :8643, prints LAN URL
+uv run python wasm/build.py    # stage dist/ (~18 MiB, self-contained)
+uv run python wasm/serve.py    # static host on :8643, prints LAN URL
 ```
 
 `build.py --refresh` re-downloads the pyodide runtime (version pinned
@@ -45,7 +46,7 @@ the LAN root and under the Pages subpath.
 
 ```bash
 npm install pyodide   # anywhere; point PYODIDE_NODE_MODULES at it if not cwd
-node spikes/pyodide/verify_node.mjs
+node wasm/verify_node.mjs
 ```
 
 Mirrors boot.js step-for-step against the staged dist/ and drives
@@ -54,7 +55,7 @@ the browser build's engine path works. Verified 2026-07-11: pyodide
 314.0.2 (CPython 3.14), boot→engine-ready ≈4 s, combat resolves, all
 packages from the vendored index (no CDN).
 
-## Known limits (spike cuts)
+## Known limits
 
 - Over plain-http LAN serving, the service worker needs Chrome's
   insecure-origin flag (same caveat as the LAN PWA, printed by

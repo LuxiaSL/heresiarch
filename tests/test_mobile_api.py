@@ -228,6 +228,113 @@ def test_cheat_queue_with_mixed_slots(client: TestClient) -> None:
             assert payload["error"] is None, payload["error"]
 
 
+def test_wait_primary_action_while_charging(client: TestClient) -> None:
+    """TUI parity: a mid-windup character can submit Wait as their primary
+    action instead of a throwaway attack the engine would discard."""
+    _act(client, "new_run", {"name": "Windy", "job_id": "einherjar", "seed": 42})
+    _act(client, "enter_zone", {"zone_id": "zone_01"})
+    payload = _act(client, "fight")
+    assert payload["phase"] == "COMBAT"
+
+    session = client.app.state.session
+    combat = session.combat_state
+    assert combat is not None
+    mc = combat.player_combatants[0]
+    mc.ability_ids.append("charge_slam")  # 2-turn windup
+
+    target = next(e.id for e in combat.enemy_combatants if e.is_alive)
+    payload = _act(client, "submit_decisions", {"decisions": {
+        mc.id: {"mode": "normal", "action": "charge_slam", "target": target},
+    }})
+    assert payload["error"] is None, payload["error"]
+    assert payload["phase"] == "COMBAT", "windup rounds deal no damage"
+    player = payload["combat"]["players"][0]
+    assert player["charging"], "windup did not surface on the combat view"
+
+    # The mobile client submits Wait as the primary while charging
+    payload = _act(client, "submit_decisions", {"decisions": {
+        mc.id: {"mode": "normal", "action": "wait"},
+    }})
+    assert payload["error"] is None, payload["error"]
+    if payload["phase"] == "COMBAT":
+        # Charge ticked down by exactly one turn
+        assert payload["combat"]["players"][0]["charging"], (
+            "charge should still be active after one wait round"
+        )
+
+
+def test_wait_primary_accepted_when_not_charging(client: TestClient) -> None:
+    """A wait primary is a harmless pass even without an active windup —
+    the session must not reject it (the engine treats it as a no-op)."""
+    _act(client, "new_run", {"name": "Idler", "job_id": "einherjar", "seed": 42})
+    _act(client, "enter_zone", {"zone_id": "zone_01"})
+    payload = _act(client, "fight")
+    mc_id = payload["combat"]["players"][0]["id"]
+    payload = _act(client, "submit_decisions", {"decisions": {
+        mc_id: {"mode": "normal", "action": "wait"},
+    }})
+    assert payload["error"] is None, payload["error"]
+
+
+def test_taunt_constraint_flows_to_combat_view(client: TestClient) -> None:
+    """The taunt lock the client applies to EVERY target picker (primary,
+    cheat-extra, bonus slots) is driven by CombatantView.taunted_by — the
+    payload must name living taunters so all pickers filter identically."""
+    _act(client, "new_run", {"name": "Locked", "job_id": "einherjar", "seed": 42})
+    _act(client, "enter_zone", {"zone_id": "zone_01"})
+    payload = _act(client, "fight")
+    assert payload["phase"] == "COMBAT"
+
+    session = client.app.state.session
+    combat = session.combat_state
+    assert combat is not None
+    mc = combat.player_combatants[0]
+    enemy = next(e for e in combat.enemy_combatants if e.is_alive)
+    mc.taunted_by.append(enemy.id)
+
+    payload = client.get("/api/state").json()
+    view = payload["combat"]["players"][0]
+    assert view["taunted_by"] == [enemy.id]
+    # The taunter is present (and alive) in the enemy views, so the
+    # client can resolve the lock against real target chips
+    enemy_views = {e["id"]: e for e in payload["combat"]["enemies"]}
+    assert enemy.id in enemy_views and enemy_views[enemy.id]["is_alive"]
+
+
+def test_loot_view_reports_xp_awards(client: TestClient) -> None:
+    """Victory loot payload carries per-character XP gains (TUI parity)."""
+    _act(client, "new_run", {"name": "Leveler", "job_id": "einherjar", "seed": 42})
+    _act(client, "enter_zone", {"zone_id": "zone_01"})
+    payload = _act(client, "fight")
+    for _ in range(60):
+        if payload["phase"] != "COMBAT":
+            break
+        combat = payload["combat"]
+        decisions = {
+            p["id"]: _default_decision(p, combat["enemies"])
+            for p in combat["players"]
+            if p["is_alive"]
+        }
+        payload = _act(client, "submit_decisions", {"decisions": decisions})
+        assert payload["error"] is None, payload["error"]
+    if payload["phase"] != "POST_COMBAT":
+        pytest.skip("seed lost the first encounter; no loot screen to check")
+
+    awards = payload["loot"]["xp_awards"]
+    assert awards, "victory must report XP for surviving characters"
+    mc = awards[0]
+    assert mc["name"] == "Leveler"
+    assert mc["xp_gained"] > 0, "first zone-1 kill must award XP"
+    assert mc["levels_gained"] >= 0
+    assert mc["xp_next"] > mc["xp"] - mc["xp_gained"]
+    assert mc["level"] >= 1 and mc["job_name"]
+
+    # Awards are one-shot: cleared once the loot is picked
+    payload = _act(client, "pick_loot", {"item_ids": []})
+    assert payload["error"] is None, payload["error"]
+    assert payload["loot"] is None
+
+
 def test_character_view_has_stats_and_xp(client: TestClient) -> None:
     payload = _act(client, "new_run", {"name": "Stats", "job_id": "einherjar", "seed": 5})
     char = payload["party"]["characters"][0]

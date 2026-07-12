@@ -4,10 +4,11 @@ The GameSession returns prose (built for LLM consumption); a touch UI
 needs tappable data. These builders read session/run state and produce
 pydantic view models. Read-only — no game logic, no state mutation.
 
-Spike note: this reads a few private session fields (_combat_state,
-_last_loot, _enemy_combatant_templates, _round_events). If the mobile
-frontend graduates, promote these into a formal structured-view layer
-on the summarizer side (see design/mobile-spike.md).
+Combat/loot state comes through GameSession's read accessors
+(combat_state, last_loot, last_xp_awards). A few auxiliary fields are
+still read privately (_enemy_combatant_templates, _round_events,
+_round_start_hp, _current_candidate) — promote those the same way if
+more frontends appear (see design/mobile-spike.md).
 """
 
 from __future__ import annotations
@@ -182,9 +183,23 @@ class TownView(BaseModel):
     shop_items: list[ItemView] = Field(default_factory=list)
 
 
+class LootXpView(BaseModel):
+    """One surviving character's XP outcome from the last victory."""
+
+    character_id: str
+    name: str
+    job_name: str = ""
+    level: int
+    levels_gained: int = 0
+    xp: int = 0
+    xp_gained: int = 0
+    xp_next: int = 0  # cumulative XP needed for the next level
+
+
 class LootView(BaseModel):
     money: int = 0
     items: list[ItemView] = Field(default_factory=list)
+    xp_awards: list[LootXpView] = Field(default_factory=list)
 
 
 class CharacterView(BaseModel):
@@ -612,7 +627,7 @@ def _combatant_view(
 
 
 def build_combat_view(session: GameSession) -> CombatView | None:
-    combat = session._combat_state
+    combat = session.combat_state
     run = session.run
     if combat is None or run is None:
         return None
@@ -751,9 +766,35 @@ def build_hp_start(session: GameSession) -> dict[str, int]:
 
 
 def build_loot_view(session: GameSession) -> LootView | None:
-    loot = session._last_loot
+    loot = session.last_loot
+    run = session.run
     if loot is None:
         return None
+
+    # XP summary: active party first, then any surviving reserve members
+    xp_awards: list[LootXpView] = []
+    if run is not None:
+        awards = session.last_xp_awards
+        ordered_ids = list(run.party.active) + [
+            cid for cid in awards if cid not in run.party.active
+        ]
+        for cid in ordered_ids:
+            award = awards.get(cid)
+            char = run.party.characters.get(cid)
+            if award is None or char is None:
+                continue
+            job = session.game_data.jobs.get(char.job_id)
+            xp_awards.append(LootXpView(
+                character_id=cid,
+                name=char.name,
+                job_name=job.name if job else char.job_id,
+                level=char.level,
+                levels_gained=award.levels_gained,
+                xp=char.xp,
+                xp_gained=award.xp_gained,
+                xp_next=xp_for_level(char.level + 1),
+            ))
+
     return LootView(
         money=loot.money,
         items=[
@@ -762,6 +803,7 @@ def build_loot_view(session: GameSession) -> LootView | None:
             )
             for iid in loot.item_ids
         ],
+        xp_awards=xp_awards,
     )
 
 
