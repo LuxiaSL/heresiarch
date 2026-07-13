@@ -47,7 +47,16 @@ if TYPE_CHECKING:
 POTION_ITEM_ID: str = "minor_potion"
 POTION_HEAL: int = 50   # minor_potion flat heal (data/items/consumables.yaml)
 MAX_RECRUIT_PARTY_SIZE: int = 4
-POTION_COMBAT_RESERVE: int = 0
+# Doctrine: "always carry a spare 'in case I slip up mid fight'". The
+# spare exists for IN-COMBAT use — the onmyoji insight→bolt cycle is
+# only survivable with a mid-fight drink covering the post-cheat
+# window (mystery-diff autopsy 2026-07-12: old macro passed the zone-1
+# triple pack holding a spare; v2.x drank it in town and 37/48 died
+# there). Scope: the waste-accepting top-up branch and the town
+# drink-from-stash loop stop at this floor; the zero-waste and
+# projected-death branches may still drink the last one (measured
+# optimal for berserker/einherjar — v2.1 lesson).
+POTION_COMBAT_RESERVE: int = 1
 
 # --- Doctrine constants (rules, not knobs — CEM must not touch these) ---
 # Overstay rewards decay 5%/battle; at 100% decay farming is "meaningless
@@ -933,13 +942,14 @@ class GoldenMacroPolicy:
                 return None
             return max(fits, key=lambda iid: heal_of(iid, char_id))
 
-        while len(held) > POTION_COMBAT_RESERVE:
+        while held:
             hurt = [c for c in active_chars if running_hp[c.id] < max_hp[c.id]]
             if not hurt:
                 break
             hurt.sort(key=lambda c: running_hp[c.id] / max(1, max_hp[c.id]))
 
             # Survival: largest heal held — mitigation over efficiency.
+            # May drink the LAST potion: dying trumps the combat spare.
             dying = [c for c in hurt if running_hp[c.id] <= share]
             if dying:
                 cid = dying[0].id
@@ -947,7 +957,9 @@ class GoldenMacroPolicy:
                 continue
 
             # Zero waste, ladder-aware: drink the biggest potion the
-            # frame's missing HP fully absorbs.
+            # frame's missing HP fully absorbs. May also drink the last
+            # one — "drink the moment missing == heal" is the doctrine's
+            # core line and measured-optimal for the survive-cycle jobs.
             zero_waste = [c for c in hurt if largest_zero_waste(c.id)]
             if zero_waste:
                 cid = zero_waste[0].id
@@ -958,7 +970,12 @@ class GoldenMacroPolicy:
 
             # Per-job risk threshold: pre-boss/endless target dominates;
             # otherwise the config's between-fight target (0.0 = off).
-            # Waste is accepted here, so the SMALLEST held rung tops up.
+            # Waste is accepted here, so the SMALLEST held rung tops up —
+            # and the combat spare is off-limits: a glass frame that
+            # tops up with its last potion enters the fight unable to
+            # cover the post-cheat window (the onmyoji pack deaths).
+            if len(held) <= POTION_COMBAT_RESERVE:
+                break
             target = boss_target if boss_next else self.config.between_fight_heal_target
             if target > 0:
                 below_target = [

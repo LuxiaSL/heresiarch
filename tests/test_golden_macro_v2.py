@@ -177,7 +177,9 @@ class TestZeroWasteHeal:
         sipping the pack budget on ordinary chip."""
         gl, run = _new_run(game_data, job="onmyoji")
         run = gl.enter_zone(run, "zone_01")
-        run = _with_stash(run, [POTION_ITEM_ID])
+        # Two potions: the top-up branch drinks down TO the combat
+        # spare, never through it (POTION_COMBAT_RESERVE).
+        run = _with_stash(run, [POTION_ITEM_ID, POTION_ITEM_ID])
         onmyoji = make_golden_macro_for_job(game_data, "onmyoji")
 
         low = _set_mc_hp(run, 20, max_hp=40)   # 50% < 0.75 → drink
@@ -185,6 +187,28 @@ class TestZeroWasteHeal:
         high = _set_mc_hp(run, 31, max_hp=40)  # 77.5% ≥ 0.75, waste → save
         assert onmyoji.decide_between_encounter_items(high) == []
 
+    def test_topup_never_drinks_the_combat_spare(self, game_data: GameData):
+        """The onmyoji pack-death fix: a glass frame below its risk
+        target with ONE potion held keeps it — the insight cycle needs
+        the mid-fight drink for the post-cheat window. (Projected death
+        may still take it; that branch outranks the spare.)"""
+        gl, run = _new_run(game_data, job="onmyoji")
+        run = gl.enter_zone(run, "zone_01")
+        run = _with_stash(run, [POTION_ITEM_ID])
+        onmyoji = make_golden_macro_for_job(game_data, "onmyoji")
+        low = _set_mc_hp(run, 20, max_hp=40)  # 50% < 0.75 but last potion
+        assert onmyoji.decide_between_encounter_items(low) == []
+
+    def test_projected_death_may_drink_the_spare(self, game_data: GameData):
+        gl, run = _new_run(game_data, job="onmyoji")
+        run = gl.enter_zone(run, "zone_01")
+        run = _with_stash(run, [POTION_ITEM_ID])
+        run = _set_mc_hp(run, 12, max_hp=40)
+        run = _with_last_fight_damage(run, taken=30)
+        onmyoji = make_golden_macro_for_job(game_data, "onmyoji")
+        assert len(onmyoji.decide_between_encounter_items(run)) == 1
+
+    def test_berserker_no_target_no_drink(self, game_data: GameData):
         glb, runb = _new_run(game_data, job="berserker")
         runb = glb.enter_zone(runb, "zone_01")
         runb = _with_stash(runb, [POTION_ITEM_ID])
@@ -201,7 +225,7 @@ class TestZeroWasteHeal:
         zs = run.zone_state.model_copy(update={"current_encounter_index": boss_idx})
         run = run.model_copy(update={"zone_state": zs})
         run = _set_mc_hp(run, 100, max_hp=120)  # 83% < 0.90, missing 20 < heal
-        run = _with_stash(run, [POTION_ITEM_ID])
+        run = _with_stash(run, [POTION_ITEM_ID, POTION_ITEM_ID])
         macro = make_golden_macro_for_job(game_data, "einherjar")
         uses = macro.decide_between_encounter_items(run)
         assert len(uses) >= 1
@@ -330,7 +354,7 @@ class TestEndlessZones:
         """Every endless fight gets the pre-boss top-up (waste accepted)."""
         run = self._pit_run(game_data)
         run = _set_mc_hp(run, 96, max_hp=120)  # 80% < 0.90, missing 24 < gate
-        run = _with_stash(run, [POTION_ITEM_ID])
+        run = _with_stash(run, [POTION_ITEM_ID, POTION_ITEM_ID])
         macro = make_golden_macro_for_job(game_data, "einherjar")
         uses = macro.decide_between_encounter_items(run)
         assert len(uses) == 1
@@ -667,6 +691,50 @@ class TestPartyGearing:
         # the stash one as an "upgrade" it can't scale.
         assert run.party.characters[rid].equipment["WEAPON"] == "iron_blade"
         assert "runic_edge" in run.party.stash
+
+
+# ---------------------------------------------------------------------------
+# Town heal loop: the combat spare survives town
+# ---------------------------------------------------------------------------
+
+
+class TestTownHealSpare:
+    def _ctx(self, gl, game_data: GameData) -> SimpleNamespace:
+        return SimpleNamespace(
+            game_loop=gl,
+            game_data=game_data,
+            macro_policy=make_golden_macro_for_job(game_data, "onmyoji"),
+            metrics=SimpleNamespace(gold_spent_shop=0, shop_purchases=0),
+        )
+
+    def test_town_heal_keeps_the_spare_when_broke(self, game_data: GameData):
+        """Gold can't replace the last potion → leave town wounded but
+        ARMED (the onmyoji pack-death fix, town side)."""
+        from heresiarch.tools.run_driver import _in_town_heal_loop
+
+        gl, run = _new_run(game_data, job="onmyoji")
+        run = gl.enter_town(run, "shinto_town")
+        run = _set_mc_hp(run, 24, max_hp=40)
+        run = _with_stash(run, [POTION_ITEM_ID])
+        run = _with_gold(run, 4)
+        out = _in_town_heal_loop(run, self._ctx(gl, game_data))
+        assert POTION_ITEM_ID in out.party.stash
+        mc = next(c for c in out.party.characters.values() if c.is_mc)
+        assert mc.current_hp == 24
+
+    def test_town_heal_buys_to_drink_leaving_spare(self, game_data: GameData):
+        """With gold, the loop buys-to-drink (never touches the spare)."""
+        from heresiarch.tools.run_driver import _in_town_heal_loop
+
+        gl, run = _new_run(game_data, job="onmyoji")
+        run = gl.enter_town(run, "shinto_town")
+        run = _set_mc_hp(run, 24, max_hp=40)
+        run = _with_stash(run, [POTION_ITEM_ID])
+        run = _with_gold(run, 90)
+        out = _in_town_heal_loop(run, self._ctx(gl, game_data))
+        assert POTION_ITEM_ID in out.party.stash  # spare intact
+        mc = next(c for c in out.party.characters.values() if c.is_mc)
+        assert mc.current_hp == 40  # healed via bought potion
 
 
 # ---------------------------------------------------------------------------
