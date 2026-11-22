@@ -1,0 +1,385 @@
+# Master colours + palettes.
+#
+# `colors` is the shared swatch: every hex in the game lives here, so the
+# whole style stays one family. GBA-bright: saturated mids, warm light
+# ramps, cool dark ramps, and one deep plum-black for every outline.
+#
+# `palettes` map single chars -> a colour name (or a raw #hex). A palette
+# can `extends:` another and override a few chars; that is how colourways
+# (jobs, slime variants) are made. '.' is always transparent.
+
+colors:
+  ink: "#1c1228"        # the one outline colour
+  void: "#0e0a16"
+  shadow: "#1c122866"   # translucent drop shadow under actors
+
+  # warm stone path
+  path1: "#fbe6b4"
+  path2: "#ecc888"
+  path3: "#cf9d5e"
+  path4: "#9a6a3e"
+  # paving stones
+  pave1: "#eee8dc"
+  pave2: "#cdc3b2"
+  pave3: "#a3977f"
+  # moss / grass
+  moss1: "#c8f26a"
+  moss2: "#7fd043"
+  moss3: "#3e9a3a"
+  # cedar canopy (wall tops)
+  leaf1: "#9cf07c"
+  leaf2: "#4cc463"
+  leaf3: "#23905a"
+  leaf4: "#155e4c"
+  leaf5: "#0f3a3a"
+  # stone embankment (wall faces)
+  stone1: "#e4def2"
+  stone2: "#b7aed4"
+  stone3: "#857cae"
+  stone4: "#565082"
+  # shrine vermilion
+  ver1: "#ffa070"
+  ver2: "#ff5a36"
+  ver3: "#cc2c34"
+  ver4: "#7c1834"
+  # gold
+  gold1: "#fff4a0"
+  gold2: "#ffd040"
+  gold3: "#e49422"
+  gold4: "#99561c"
+  # paper / cloth whites
+  paper1: "#fffdf4"
+  paper2: "#f2e2c8"
+  paper3: "#cdb592"
+  # skin
+  skin1: "#ffe6c8"
+  skin2: "#f8b890"
+  skin3: "#d07c5c"
+  # hair
+  hairdk1: "#6a5a86"
+  hairdk2: "#3c2e5a"
+  hairdk3: "#261a3c"
+  # wood
+  wood1: "#e0a060"
+  wood2: "#a86434"
+  wood3: "#6a3a22"
+  # cool blues
+  blue1: "#c4f2ff"
+  blue2: "#6cd2ff"
+  blue3: "#2e8ef0"
+  blue4: "#1e4cb0"
+  blue5: "#16246a"
+  # teal
+  teal1: "#b0fff0"
+  teal2: "#48e8c8"
+  teal3: "#14a89c"
+  teal4: "#0c5e68"
+  # violet
+  vio1: "#f4c4ff"
+  vio2: "#c878ff"
+  vio3: "#8c3ce8"
+  vio4: "#4c1e96"
+  # acid
+  acid1: "#f0ff80"
+  acid2: "#b0f02c"
+  acid3: "#5cb01c"
+  acid4: "#2e6a1a"
+  # pink
+  pink1: "#ffd8ec"
+  pink2: "#ff90cc"
+  pink3: "#e04ca0"
+  pink4: "#8a2266"
+  # steel
+  steel1: "#f4f6ff"
+  steel2: "#c6cce4"
+  steel3: "#8a92b8"
+  steel4: "#545a84"
+  # sky
+  sky1: "#fff0d8"
+  sky2: "#ffd2b4"
+  sky3: "#f8a8b8"
+  sky4: "#b890d8"
+  # plain
+  white: "#ffffff"
+  red_eye: "#ff2a4a"
+
+palettes:
+  # ------------------------------------------------------------ terrain
+  shrine:
+    K: ink
+    V: void
+    s: shadow
+    # path ramp
+    1: path1
+    2: path2
+    3: path3
+    4: path4
+    # paving
+    p: pave1
+    q: pave2
+    r: pave3
+    # moss
+    m: moss1
+    n: moss2
+    o: moss3
+    # canopy
+    a: leaf1
+    b: leaf2
+    c: leaf3
+    d: leaf4
+    e: leaf5
+    # stone face
+    w: stone1
+    x: stone2
+    y: stone3
+    z: stone4
+    # vermilion
+    R: ver1
+    S: ver2
+    T: ver3
+    U: ver4
+    # gold
+    G: gold1
+    H: gold2
+    I: gold3
+    J: gold4
+    # paper
+    P: paper1
+    Q: paper2
+    W: paper3
+    # wood
+    A: wood1
+    B: wood2
+    C: wood3
+    # sky (backdrop)
+    D: sky1
+    E: sky2
+    F: sky3
+    L: sky4
+    # bamboo greens reuse moss/leaf
+    M: white
+    # indigo cloth (furoshiki bundles)
+    g: blue2
+    h: blue3
+    i: blue4
+    j: blue5
+
+  # ------------------------------------------------------------ heroes
+  # semantic chars:
+  #   K outline   s shadow
+  #   h/H/d  hair mid/high/dark     f/F skin / skin shade   e eye
+  #   a/A/b  garment mid/high/shade  c/C trim / trim shade
+  #   l/L    legs / leg shade        o/O boots / boot shade
+  #   t/T/u  accessory mid/high/shade (hats, helms, halos)
+  hero:
+    K: ink
+    s: shadow
+    h: hairdk2
+    H: hairdk1
+    d: hairdk3
+    f: skin1
+    F: skin2
+    g: skin3
+    e: ink
+    w: white
+    a: teal3
+    A: teal2
+    b: teal4
+    c: paper1
+    C: paper3
+    l: blue5
+    L: ink
+    o: wood2
+    O: wood3
+    t: steel2
+    T: steel1
+    u: steel4
+  hero_default:
+    extends: hero
+  hero_einherjar:          # chosen dead: steel-blue mail, winged helm
+    extends: hero
+    h: gold3
+    H: gold2
+    d: gold4
+    a: blue3
+    A: blue2
+    b: blue4
+    c: steel2
+    C: steel3
+    t: steel2
+    T: steel1
+    u: steel4
+  hero_onmyoji:            # diviner: silver hair, white kariginu, violet trim, black eboshi
+    extends: hero
+    h: steel2
+    H: steel1
+    d: steel3
+    a: paper1
+    A: white
+    b: paper3
+    c: vio3
+    C: vio4
+    l: vio4
+    t: hairdk3
+    T: hairdk1
+    u: ink
+  hero_berserker:          # red, spiky, bandaged
+    extends: hero
+    h: ver3
+    H: ver2
+    d: ver4
+    a: ver2
+    A: ver1
+    b: ver3
+    c: paper2
+    C: paper3
+    l: wood3
+    t: paper1
+    T: white
+    u: paper3
+  hero_martyr:             # the wall: pale steel, gold crescent kabuto
+    extends: hero
+    h: wood2
+    H: wood1
+    d: wood3
+    a: steel2
+    A: steel1
+    b: steel3
+    c: gold2
+    C: gold3
+    l: steel4
+    t: steel3
+    T: steel2
+    u: steel4
+  hero_sacrist:            # the one who pays: deep violet robe, gold halo
+    extends: hero
+    h: paper2
+    H: paper1
+    d: paper3
+    a: vio3
+    A: vio2
+    b: vio4
+    c: gold2
+    C: gold3
+    l: vio4
+    t: gold2
+    T: gold1
+    u: gold3
+
+  # ------------------------------------------------------------ slimes
+  # semantic chars:
+  #   K outline  s shadow  1 highlight  2 light  3 mid  4 shade  5 deep
+  #   e eye  w eye shine  m mouth
+  #   t/T/u  accessory (blade, crown, helm...)  mid/high/shade
+  #   g/G    glow / glow high
+  slime:
+    K: ink
+    s: shadow
+    1: white
+    2: teal1
+    3: teal2
+    4: teal3
+    5: teal4
+    e: ink
+    w: white
+    m: ver4
+    t: steel2
+    T: steel1
+    u: steel4
+    g: gold2
+    G: gold1
+    v: void
+  slime_fodder:
+    extends: slime
+    2: blue1
+    3: blue2
+    4: blue3
+    5: blue4
+  slime_alpha:
+    extends: slime
+    2: ver1
+    3: ver2
+    4: ver3
+    5: ver4
+    m: ink
+  slime_swime:
+    extends: slime
+    2: blue2
+    3: blue3
+    4: blue4
+    5: blue5
+  slime_mystic:
+    extends: slime
+    2: vio1
+    3: vio2
+    4: vio3
+    5: vio4
+    t: paper1
+    T: white
+    u: paper3
+  slime_chunky:
+    extends: slime
+    2: paper2
+    3: paper3
+    4: wood2
+    5: wood3
+    t: steel3
+    T: steel2
+    u: steel4
+  slime_toxic:
+    extends: slime
+    2: acid1
+    3: acid2
+    4: acid3
+    5: acid4
+    e: vio4
+    m: vio4
+    g: vio2
+    G: vio1
+  slime_omega:
+    extends: slime
+    1: pink1
+    2: pink2
+    3: pink3
+    4: pink4
+    5: hairdk3
+    e: gold2            # glowing eyes: the apex slime looks back
+    w: white
+    t: gold2
+    T: gold1
+    u: gold4
+    g: gold2
+    G: gold1
+  slime_bandit:
+    extends: slime
+    2: moss1
+    3: moss2
+    4: moss3
+    5: acid4
+    t: hairdk2
+    T: hairdk1
+    u: hairdk3
+  slime_default:
+    extends: slime
+    2: pink1
+    3: pink2
+    4: pink3
+    5: pink4
+
+  # ------------------------------------------------------------ ui
+  ui:
+    K: ink
+    s: shadow
+    w: white
+    p: paper1
+    q: paper2
+    r: paper3
+    R: ver2
+    T: ver3
+    G: gold1
+    H: gold2
+    I: gold3
+    J: gold4
+    B: wood2
+    C: wood3
+    A: wood1
