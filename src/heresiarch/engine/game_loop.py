@@ -69,6 +69,8 @@ class GameLoop:
             rng=self.rng,
         )
         self.shop_engine = ShopEngine(item_registry=game_data.items)
+        from heresiarch.engine.dungeon.director import DungeonDirector
+        self.dungeon = DungeonDirector(self)
         self.recruitment_engine = RecruitmentEngine(
             job_registry=game_data.jobs,
             item_registry=game_data.items,
@@ -439,8 +441,12 @@ class GameLoop:
         for zone_id, zstate in list(run.zone_progress.items()):
             if not zstate.is_cleared:
                 # Track high-water mark for reward suppression
+                # Dungeon mode clears encounters out of order, so the
+                # high-water mark also counts the furthest completed one.
+                furthest = max(zstate.encounters_completed, default=-1) + 1
                 new_lodge_resets[zone_id] = max(
                     zstate.current_encounter_index,
+                    furthest,
                     new_lodge_resets.get(zone_id, 0),
                 )
                 del new_zone_progress[zone_id]

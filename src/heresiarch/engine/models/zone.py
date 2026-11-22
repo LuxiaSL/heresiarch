@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from heresiarch.engine.dungeon.models import FloorState
 from heresiarch.engine.models.loot import LootPool
 
 
@@ -67,6 +68,9 @@ class ZoneTemplate(BaseModel):
     endless_enemy_pool: list[str] = Field(default_factory=list)  # template IDs for dynamic spawns
     endless_min_level: int = 0
     endless_max_level: int = 0
+    # Dungeon layer (map mode). 0 floors = auto from encounter count.
+    dungeon_floors: int = 0
+    floor_items: list[str] = Field(default_factory=list)  # item ids that can lie on floors
 
 
 class ZoneState(BaseModel):
@@ -78,3 +82,6 @@ class ZoneState(BaseModel):
     is_cleared: bool = False
     overstay_battles: int = 0
     recruitment_offered: bool = False
+    # Dungeon layer: the live floor (None in linear mode / before entry).
+    floor: FloorState | None = None
+    floor_number: int = 0  # 1-based floor currently on; 0 = not started

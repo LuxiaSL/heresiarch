@@ -14,6 +14,13 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from heresiarch.engine.data_loader import GameData, load_all
+from heresiarch.engine.dungeon.director import DungeonError, apply_initiative
+from heresiarch.engine.dungeon.models import (
+    Direction,
+    Initiative,
+    StepOutcome,
+    StepResult,
+)
 from heresiarch.engine.formulas import (
     calculate_buy_price,
     calculate_sell_price,
@@ -38,6 +45,24 @@ from heresiarch.engine.shop import ShopInventory
 
 from . import lookups as L
 from . import summarizer as S
+
+
+def _parse_direction(raw: str) -> Direction:
+    """Accept N/NE/.. plus friendly aliases (up, down-left, ...)."""
+    key = raw.strip().upper().replace("-", "").replace("_", "").replace(" ", "")
+    aliases = {
+        "UP": "N", "DOWN": "S", "LEFT": "W", "RIGHT": "E",
+        "UPLEFT": "NW", "UPRIGHT": "NE", "DOWNLEFT": "SW", "DOWNRIGHT": "SE",
+        "NORTH": "N", "SOUTH": "S", "EAST": "E", "WEST": "W",
+        "NORTHEAST": "NE", "NORTHWEST": "NW", "SOUTHEAST": "SE", "SOUTHWEST": "SW",
+    }
+    key = aliases.get(key, key)
+    try:
+        return Direction(key)
+    except ValueError as e:
+        raise AgentError(
+            f"Unknown direction {raw!r}. Use N, NE, E, SE, S, SW, W, NW."
+        ) from e
 
 
 class Phase(str, Enum):
@@ -90,7 +115,7 @@ _PHASE_TOOLS: dict[Phase, set[str]] = {
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
     },
     Phase.IN_ZONE: {
-        "new_run", "fight", "party_status", "equip", "unequip", "dismiss", "swap_roster",
+        "new_run", "fight", "move", "travel", "wait_turn", "descend", "get_map", "party_status", "equip", "unequip", "dismiss", "swap_roster",
         "use_scroll", "use_consumable",
         "leave_zone", "get_zone_status", "get_battle_record",
         "lookup_job", "lookup_ability", "lookup_item", "lookup_enemy",
@@ -142,6 +167,7 @@ class GameSession:
         game_data: GameData | None = None,
         data_path: Path | None = None,
         notes_path: Path | None = None,
+        dungeon_mode: bool = False,
     ):
         if game_data is not None:
             self.game_data = game_data
@@ -153,6 +179,14 @@ class GameSession:
         # Notes persistence
         self._notes_path = notes_path or (data_path or Path("data")).parent / "agent_notes.json"
         self._notes: dict[str, str] = self._load_notes()
+
+        # Dungeon mode: zones are explored as PMD-style floors and fights
+        # start by touching packs. Off = the original linear fight() list
+        # (MCP agent, sims, tests).
+        self.dungeon_mode = dungeon_mode
+        self._engaged_entity_ids: list[str] = []
+        self._last_step: StepResult | None = None
+        self._last_trail: list[tuple[int, int]] = []  # player path, last action
 
         self.phase = Phase.SETUP
         self.run: RunState | None = None
@@ -189,6 +223,16 @@ class GameSession:
     def combat_state(self) -> CombatState | None:
         """Live combat state, or None outside combat."""
         return self._combat_state
+
+    @property
+    def last_trail(self) -> list[tuple[int, int]]:
+        """Player positions after each step of the last map action."""
+        return list(self._last_trail)
+
+    @property
+    def last_step(self) -> StepResult | None:
+        """Result of the last map turn (dungeon mode), for UI messages."""
+        return self._last_step
 
     @property
     def last_loot(self) -> LootResult | None:
@@ -288,7 +332,7 @@ class GameSession:
                     return "\n".join(lines)
                 return "In town."
             case Phase.IN_ZONE:
-                return S.summarize_zone_status(run, self.game_data)
+                return self._zone_view_text()
             case Phase.COMBAT:
                 if self._combat_state:
                     return S.summarize_combat(
@@ -341,12 +385,15 @@ class GameSession:
 
         try:
             self.run = gl.enter_zone(run, zone_id)
+            if self.dungeon_mode:
+                self.run = gl.dungeon.ensure_floor(self.run)
         except ValueError as e:
             raise AgentError(str(e)) from e
 
         self.phase = Phase.IN_ZONE
+        self._last_step = None
         self._autosave()
-        return S.summarize_zone_status(self.run, self.game_data)
+        return self._zone_view_text()
 
     def leave_zone(self) -> str:
         """Exit current zone."""
@@ -445,12 +492,124 @@ class GameSession:
         self._require_phase("fight")
         run = self._require_run()
         gl = self._require_game_loop()
+        if self.dungeon_mode:
+            raise AgentError(
+                "This zone is a dungeon: walk into an enemy pack to fight "
+                "(move <direction>)."
+            )
 
         try:
             enemies = gl.get_next_encounter(run)
         except ValueError as e:
             raise AgentError(str(e)) from e
 
+        self._engaged_entity_ids = []
+        return self._start_combat(enemies)
+
+    # ------------------------------------------------------------------
+    # Dungeon map (dungeon_mode)
+    # ------------------------------------------------------------------
+
+    def _zone_view_text(self) -> str:
+        run = self._require_run()
+        if self.dungeon_mode and run.zone_state is not None and run.zone_state.floor:
+            return S.summarize_floor(run, self.game_data, self._last_step)
+        return S.summarize_zone_status(run, self.game_data)
+
+    def get_map(self) -> str:
+        """Show the current floor (dungeon mode)."""
+        self._require_phase("get_map")
+        if not self.dungeon_mode:
+            raise AgentError("Not in dungeon mode.")
+        return self._zone_view_text()
+
+    def move(self, direction: str) -> str:
+        """Take one step (N/NE/E/SE/S/SW/W/NW). Walking into a pack fights it."""
+        self._require_phase("move")
+        return self._map_turn(_parse_direction(direction))
+
+    def wait_turn(self) -> str:
+        """Stand still for one turn; packs still move."""
+        self._require_phase("wait_turn")
+        return self._map_turn(None)
+
+    def travel(self, x: int, y: int) -> str:
+        """Walk toward a tile, stopping if anything interesting happens."""
+        self._require_phase("travel")
+        run = self._require_run()
+        gl = self._require_game_loop()
+        if not self.dungeon_mode:
+            raise AgentError("Not in dungeon mode.")
+        try:
+            self.run, results, trail = gl.dungeon.travel(run, int(x), int(y))
+        except DungeonError as e:
+            raise AgentError(str(e)) from e
+        self._last_trail = trail
+        if not results:
+            return self._zone_view_text()
+        # Merge the walk's messages into the final step for display
+        final = results[-1]
+        msgs = [m for r in results for m in r.messages]
+        final = final.model_copy(update={"messages": msgs})
+        return self._after_turn(final)
+
+    def _map_turn(self, direction: Direction | None) -> str:
+        run = self._require_run()
+        gl = self._require_game_loop()
+        if not self.dungeon_mode:
+            raise AgentError("Not in dungeon mode.")
+        try:
+            self.run, result = gl.dungeon.step(run, direction)
+        except DungeonError as e:
+            raise AgentError(str(e)) from e
+        floor = self.run.zone_state.floor if self.run.zone_state else None
+        self._last_trail = (
+            [(floor.player_x, floor.player_y)]
+            if floor is not None and result.turn_spent else []
+        )
+        return self._after_turn(result)
+
+    def _after_turn(self, result: StepResult) -> str:
+        gl = self._require_game_loop()
+        self._last_step = result
+
+        if result.outcome == StepOutcome.CONTACT:
+            try:
+                self.run, enemies = gl.dungeon.build_engagement(
+                    self.run, result.engaged_entity_ids,
+                )
+            except (DungeonError, ValueError) as e:
+                raise AgentError(str(e)) from e
+            self._engaged_entity_ids = list(result.engaged_entity_ids)
+            text = self._start_combat(enemies, initiative=result.initiative)
+            header = "\n".join(result.messages)
+            if len(result.engaged_entity_ids) > 1:
+                header += f"\n{len(result.engaged_entity_ids) - 1} more pack(s) join the fight!"
+            return header + "\n\n" + text
+        return self._zone_view_text()
+
+    def descend(self) -> str:
+        """Take the stairs you're standing on down to the next floor."""
+        self._require_phase("descend")
+        run = self._require_run()
+        gl = self._require_game_loop()
+        if not self.dungeon_mode:
+            raise AgentError("Not in dungeon mode.")
+        try:
+            self.run = gl.dungeon.descend(run)
+        except DungeonError as e:
+            raise AgentError(str(e)) from e
+        self._last_step = None
+        self._autosave()
+        return self._zone_view_text()
+
+    def _start_combat(
+        self,
+        enemies: list[EnemyInstance],
+        initiative: Initiative | None = None,
+    ) -> str:
+        run = self._require_run()
+        gl = self._require_game_loop()
         self._current_enemies = enemies
 
         # Get active party characters for combat
@@ -463,6 +622,7 @@ class GameSession:
         self._combat_state = gl.combat_engine.initialize_combat(
             characters, enemies, party_gold=run.party.money
         )
+        apply_initiative(self._combat_state, initiative)
 
         # Map combatant IDs to template IDs (enemies are created in same order)
         self._enemy_combatant_templates = {}
@@ -667,8 +827,13 @@ class GameSession:
                     levels_gained=max(0, after.level - before.level),
                 )
 
-        # Advance zone (increment encounter or overstay counter)
-        new_run = gl.advance_zone(new_run)
+        # Advance zone (increment encounter or overstay counter). In dungeon
+        # mode the fought packs leave the map instead.
+        if self._engaged_entity_ids:
+            new_run = gl.dungeon.resolve_engagement(new_run, self._engaged_entity_ids)
+            self._engaged_entity_ids = []
+        else:
+            new_run = gl.advance_zone(new_run)
         self.run = new_run
 
         # Record encounter AFTER run state is updated
@@ -1052,7 +1217,8 @@ class GameSession:
             )
 
         self.phase = Phase.IN_ZONE
-        return S.summarize_zone_status(self.run, self.game_data)
+        self._last_step = None
+        return self._zone_view_text()
 
     def _should_offer_recruitment(self) -> bool:
         """Check if a recruitment event should trigger."""
@@ -1617,6 +1783,17 @@ class GameSession:
         self._combat_state = None
         self._current_enemies = []
         self._round_events = []
+        self._engaged_entity_ids = []  # the pack is still on the map
+        self._last_step = None
+        if (
+            self.dungeon_mode
+            and self.phase == Phase.IN_ZONE
+            and self.run.zone_state is not None
+        ):
+            try:
+                self.run = self.game_loop.dungeon.ensure_floor(self.run)
+            except ValueError:
+                pass  # unknown zone in an old save — zone view will say so
 
         mc_name = ""
         mc_level = 0
