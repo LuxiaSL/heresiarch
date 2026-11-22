@@ -1318,7 +1318,9 @@ function dgEntPos(st, now) {
 function dgHeroPos(now) {
   const a = DG.anim;
   if (!a) return {...DG.disp, moving: false, step: 0};
-  const t = (now - a.t0) / STEP_MS;
+  // rAF's timestamp is the frame START — it can precede the t0 we took
+  // when the payload landed, so clamp or i goes -1 for one frame
+  const t = Math.max(0, (now - a.t0) / STEP_MS);
   const i = Math.floor(t);
   if (i >= a.pts.length) {
     const end = a.pts[a.pts.length - 1];
