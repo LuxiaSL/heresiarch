@@ -15,6 +15,7 @@ from heresiarch.mobile import dispatch as _D
 _session = GameSession(
     data_path=Path("/data"),
     notes_path=Path("/persist/agent_notes.json"),
+    dungeon_mode=True,
 )
 
 

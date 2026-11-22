@@ -111,6 +111,42 @@
   pre.map { margin: 6px; font-size: inherit; line-height: inherit; white-space: pre; }
   .maptap { position: absolute; width: 28px; height: 28px; margin: 6px;
     transform: translate(-50%,-50%); border-radius: 50%; background: transparent; z-index: 2; }
+  /* ---------- dungeon floor (canvas) ---------- */
+  .dg-hud { display: flex; justify-content: space-between; align-items: baseline;
+    margin: 4px 2px 2px; font-size: 12px; color: var(--dim); }
+  .dg-hud .zn { color: var(--fg); font-weight: 600; font-size: 13px; }
+  .dg-hud .fl { color: var(--gold); letter-spacing: 1px; }
+  .dg-msg { min-height: 18px; font-size: 12px; margin: 0 2px 6px; color: #cfc8b0; }
+  .dg-view { position: relative; border: 2px solid #2c2c3a; border-radius: 10px;
+    overflow: hidden; background: #06060a; }
+  #dcanvas { display: block; width: 100%; image-rendering: pixelated;
+    image-rendering: crisp-edges; touch-action: none; }
+  .dg-controls { display: flex; gap: 10px; margin-top: 8px; align-items: stretch; }
+  .dg-actions { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .dg-actions button { width: 100%; }
+  .dg-pad { display: grid; grid-template-columns: repeat(3, 54px);
+    grid-template-rows: repeat(3, 54px); gap: 4px; }
+  .dg-pad button { min-height: 0; padding: 0; font-size: 18px; border-radius: 12px;
+    touch-action: none; user-select: none; -webkit-user-select: none; }
+  .dg-pad button.wait { font-size: 13px; color: var(--dim); }
+  .flash { position: fixed; inset: 0; z-index: 200; pointer-events: none;
+    background: #fff; animation: hxflash .36s ease-out forwards; }
+  @keyframes hxflash { 0% {opacity: 0} 30% {opacity: .9} 100% {opacity: 0} }
+  /* ---------- battle stage (combat cutaway) ---------- */
+  .stage { position: relative; height: 150px; border-radius: 10px; overflow: hidden;
+    border: 2px solid #2c2c3a; margin: 6px 0 4px; background: #1d2a1f;
+    image-rendering: pixelated; }
+  .stage .foes { position: absolute; left: 0; right: 0; bottom: 9%; display: flex;
+    justify-content: center; align-items: flex-end; gap: 6px; }
+  .stage .foe { display: flex; flex-direction: column; align-items: center; transition: opacity .3s; }
+  .stage .foe.dead { opacity: .15; filter: grayscale(1); }
+  .stage .foe .bob { animation: hxbob 1.1s ease-in-out infinite; }
+  .stage .foe:nth-child(2) .bob { animation-delay: -.35s; }
+  .stage .foe:nth-child(3) .bob { animation-delay: -.7s; }
+  .stage .foe .mini { width: 44px; height: 4px; background: #00000088; border-radius: 2px; margin-top: 3px; }
+  .stage .foe .mini > div { height: 100%; background: var(--red); border-radius: 2px; transition: width .25s; }
+  @keyframes hxbob { 0%,100% {transform: translateY(0)} 50% {transform: translateY(-3px)} }
+  .spr { image-rendering: pixelated; background-repeat: no-repeat; }
 </style>
 </head>
 <body>
@@ -190,6 +226,18 @@ function onPayload(p) {
   }
   if (p.combat && p.combat.round_number !== ui.lastRound) {
     rebuildDecisions(); ui.lastRound = p.combat.round_number;
+  }
+  if (p.dungeon) dgSetView(p.dungeon);
+  // Touching a pack: white flash, then cut to the battle screen
+  if (prevPhase === "IN_ZONE" && p.phase === "COMBAT" && !p.error) {
+    dgEncounterFlash(() => render());
+    return;
+  }
+  // Same floor, still exploring: patch the HUD, keep canvas + d-pad alive
+  if (prevPhase === "IN_ZONE" && p.phase === "IN_ZONE" && p.dungeon
+      && document.getElementById("dgslot")) {
+    dgPatch();
+    return;
   }
   // A round just resolved: replay its events paced instead of snapping
   const evs = ui.verbose ? p.events : p.events_summary;
@@ -877,6 +925,7 @@ function screenTown() {
     <div class="sticky-bottom"><button class="primary" data-a="leave-town">Leave Town</button></div>`;
 }
 function screenZone() {
+  if (S.dungeon) return screenDungeon();
   const z = S.zone || {};
   const prog = z.is_cleared
     ? `cleared · overstay ${z.overstay_battles}`
@@ -1059,6 +1108,8 @@ function screenCombat() {
         <button class="primary grow" data-a="submit-round" ${ui.auto ? "disabled" : ""}>⚔ Resolve Round</button>
       </div>`;
   return topbar() + `
+    ${battleStage()}
+    ${c.round_number === 0 && c.opening ? `<div class="card small" style="border-color:${c.opening === "ambush" ? "var(--red)" : "var(--gold)"};color:${c.opening === "ambush" ? "#ffb0b0" : "var(--gold)"}">${c.opening === "ambush" ? "⚠" : "⚡"} ${esc(c.opening_text)}</div>` : ""}
     <div class="section">ROUND ${c.round_number + 1} — ENEMIES</div>${enemyCards()}
     ${log}
     <div class="section">YOUR MOVE</div>
@@ -1173,6 +1224,442 @@ function screenVictory() {
     ${screenSetup(`<div class="section">ANOTHER HERESY</div>`)}`;
 }
 
+// ---------- dungeon floor (canvas) ----------
+// One persistent <canvas> survives re-renders (moved into #dgslot after
+// each innerHTML swap) so walk tweens and idle bobs never restart.
+// Art comes from sprites/atlas.json (art/build.py); with no atlas, a
+// placeholder renderer draws readable colored tiles instead.
+const TILE = 16, VW = 11, VH = 11;   // viewport in tiles (odd = centered hero)
+const STEP_MS = 85;                  // walk tween per tile
+const WALKABLE = new Set([".", ">", "X"]);
+const DG = {
+  canvas: null, ctx: null, raf: 0,
+  atlas: null, sheets: {}, atlasState: "idle",  // idle|loading|ready|none
+  view: null, floorKey: "",
+  disp: {x: 0, y: 0},          // displayed hero position (tiles, float)
+  anim: null,                  // {pts:[[x,y]..], from:{x,y}, t0}
+  ents: {},                    // id -> {fx,fy,tx,ty,t0}
+  hist: [],                    // hero tile history (followers walk it)
+  holdTimer: null, holdDir: null,
+};
+
+function dgLoadAtlas() {
+  if (DG.atlasState !== "idle") return;
+  DG.atlasState = "loading";
+  fetch("sprites/atlas.json").then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(atlas => {
+      const names = Object.keys(atlas.sheets || {});
+      let pending = names.length;
+      if (!pending) { DG.atlasState = "none"; return; }
+      for (const n of names) {
+        const img = new Image();
+        img.onload = () => { DG.sheets[n] = img; if (--pending === 0) { DG.atlas = atlas; DG.atlasState = "ready"; if (S && S.phase === "COMBAT") render(); } };
+        img.onerror = () => { DG.atlasState = "none"; };
+        img.src = "sprites/" + atlas.sheets[n];
+      }
+    })
+    .catch(() => { DG.atlasState = "none"; });
+}
+function frame(name) { return DG.atlas && DG.atlas.frames[name]; }
+function firstFrame(...names) { for (const n of names) { const f = frame(n); if (f) return f; } return null; }
+// Draw a frame with its anchor (ax, ay) on pixel (px, py)
+function blit(ctx, f, px, py, flip) {
+  const img = DG.sheets[f.sheet];
+  if (!img) return false;
+  const ax = f.ax ?? f.w / 2, ay = f.ay ?? f.h;
+  if (flip) {
+    ctx.save(); ctx.scale(-1, 1);
+    ctx.drawImage(img, f.x, f.y, f.w, f.h, -(px - ax) - f.w, py - ay, f.w, f.h);
+    ctx.restore();
+  } else {
+    ctx.drawImage(img, f.x, f.y, f.w, f.h, Math.round(px - ax), Math.round(py - ay), f.w, f.h);
+  }
+  return true;
+}
+
+function dgSetView(v) {
+  const key = v.zone_id + ":" + v.floor_number;
+  const prev = DG.view;
+  const now = performance.now();
+  if (key !== DG.floorKey || !prev) {
+    // New floor (or first look): snap everything
+    DG.floorKey = key; DG.anim = null; DG.ents = {};
+    DG.disp = {x: v.player_x, y: v.player_y};
+    DG.hist = [[v.player_x, v.player_y]];
+    for (const e of v.entities) DG.ents[e.id] = {fx: e.x, fy: e.y, tx: e.x, ty: e.y, t0: now};
+  } else {
+    if (v.trail && v.trail.length) {
+      DG.anim = {pts: v.trail.map(p => [p[0], p[1]]), from: {...DG.disp}, t0: now};
+      for (const p of v.trail) {
+        const last = DG.hist[0];
+        if (!last || last[0] !== p[0] || last[1] !== p[1]) DG.hist.unshift([p[0], p[1]]);
+      }
+      DG.hist.length = Math.min(DG.hist.length, 6);
+    } else {
+      DG.disp = {x: v.player_x, y: v.player_y};
+    }
+    const tween = Math.max(1, (v.trail || []).length);
+    const ents = {};
+    for (const e of v.entities) {
+      const old = DG.ents[e.id];
+      const cur = old ? dgEntPos(old, now) : {x: e.x, y: e.y};
+      // Packs move once per turn: slide them during the hero's last step
+      ents[e.id] = {fx: cur.x, fy: cur.y, tx: e.x, ty: e.y,
+                    t0: now + (tween - 1) * STEP_MS};
+    }
+    DG.ents = ents;
+  }
+  DG.view = v;
+}
+function dgEntPos(st, now) {
+  const k = Math.min(1, Math.max(0, (now - st.t0) / STEP_MS));
+  return {x: st.fx + (st.tx - st.fx) * k, y: st.fy + (st.ty - st.fy) * k};
+}
+function dgHeroPos(now) {
+  const a = DG.anim;
+  if (!a) return {...DG.disp, moving: false, step: 0};
+  // rAF's timestamp is the frame START — it can precede the t0 we took
+  // when the payload landed, so clamp or i goes -1 for one frame
+  const t = Math.max(0, (now - a.t0) / STEP_MS);
+  const i = Math.floor(t);
+  if (i >= a.pts.length) {
+    const end = a.pts[a.pts.length - 1];
+    DG.disp = {x: end[0], y: end[1]}; DG.anim = null;
+    return {...DG.disp, moving: false, step: 0};
+  }
+  const from = i === 0 ? [a.from.x, a.from.y] : a.pts[i - 1];
+  const to = a.pts[i], k = t - i;
+  DG.disp = {x: from[0] + (to[0] - from[0]) * k, y: from[1] + (to[1] - from[1]) * k};
+  return {...DG.disp, moving: true, step: i};
+}
+
+function dgMount() {
+  dgLoadAtlas();
+  const slot = document.getElementById("dgslot");
+  if (!slot) return;
+  if (!DG.canvas) {
+    DG.canvas = document.createElement("canvas");
+    DG.canvas.id = "dcanvas";
+    DG.canvas.addEventListener("pointerup", dgTap);
+  }
+  slot.appendChild(DG.canvas);
+  // Integer backing scale: crisp pixels at any CSS width
+  const cssW = slot.clientWidth || 340;
+  const scale = Math.max(1, Math.floor((cssW * (window.devicePixelRatio || 1)) / (VW * TILE)));
+  const w = VW * TILE * scale, h = VH * TILE * scale;
+  if (DG.canvas.width !== w || DG.canvas.height !== h) {
+    DG.canvas.width = w; DG.canvas.height = h;
+    DG.scale = scale;
+  }
+  DG.ctx = DG.canvas.getContext("2d");
+  if (!DG.raf) DG.raf = requestAnimationFrame(dgLoop);
+}
+function dgLoop(now) {
+  if (!DG.canvas || !DG.canvas.isConnected || !DG.view) { DG.raf = 0; return; }
+  dgDraw(now);
+  DG.raf = requestAnimationFrame(dgLoop);
+}
+
+// --- placeholder palette (no atlas): GBA-ish brights on dark ---
+const PH = {void: "#07070b", floor: "#6b6151", floor2: "#625949", wallTop: "#2d3a2c",
+  wallFace: "#4b5a3e", wallEdge: "#1a2219", stairs: "#d4af37", exit: "#d8432f"};
+const JOB_COLORS = {einherjar: "#5aa0e0", onmyoji: "#b18cff", berserker: "#e05555",
+  martyr: "#e0c055", sacrist: "#7fd6a4"};
+function dgTileCode(v, x, y) {
+  if (y < 0 || y >= v.height || x < 0 || x >= v.width) return " ";
+  return v.tiles[y][x];
+}
+function dgWalk(v, x, y) { return WALKABLE.has(dgTileCode(v, x, y)); }
+function dgHash(x, y) { return ((x * 73856093) ^ (y * 19349663)) >>> 0; }
+
+function dgDrawTile(ctx, v, x, y, px, py) {
+  const c = dgTileCode(v, x, y);
+  if (c === " ") { ctx.fillStyle = PH.void; ctx.fillRect(px, py, TILE, TILE); return; }
+  const art = DG.atlasState === "ready";
+  if (c === "#") {
+    const mask = (dgWalk(v, x, y - 1) ? 1 : 0) | (dgWalk(v, x + 1, y) ? 2 : 0)
+               | (dgWalk(v, x, y + 1) ? 4 : 0) | (dgWalk(v, x - 1, y) ? 8 : 0);
+    // art/README: rock touching floor in ANY of 8 neighbours is a wall
+    // (diagonal-only = wall_0, plain canopy); fully enclosed rock = void
+    const diag = dgWalk(v, x - 1, y - 1) || dgWalk(v, x + 1, y - 1)
+              || dgWalk(v, x - 1, y + 1) || dgWalk(v, x + 1, y + 1);
+    if (art) {
+      const f = (mask || diag) ? frame("wall_" + mask) : frame("void");
+      if (f && blit(ctx, f, px + (f.ax ?? 8), py + (f.ay ?? 16))) return;
+    }
+    if (!mask) { ctx.fillStyle = PH.void; ctx.fillRect(px, py, TILE, TILE); return; }
+    ctx.fillStyle = PH.wallTop; ctx.fillRect(px, py, TILE, TILE);
+    if (mask & 4) {  // floor below: show the wall's front face
+      ctx.fillStyle = PH.wallFace; ctx.fillRect(px, py + 7, TILE, 9);
+      ctx.fillStyle = PH.wallEdge; ctx.fillRect(px, py + 6, TILE, 1);
+    }
+    ctx.fillStyle = PH.wallEdge;
+    if (mask & 1) ctx.fillRect(px, py, TILE, 1);
+    if (mask & 2) ctx.fillRect(px + TILE - 1, py, 1, TILE);
+    if (mask & 8) ctx.fillRect(px, py, 1, TILE);
+    return;
+  }
+  // walkable ground
+  if (art) {
+    const f = frame("floor_" + (dgHash(x, y) & 3)) || frame("floor_0");
+    if (f) blit(ctx, f, px + (f.ax ?? 8), py + (f.ay ?? 16));
+    const over = c === ">" ? frame("stairs_down") : c === "X" ? frame("exit_torii") : null;
+    if (over) { blit(ctx, over, px + (over.ax ?? 8), py + (over.ay ?? 16)); return; }
+    if (f) return;
+  }
+  ctx.fillStyle = (dgHash(x, y) & 1) ? PH.floor : PH.floor2;
+  ctx.fillRect(px, py, TILE, TILE);
+  if (c === ">") {
+    ctx.fillStyle = "#2a2418"; ctx.fillRect(px + 2, py + 2, 12, 12);
+    ctx.fillStyle = PH.stairs;
+    for (let i = 0; i < 4; i++) ctx.fillRect(px + 3 + i, py + 4 + i * 3, 10 - 2 * i, 2);
+  } else if (c === "X") {
+    ctx.fillStyle = PH.exit;
+    ctx.fillRect(px + 2, py + 3, 12, 2); ctx.fillRect(px + 4, py + 6, 8, 1);
+    ctx.fillRect(px + 4, py + 5, 2, 10); ctx.fillRect(px + 10, py + 5, 2, 10);
+  }
+}
+
+function dirName(f) {
+  return f === "N" ? "up" : f === "S" ? "down"
+    : (f === "E" || f === "NE" || f === "SE") ? "right" : "left";
+}
+function dgDrawHero(ctx, job, px, py, facing, walkFrame) {
+  if (DG.atlasState === "ready") {
+    const d = dirName(facing);
+    const f = firstFrame(`hero_${job}_${d}_${walkFrame}`, `hero_default_${d}_${walkFrame}`,
+                         `hero_${job}_${d}_0`, `hero_default_${d}_0`);
+    if (f && blit(ctx, f, px + 8, py + 16)) return;
+  }
+  ctx.fillStyle = "#00000055"; ctx.fillRect(px + 3, py + 13, 10, 3);
+  ctx.fillStyle = "#101018"; ctx.fillRect(px + 3, py + 2 - (walkFrame ? 1 : 0), 10, 12);
+  ctx.fillStyle = JOB_COLORS[job] || "#e8e4d8";
+  ctx.fillRect(px + 4, py + 3 - (walkFrame ? 1 : 0), 8, 10);
+  ctx.fillStyle = "#101018";
+  const eye = {up: -1, down: 0, left: -2, right: 2}[dirName(facing)];
+  if (eye !== -1) ctx.fillRect(px + 7 + eye, py + 6, 2, 2);
+}
+function dgDrawEntity(ctx, e, px, py, now) {
+  const bounce = Math.floor(now / 200 + (e.id.length % 2)) % 2;  // ~2.5 Hz
+  if (e.kind === "ITEM") {
+    const f = DG.atlasState === "ready" && firstFrame("ui_item_bag");
+    if (f && blit(ctx, f, px + 8, py + 16)) return;
+    ctx.fillStyle = "#101018"; ctx.fillRect(px + 4, py + 6, 8, 8);
+    ctx.fillStyle = "#d4af37"; ctx.fillRect(px + 5, py + 7, 6, 6);
+    return;
+  }
+  const boss = e.kind === "BOSS";
+  if (DG.atlasState === "ready") {
+    const f = firstFrame(`mob_${e.sprite}_${bounce}`, `mob_${e.sprite}_0`, `mob_default_${bounce}`);
+    if (f && blit(ctx, f, px + 8, py + 16)) { dgBadges(ctx, e, px, py); return; }
+  }
+  const col = boss ? "#d8432f" : "#4fc06a";
+  const h = boss ? 13 : 10 - bounce;
+  ctx.fillStyle = "#00000055"; ctx.fillRect(px + 2, py + 13, 12, 3);
+  ctx.fillStyle = "#101018"; ctx.fillRect(px + 1, py + 15 - h, 14, h);
+  ctx.fillStyle = col; ctx.fillRect(px + 2, py + 16 - h, 12, h - 2);
+  ctx.fillStyle = "#ffffffaa"; ctx.fillRect(px + 4, py + 17 - h, 3, 2);
+  ctx.fillStyle = "#101018"; ctx.fillRect(px + 5, py + 18 - h + 2, 2, 2); ctx.fillRect(px + 9, py + 18 - h + 2, 2, 2);
+  dgBadges(ctx, e, px, py);
+}
+function dgBadges(ctx, e, px, py) {
+  if (e.count > 1) {  // pack size pip
+    ctx.fillStyle = "#101018"; ctx.fillRect(px + 10, py - 1, 7, 7);
+    ctx.fillStyle = "#e8e4d8"; ctx.font = "6px monospace"; ctx.textBaseline = "top";
+    ctx.fillText(String(e.count), px + 12, py);
+  }
+  if (e.alerted && e.kind !== "ITEM") {
+    const f = DG.atlasState === "ready" && frame("ui_alert");
+    if (f) { blit(ctx, f, px + 8, py - 1); return; }
+    ctx.fillStyle = "#101018"; ctx.fillRect(px + 5, py - 9, 6, 9);
+    ctx.fillStyle = "#ffd23f"; ctx.fillRect(px + 7, py - 8, 2, 4); ctx.fillRect(px + 7, py - 3, 2, 2);
+  }
+}
+
+function dgDraw(now) {
+  const v = DG.view, ctx = DG.ctx;
+  if (!v || !ctx) return;
+  const sc = DG.scale || 1;
+  ctx.setTransform(sc, 0, 0, sc, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  const hero = dgHeroPos(now);
+  // Camera centers the hero (sub-tile while walking)
+  const camX = Math.round(hero.x * TILE + TILE / 2 - (VW * TILE) / 2);
+  const camY = Math.round(hero.y * TILE + TILE / 2 - (VH * TILE) / 2);
+  ctx.fillStyle = PH.void; ctx.fillRect(0, 0, VW * TILE, VH * TILE);
+  const x0 = Math.floor(camX / TILE) - 1, y0 = Math.floor(camY / TILE) - 1;
+  for (let y = y0; y <= y0 + VH + 2; y++)
+    for (let x = x0; x <= x0 + VW + 2; x++)
+      dgDrawTile(ctx, v, x, y, x * TILE - camX, y * TILE - camY);
+
+  // Sprites, painter-sorted by row
+  const sprites = [];
+  for (const e of v.entities) {
+    const p = dgEntPos(DG.ents[e.id] || {fx: e.x, fy: e.y, tx: e.x, ty: e.y, t0: 0}, now);
+    sprites.push({y: p.y, draw: () => dgDrawEntity(ctx, e, Math.round(p.x * TILE - camX), Math.round(p.y * TILE - camY), now)});
+  }
+  // Followers trail the leader along its recent tiles (cosmetic)
+  const jobs = v.party_jobs || [];
+  for (let i = 1; i < jobs.length; i++) {
+    const h = DG.hist[i] || DG.hist[DG.hist.length - 1];
+    if (!h || (h[0] === v.player_x && h[1] === v.player_y && !DG.anim)) continue;
+    const prev = DG.hist[i - 1] || h;
+    const fdir = prev[0] > h[0] ? "E" : prev[0] < h[0] ? "W" : prev[1] < h[1] ? "N" : "S";
+    sprites.push({y: h[1] - 0.01, draw: () => dgDrawHero(ctx, jobs[i], h[0] * TILE - camX, h[1] * TILE - camY, fdir, 0)});
+  }
+  // Walk cycle 0,1,0,2 — two phases per tile so each step shows a stride
+  const walkF = hero.moving ? [1, 0, 2, 0][Math.floor(Math.max(0, now - DG.anim.t0) / (STEP_MS / 2)) % 4] : 0;
+  sprites.push({y: hero.y, draw: () => dgDrawHero(ctx, jobs[0] || "default",
+    Math.round(hero.x * TILE - camX), Math.round(hero.y * TILE - camY), v.facing, walkF)});
+  sprites.sort((a, b) => a.y - b.y).forEach(s => s.draw());
+}
+
+// --- input ---
+function dgMove(dir) {
+  if (!S || S.phase !== "IN_ZONE" || !S.dungeon) return;
+  if (dir === "wait") act("wait_turn"); else act("move", {direction: dir});
+}
+function dgTap(ev) {
+  const v = DG.view;
+  if (!v || !DG.canvas || S?.phase !== "IN_ZONE") return;
+  const r = DG.canvas.getBoundingClientRect();
+  const lx = (ev.clientX - r.left) / r.width * VW * TILE;
+  const ly = (ev.clientY - r.top) / r.height * VH * TILE;
+  const camX = DG.disp.x * TILE + TILE / 2 - (VW * TILE) / 2;
+  const camY = DG.disp.y * TILE + TILE / 2 - (VH * TILE) / 2;
+  const tx = Math.floor((lx + camX) / TILE), ty = Math.floor((ly + camY) / TILE);
+  if (tx === v.player_x && ty === v.player_y) {
+    if (v.on_stairs) act("descend");
+    return;
+  }
+  const ent = v.entities.find(e => e.x === tx && e.y === ty);
+  if (ent || dgWalk(v, tx, ty)) act("travel", {x: tx, y: ty});
+}
+document.addEventListener("pointerdown", (ev) => {
+  const el = ev.target.closest("[data-dir]");
+  if (!el) return;
+  ev.preventDefault();
+  const dir = el.dataset.dir;
+  dgMove(dir);
+  clearInterval(DG.holdTimer);
+  // Hold to keep walking (not for wait — one tap, one turn)
+  if (dir !== "wait") DG.holdTimer = setInterval(() => { if (!ui.busy) dgMove(dir); }, 150);
+});
+for (const t of ["pointerup", "pointercancel", "pointerleave"]) {
+  document.addEventListener(t, () => { clearInterval(DG.holdTimer); DG.holdTimer = null; });
+}
+const DG_KEYS = {ArrowUp: "N", ArrowDown: "S", ArrowLeft: "W", ArrowRight: "E",
+  w: "N", s: "S", a: "W", d: "E", q: "NW", e: "NE", z: "SW", c: "SE",
+  "8": "N", "2": "S", "4": "W", "6": "E", "7": "NW", "9": "NE", "1": "SW", "3": "SE",
+  "5": "wait", ".": "wait"};
+document.addEventListener("keydown", (ev) => {
+  if (!S || S.phase !== "IN_ZONE" || !S.dungeon || ev.target.tagName === "INPUT") return;
+  if (ev.key === ">" && S.dungeon.on_stairs) { act("descend"); ev.preventDefault(); return; }
+  const dir = DG_KEYS[ev.key];
+  if (dir) { ev.preventDefault(); if (!ui.busy) dgMove(dir); }
+});
+
+function dgEncounterFlash(then) {
+  const f = document.createElement("div");
+  f.className = "flash";
+  document.body.appendChild(f);
+  setTimeout(() => { then(); }, 220);
+  setTimeout(() => f.remove(), 420);
+}
+
+// --- screen ---
+function dgHudHtml() {
+  const v = S.dungeon;
+  const fl = v.total_floors ? `B${v.floor_number}F / ${v.total_floors}` : `B${v.floor_number}F`;
+  const tag = v.is_cleared ? ` · <span style="color:var(--green)">cleared</span>${v.overstay_battles ? ` · overstay ${v.overstay_battles}` : ""}` : "";
+  return `<span class="zn">${esc(v.zone_name)}</span><span><span class="fl">${fl}</span>${tag} · <span class="dim">t${v.turn}</span></span>`;
+}
+function dgMsgHtml() {
+  const v = S.dungeon;
+  if (v.messages && v.messages.length) return esc(v.messages[v.messages.length - 1]);
+  if (v.on_stairs) return "Stairs leading down.";
+  if (v.on_exit) return "The way out. The zone is yours.";
+  const seen = v.entities.filter(e => e.kind !== "ITEM");
+  if (seen.length) {
+    const e = seen[0];
+    return `${esc(e.label)}${e.level_hint ? " · " + esc(e.level_hint) : ""}${e.alerted ? " — it's seen you" : ""}`;
+  }
+  return "&nbsp;";
+}
+function dgActionsHtml() {
+  const v = S.dungeon;
+  const btns = [];
+  if (v.on_stairs) btns.push(`<button class="primary" data-a="dg-descend">▼ Descend</button>`);
+  if (v.on_exit) btns.push(`<button class="gold" data-a="leave-zone">⛩ Leave zone</button>`);
+  btns.push(`<button class="small" data-a="leave-zone">← Retreat to map</button>`);
+  return btns.join("");
+}
+function dgBelowHtml() {
+  return `${partyStrip()} ${stashPanel({use: true})} ${partyDetails()}`;
+}
+function screenDungeon() {
+  const pad = [["NW", "↖"], ["N", "↑"], ["NE", "↗"], ["W", "←"], ["wait", "⏳"],
+               ["E", "→"], ["SW", "↙"], ["S", "↓"], ["SE", "↘"]]
+    .map(([d, g]) => `<button data-dir="${d}" class="${d === "wait" ? "wait" : ""}" aria-label="${d}">${g}</button>`).join("");
+  return topbar() + `
+    <div class="dg-hud" id="dg-hud">${dgHudHtml()}</div>
+    <div class="dg-msg" id="dg-msg">${dgMsgHtml()}</div>
+    <div class="dg-view" id="dgslot"></div>
+    <div class="dg-controls">
+      <div class="dg-actions" id="dg-actions">${dgActionsHtml()}</div>
+      <div class="dg-pad">${pad}</div>
+    </div>
+    <div id="dg-below">${dgBelowHtml()}</div>`;
+}
+function dgPatch() {
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  set("dg-hud", dgHudHtml());
+  set("dg-msg", dgMsgHtml());
+  set("dg-actions", dgActionsHtml());
+  set("dg-below", dgBelowHtml());
+}
+
+// ---------- battle stage (the cutaway) ----------
+function sprDiv(f, scale, extraStyle) {
+  const img = DG.sheets[f.sheet];
+  if (!img) return "";
+  return `<div class="spr" style="width:${f.w * scale}px;height:${f.h * scale}px;
+    background-image:url('sprites/${esc(DG.atlas.sheets[f.sheet])}');
+    background-size:${img.naturalWidth * scale}px ${img.naturalHeight * scale}px;
+    background-position:-${f.x * scale}px -${f.y * scale}px;${extraStyle || ""}"></div>`;
+}
+function battleStage() {
+  dgLoadAtlas();
+  const c = S.combat;
+  if (!c || DG.atlasState !== "ready") return "";
+  // The stage IS the backdrop frame, scaled to the app width (5:3)
+  const bg = frame("bg_shrine_path");
+  const appW = Math.max(200, (document.getElementById("app")?.clientWidth || 360) - 4);
+  let bgStyle = "";
+  if (bg && DG.sheets[bg.sheet]) {
+    const img = DG.sheets[bg.sheet];
+    const k = appW / bg.w;
+    bgStyle = `height:${Math.round(bg.h * k)}px;
+      background-image:url('sprites/${esc(DG.atlas.sheets[bg.sheet])}');
+      background-size:${img.naturalWidth * k}px ${img.naturalHeight * k}px;
+      background-position:-${bg.x * k}px -${bg.y * k}px;
+      background-repeat:no-repeat;`;
+  }
+  const n = c.enemies.length;
+  const scale = n >= 4 ? 2 : 3;
+  const foes = c.enemies.map(e => {
+    const f = firstFrame(`battle_${e.sprite}_0`, "battle_default_0");
+    if (!f) return "";
+    const d = dispHp(e);
+    const pct = Math.max(0, Math.round(100 * d.hp / Math.max(1, e.max_hp)));
+    const s = f.w >= 48 ? Math.max(2, scale - 1) : scale;
+    return `<div class="foe ${d.alive ? "" : "dead"}" data-foe="${esc(e.id)}">
+      <div class="bob">${sprDiv(f, s)}</div>
+      <div class="mini"><div style="width:${pct}%"></div></div></div>`;
+  }).join("");
+  return `<div class="stage" style="${bgStyle}"><div class="foes">${foes}</div></div>`;
+}
+
 function render() {
   if (!S) return;
   const app = document.getElementById("app");
@@ -1199,6 +1686,7 @@ function render() {
   const nameEl2 = document.getElementById("mc-name");
   if (nameEl2 && savedName != null) nameEl2.value = savedName;
   restoreMapScroll();
+  if (document.getElementById("dgslot")) dgMount();
   const log = document.getElementById("log");
   if (log) log.scrollTop = log.scrollHeight;
 }
@@ -1224,6 +1712,7 @@ document.addEventListener("click", (ev) => {
     case "save": act("save_run", {slot: "manual"}); break;
     case "enter-zone": act("enter_zone", {zone_id: id}); break;
     case "leave-zone": act("leave_zone"); break;
+    case "dg-descend": act("descend"); break;
     case "enter-town": act("enter_town", {town_id: id}); break;
     case "map-sel": ui.mapSel = id; render(); break;
     case "map-prev":

@@ -86,6 +86,8 @@ def stage_client() -> None:
     for name in ("manifest.webmanifest", "sw.js"):
         shutil.copy(STATIC / name, DIST / name)
     shutil.copytree(STATIC / "icons", DIST / "icons", dirs_exist_ok=True)
+    if (STATIC / "sprites").is_dir():  # pixel-art atlas (art/build.py)
+        shutil.copytree(STATIC / "sprites", DIST / "sprites", dirs_exist_ok=True)
     # Belt-and-braces for GitHub Pages: never run Jekyll over the bundle
     (DIST / ".nojekyll").touch()
     log("client staged (index.html + boot.js + PWA shell)")

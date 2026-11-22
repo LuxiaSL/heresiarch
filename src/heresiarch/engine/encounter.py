@@ -186,3 +186,31 @@ class EncounterGenerator:
             instances.append(instance)
 
         return instances
+
+    def generate_endless_group(
+        self,
+        template_ids: list[str],
+        player_level: int,
+        min_level: int,
+        max_level: int,
+    ) -> list[EnemyInstance]:
+        """Endless-zone group with a fixed composition (dungeon packs).
+
+        Same level rule as ``generate_endless_encounter`` — rubber-band to
+        the player, ±1 jitter, clamped — but the members were already
+        rolled when the pack was placed on the map.
+        """
+        base = max(min_level, min(player_level, max_level))
+        instances: list[EnemyInstance] = []
+        for idx, template_id in enumerate(template_ids):
+            template = self.enemy_registry.get(template_id)
+            if template is None:
+                continue
+            jitter = self.rng.randint(-1, 1)
+            level = max(min_level, min(base + jitter, max_level))
+            instances.append(self.combat_engine.create_enemy_instance(
+                template, level, instance_id=f"{template_id}_{idx}",
+            ))
+        if not instances:
+            raise ValueError("Endless group has no valid enemies")
+        return instances

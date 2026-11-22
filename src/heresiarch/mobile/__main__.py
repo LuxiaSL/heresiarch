@@ -23,6 +23,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Heresiarch mobile sniff test")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8642)
+    parser.add_argument(
+        "--linear", action="store_true",
+        help="classic linear zones (Fight button) instead of dungeon floors",
+    )
     args = parser.parse_args()
 
     import uvicorn
@@ -41,7 +45,7 @@ def main() -> None:
     print(f"      ({origin}), relaunch Chrome, then menu → Add to Home screen")
     print()
 
-    uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(create_app(dungeon_mode=not args.linear), host=args.host, port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":

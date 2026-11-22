@@ -1,0 +1,48 @@
+# UI bits drawn over the map / battle.
+sheet: ui
+defaults:
+  palette: ui
+
+sprites:
+  ui_cursor:          # bobbing target arrow, points down at the target
+    grid: |
+      KKKKKKKKK
+      KGGGGGHIK
+      .KGGGHIK.
+      .KGGHHIK.
+      ..KGHIK..
+      ..KHIIK..
+      ...KIK...
+      ....K....
+  ui_alert:           # "!" bubble over a pack that has spotted you
+    grid: |
+      ..KKKKKK..
+      .KppppppK.
+      KpppRRpqqK
+      KpppRRpqqK
+      KpppRRpqqK
+      KpppTTpqqK
+      KppppppqqK
+      KpppRRpqqK
+      .KppppqqK.
+      ..KKKKpKK.
+      ......KK..
+  ui_item_bag:        # furoshiki bundle lying on the floor
+    palette: shrine
+    grid: |
+      ................
+      ....KK....KK....
+      ...KghK..KhiK...
+      ....KghKKhiK....
+      .....KhhhhK.....
+      ....KKghhiKK....
+      ..KKggghhhiiKK..
+      .KggggPhhhhPiiK.
+      KgggPhhhhhhhPiiK
+      KggPhhhPhhPhhiiK
+      KghhPhhhhhPhhiiK
+      KghhhhPhhhhhiijK
+      .KhhPhhhhPhiijK.
+      ..KKiiiiiiiiKK..
+      ....KKKKKKKK....
+      ...ssssssssss...

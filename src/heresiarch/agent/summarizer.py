@@ -997,3 +997,86 @@ def _render_combat_event(
             return f"--- {'VICTORY' if result == 'player_victory' else 'DEFEAT'} ---"
         case _:
             return None
+
+
+# ----------------------------------------------------------------------
+# Dungeon floor (dungeon mode)
+# ----------------------------------------------------------------------
+
+def summarize_floor(run: RunState, game_data: GameData, last_step=None) -> str:
+    """ASCII view of the explored floor + what's in sight.
+
+    Legend: @ you, # wall, . floor, > stairs, X exit, ! item,
+    a-z enemy packs (letter = list below), B boss, space = unexplored.
+    """
+    from heresiarch.engine.dungeon.models import EntityKind
+    from heresiarch.engine.dungeon.rules import pack_label, visible_entities
+
+    zs = run.zone_state
+    if zs is None or zs.floor is None or not run.current_zone_id:
+        return "Not on a dungeon floor."
+    floor = zs.floor
+    zone = game_data.zones.get(run.current_zone_id)
+    zone_name = zone.name if zone else run.current_zone_id
+
+    rows = []
+    for y in range(floor.height):
+        row = []
+        for x in range(floor.width):
+            row.append(floor.tiles[y][x] if floor.is_explored(x, y) else " ")
+        rows.append(row)
+
+    seen = visible_entities(floor)
+    lines_ents: list[str] = []
+    letter = ord("a")
+    for e in seen:
+        dx, dy = e.x - floor.player_x, e.y - floor.player_y
+        where = f"{_rel(dx, dy)} ({max(abs(dx), abs(dy))} steps)"
+        if e.kind == EntityKind.ITEM:
+            rows[e.y][e.x] = "!"
+            item = game_data.items.get(e.item_id or "")
+            lines_ents.append(f"  ! {item.name if item else e.item_id} — {where}")
+        elif e.kind == EntityKind.BOSS:
+            rows[e.y][e.x] = "B"
+            lines_ents.append(f"  B BOSS {pack_label(e)} — {where}")
+        else:
+            ch = chr(letter) if letter <= ord("z") else "?"
+            letter += 1
+            rows[e.y][e.x] = ch
+            state = "CHASING YOU" if e.alerted else "wandering"
+            lines_ents.append(f"  {ch} {pack_label(e)} [{state}] — {where}")
+    rows[floor.player_y][floor.player_x] = "@"
+
+    # Crop to explored bounds (+1) so the agent isn't fed blank rows
+    xs = [x for y in range(floor.height) for x in range(floor.width) if rows[y][x] != " "]
+    ys = [y for y in range(floor.height) if any(c != " " for c in rows[y])]
+    x0, x1 = max(0, min(xs) - 1), min(floor.width, max(xs) + 2)
+    y0, y1 = max(0, min(ys) - 1), min(floor.height, max(ys) + 2)
+    art = ["".join(rows[y][x0:x1]).rstrip() for y in range(y0, y1)]
+
+    total = f"/{floor.total_floors}" if floor.total_floors else ""
+    header = f"=== {zone_name} — Floor {floor.floor_number}{total} | turn {floor.turn} ==="
+    if zs.is_cleared:
+        header += " [CLEARED — overstay]"
+    lines = [header]
+    if last_step is not None and last_step.messages:
+        lines.extend(last_step.messages)
+    lines.append("")
+    lines.extend(art)
+    lines.append("")
+    lines.append("In sight:" if lines_ents else "Nothing in sight.")
+    lines.extend(lines_ents)
+    tile = floor.tile(floor.player_x, floor.player_y)
+    lines.append("")
+    if tile == ">":
+        lines.append("You're on the stairs — `descend` to go down.")
+    elif tile == "X":
+        lines.append("The way out — `leave_zone` to return, or keep exploring.")
+    lines.append("Actions: move <N|NE|E|SE|S|SW|W|NW>, wait_turn, descend, leave_zone")
+    return "\n".join(lines)
+
+
+def _rel(dx: int, dy: int) -> str:
+    ns = "N" if dy < 0 else ("S" if dy > 0 else "")
+    ew = "E" if dx > 0 else ("W" if dx < 0 else "")
+    return (ns + ew) or "here"

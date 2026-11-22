@@ -553,3 +553,27 @@ def calculate_endless_reward_multiplier(
 # --- Recruitment Pity ---
 
 RECRUITMENT_PITY_PER_CLEAR: float = 0.06  # +6% per encounter cleared without recruit
+
+
+# --- Dungeon Layer (PMD-style floors over the zone templates) ---
+# Gameplay tunables for the map layer. Layout geometry (map size, room
+# sizes) lives in engine/dungeon/generator.py; these are the levers that
+# change how the map *plays*.
+
+DUNGEON_PACKS_PER_FLOOR: int = 3        # regular encounters distributed per floor
+DUNGEON_OVERSTAY_PACKS_PER_FLOOR: int = 3  # packs on a regenerated overstay floor
+DUNGEON_ENDLESS_PACKS_PER_FLOOR: int = 4   # packs on an endless-zone floor
+DUNGEON_SIGHT_RADIUS: int = 2           # corridor sight (Chebyshev); rooms are fully lit
+DUNGEON_LOSE_TRACK_RADIUS: int = 7      # chasing packs give up beyond this distance
+DUNGEON_WANDER_CHANCE: float = 0.5      # unalerted pack moves this turn with this chance
+DUNGEON_MERGE_RADIUS: int = 1           # alerted packs this close to a fight join it
+DUNGEON_FIRST_STRIKE_AP: int = 1        # AP banked per party member on a first strike
+DUNGEON_ITEMS_PER_FLOOR_MAX: int = 1    # rare floor finds (no regen: finds are the sustain)
+DUNGEON_ITEM_CHANCE: float = 0.4        # chance for each item slot to actually spawn
+
+
+def calculate_dungeon_floor_count(regular_encounters: int, override: int = 0) -> int:
+    """Floors for a zone: explicit override, else ceil(regular / packs-per-floor)."""
+    if override > 0:
+        return override
+    return max(1, math.ceil(regular_encounters / DUNGEON_PACKS_PER_FLOOR))

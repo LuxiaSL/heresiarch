@@ -50,7 +50,9 @@ class ImportRequest(BaseModel):
 
 
 def create_app(
-    data_path: Path | None = None, notes_path: Path | None = None,
+    data_path: Path | None = None,
+    notes_path: Path | None = None,
+    dungeon_mode: bool = True,
 ) -> FastAPI:
     app = FastAPI(title="Heresiarch Mobile", docs_url=None, redoc_url=None)
 
@@ -61,7 +63,9 @@ def create_app(
         notes_path = Path("artifacts/mobile/agent_notes.json")
     notes_path.parent.mkdir(parents=True, exist_ok=True)
 
-    session = GameSession(data_path=data_path, notes_path=notes_path)
+    session = GameSession(
+        data_path=data_path, notes_path=notes_path, dungeon_mode=dungeon_mode,
+    )
     # One session, threadpool endpoints: serialize dispatch so a double-tap
     # can't interleave two half-applied actions.
     lock = threading.Lock()
@@ -131,5 +135,20 @@ def create_app(
         ):
             raise HTTPException(status_code=404)
         return FileResponse(path, media_type="image/png")
+
+    # --- Pixel-art atlas (art/build.py output) ---
+    _SPRITE_TYPES = {".png": "image/png", ".json": "application/json"}
+
+    @app.get("/sprites/{name}")
+    def sprite_file(name: str) -> FileResponse:
+        root = (_STATIC_DIR / "sprites").resolve()
+        path = (_STATIC_DIR / "sprites" / name).resolve()
+        if (
+            not path.is_relative_to(root)
+            or path.suffix not in _SPRITE_TYPES
+            or not path.is_file()
+        ):
+            raise HTTPException(status_code=404)
+        return FileResponse(path, media_type=_SPRITE_TYPES[path.suffix])
 
     return app

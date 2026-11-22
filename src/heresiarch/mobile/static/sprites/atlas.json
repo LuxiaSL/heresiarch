@@ -1,0 +1,1327 @@
+{
+ "tile": 16,
+ "sheets": {
+  "backdrops": "backdrops.png",
+  "battle": "battle.png",
+  "heroes": "heroes.png",
+  "mobs": "mobs.png",
+  "tiles": "tiles.png",
+  "ui": "ui.png"
+ },
+ "frames": {
+  "battle_alpha_slime_0": {
+   "sheet": "battle",
+   "x": 34,
+   "y": 34,
+   "w": 48,
+   "h": 48,
+   "ax": 24,
+   "ay": 48
+  },
+  "battle_alpha_slime_1": {
+   "sheet": "battle",
+   "x": 166,
+   "y": 83,
+   "w": 48,
+   "h": 48,
+   "ax": 24,
+   "ay": 48
+  },
+  "battle_bandit_slime_0": {
+   "sheet": "battle",
+   "x": 1,
+   "y": 34,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_bandit_slime_1": {
+   "sheet": "battle",
+   "x": 133,
+   "y": 83,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_chunky_slime_0": {
+   "sheet": "battle",
+   "x": 166,
+   "y": 1,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_chunky_slime_1": {
+   "sheet": "battle",
+   "x": 67,
+   "y": 83,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_default_0": {
+   "sheet": "battle",
+   "x": 67,
+   "y": 1,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_default_1": {
+   "sheet": "battle",
+   "x": 198,
+   "y": 34,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_fodder_slime_0": {
+   "sheet": "battle",
+   "x": 1,
+   "y": 1,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_fodder_slime_1": {
+   "sheet": "battle",
+   "x": 132,
+   "y": 34,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_mystic_slime_0": {
+   "sheet": "battle",
+   "x": 133,
+   "y": 1,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_mystic_slime_1": {
+   "sheet": "battle",
+   "x": 34,
+   "y": 83,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_omega_slime_0": {
+   "sheet": "battle",
+   "x": 83,
+   "y": 34,
+   "w": 48,
+   "h": 48,
+   "ax": 24,
+   "ay": 48
+  },
+  "battle_omega_slime_1": {
+   "sheet": "battle",
+   "x": 1,
+   "y": 132,
+   "w": 48,
+   "h": 48,
+   "ax": 24,
+   "ay": 48
+  },
+  "battle_slime_0": {
+   "sheet": "battle",
+   "x": 34,
+   "y": 1,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_slime_1": {
+   "sheet": "battle",
+   "x": 165,
+   "y": 34,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_swime_0": {
+   "sheet": "battle",
+   "x": 100,
+   "y": 1,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_swime_1": {
+   "sheet": "battle",
+   "x": 1,
+   "y": 83,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_toxic_slime_0": {
+   "sheet": "battle",
+   "x": 199,
+   "y": 1,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "battle_toxic_slime_1": {
+   "sheet": "battle",
+   "x": 100,
+   "y": 83,
+   "w": 32,
+   "h": 32,
+   "ax": 16,
+   "ay": 32
+  },
+  "bg_shrine_path": {
+   "sheet": "backdrops",
+   "x": 1,
+   "y": 1,
+   "w": 160,
+   "h": 96,
+   "ax": 0,
+   "ay": 0
+  },
+  "corridor_0": {
+   "sheet": "tiles",
+   "x": 69,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "corridor_1": {
+   "sheet": "tiles",
+   "x": 86,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "decor_bamboo": {
+   "sheet": "tiles",
+   "x": 171,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "decor_grass_0": {
+   "sheet": "tiles",
+   "x": 188,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "decor_grass_1": {
+   "sheet": "tiles",
+   "x": 205,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "decor_grass_2": {
+   "sheet": "tiles",
+   "x": 222,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "decor_lantern": {
+   "sheet": "tiles",
+   "x": 154,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "exit_torii": {
+   "sheet": "tiles",
+   "x": 137,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "floor_0": {
+   "sheet": "tiles",
+   "x": 1,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "floor_1": {
+   "sheet": "tiles",
+   "x": 18,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "floor_2": {
+   "sheet": "tiles",
+   "x": 35,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "floor_3": {
+   "sheet": "tiles",
+   "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "hero_berserker_down_0": {
+   "sheet": "heroes",
+   "x": 205,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_down_1": {
+   "sheet": "heroes",
+   "x": 222,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_down_2": {
+   "sheet": "heroes",
+   "x": 239,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_left_0": {
+   "sheet": "heroes",
+   "x": 52,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_left_1": {
+   "sheet": "heroes",
+   "x": 69,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_left_2": {
+   "sheet": "heroes",
+   "x": 86,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_right_0": {
+   "sheet": "heroes",
+   "x": 52,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_right_1": {
+   "sheet": "heroes",
+   "x": 69,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_right_2": {
+   "sheet": "heroes",
+   "x": 86,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_up_0": {
+   "sheet": "heroes",
+   "x": 1,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_up_1": {
+   "sheet": "heroes",
+   "x": 18,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_berserker_up_2": {
+   "sheet": "heroes",
+   "x": 35,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_down_0": {
+   "sheet": "heroes",
+   "x": 1,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_down_1": {
+   "sheet": "heroes",
+   "x": 18,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_down_2": {
+   "sheet": "heroes",
+   "x": 35,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_left_0": {
+   "sheet": "heroes",
+   "x": 103,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_left_1": {
+   "sheet": "heroes",
+   "x": 120,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_left_2": {
+   "sheet": "heroes",
+   "x": 137,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_right_0": {
+   "sheet": "heroes",
+   "x": 154,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_right_1": {
+   "sheet": "heroes",
+   "x": 171,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_right_2": {
+   "sheet": "heroes",
+   "x": 188,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_up_0": {
+   "sheet": "heroes",
+   "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_up_1": {
+   "sheet": "heroes",
+   "x": 69,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_default_up_2": {
+   "sheet": "heroes",
+   "x": 86,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_down_0": {
+   "sheet": "heroes",
+   "x": 154,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_down_1": {
+   "sheet": "heroes",
+   "x": 171,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_down_2": {
+   "sheet": "heroes",
+   "x": 188,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_left_0": {
+   "sheet": "heroes",
+   "x": 1,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_left_1": {
+   "sheet": "heroes",
+   "x": 18,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_left_2": {
+   "sheet": "heroes",
+   "x": 35,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_right_0": {
+   "sheet": "heroes",
+   "x": 205,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_right_1": {
+   "sheet": "heroes",
+   "x": 222,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_right_2": {
+   "sheet": "heroes",
+   "x": 239,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_up_0": {
+   "sheet": "heroes",
+   "x": 205,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_up_1": {
+   "sheet": "heroes",
+   "x": 222,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_einherjar_up_2": {
+   "sheet": "heroes",
+   "x": 239,
+   "y": 1,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_down_0": {
+   "sheet": "heroes",
+   "x": 103,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_down_1": {
+   "sheet": "heroes",
+   "x": 120,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_down_2": {
+   "sheet": "heroes",
+   "x": 137,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_left_0": {
+   "sheet": "heroes",
+   "x": 205,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_left_1": {
+   "sheet": "heroes",
+   "x": 222,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_left_2": {
+   "sheet": "heroes",
+   "x": 239,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_right_0": {
+   "sheet": "heroes",
+   "x": 103,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_right_1": {
+   "sheet": "heroes",
+   "x": 120,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_right_2": {
+   "sheet": "heroes",
+   "x": 137,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_up_0": {
+   "sheet": "heroes",
+   "x": 154,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_up_1": {
+   "sheet": "heroes",
+   "x": 171,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_martyr_up_2": {
+   "sheet": "heroes",
+   "x": 188,
+   "y": 51,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_down_0": {
+   "sheet": "heroes",
+   "x": 52,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_down_1": {
+   "sheet": "heroes",
+   "x": 69,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_down_2": {
+   "sheet": "heroes",
+   "x": 86,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_left_0": {
+   "sheet": "heroes",
+   "x": 154,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_left_1": {
+   "sheet": "heroes",
+   "x": 171,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_left_2": {
+   "sheet": "heroes",
+   "x": 188,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_right_0": {
+   "sheet": "heroes",
+   "x": 1,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_right_1": {
+   "sheet": "heroes",
+   "x": 18,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_right_2": {
+   "sheet": "heroes",
+   "x": 35,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_up_0": {
+   "sheet": "heroes",
+   "x": 103,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_up_1": {
+   "sheet": "heroes",
+   "x": 120,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_onmyoji_up_2": {
+   "sheet": "heroes",
+   "x": 137,
+   "y": 26,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_down_0": {
+   "sheet": "heroes",
+   "x": 1,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_down_1": {
+   "sheet": "heroes",
+   "x": 18,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_down_2": {
+   "sheet": "heroes",
+   "x": 35,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_left_0": {
+   "sheet": "heroes",
+   "x": 103,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_left_1": {
+   "sheet": "heroes",
+   "x": 120,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_left_2": {
+   "sheet": "heroes",
+   "x": 137,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_right_0": {
+   "sheet": "heroes",
+   "x": 154,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_right_1": {
+   "sheet": "heroes",
+   "x": 171,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_right_2": {
+   "sheet": "heroes",
+   "x": 188,
+   "y": 101,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_up_0": {
+   "sheet": "heroes",
+   "x": 52,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_up_1": {
+   "sheet": "heroes",
+   "x": 69,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "hero_sacrist_up_2": {
+   "sheet": "heroes",
+   "x": 86,
+   "y": 76,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "mob_alpha_slime_0": {
+   "sheet": "mobs",
+   "x": 137,
+   "y": 1,
+   "w": 24,
+   "h": 24,
+   "ax": 12,
+   "ay": 24
+  },
+  "mob_alpha_slime_1": {
+   "sheet": "mobs",
+   "x": 69,
+   "y": 26,
+   "w": 24,
+   "h": 24,
+   "ax": 12,
+   "ay": 24
+  },
+  "mob_bandit_slime_0": {
+   "sheet": "mobs",
+   "x": 120,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_bandit_slime_1": {
+   "sheet": "mobs",
+   "x": 52,
+   "y": 26,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_chunky_slime_0": {
+   "sheet": "mobs",
+   "x": 86,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_chunky_slime_1": {
+   "sheet": "mobs",
+   "x": 18,
+   "y": 26,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_default_0": {
+   "sheet": "mobs",
+   "x": 35,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_default_1": {
+   "sheet": "mobs",
+   "x": 221,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_fodder_slime_0": {
+   "sheet": "mobs",
+   "x": 1,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_fodder_slime_1": {
+   "sheet": "mobs",
+   "x": 187,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_mystic_slime_0": {
+   "sheet": "mobs",
+   "x": 69,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_mystic_slime_1": {
+   "sheet": "mobs",
+   "x": 1,
+   "y": 26,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_omega_slime_0": {
+   "sheet": "mobs",
+   "x": 162,
+   "y": 1,
+   "w": 24,
+   "h": 24,
+   "ax": 12,
+   "ay": 24
+  },
+  "mob_omega_slime_1": {
+   "sheet": "mobs",
+   "x": 94,
+   "y": 26,
+   "w": 24,
+   "h": 24,
+   "ax": 12,
+   "ay": 24
+  },
+  "mob_slime_0": {
+   "sheet": "mobs",
+   "x": 18,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_slime_1": {
+   "sheet": "mobs",
+   "x": 204,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_swime_0": {
+   "sheet": "mobs",
+   "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_swime_1": {
+   "sheet": "mobs",
+   "x": 238,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_toxic_slime_0": {
+   "sheet": "mobs",
+   "x": 103,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mob_toxic_slime_1": {
+   "sheet": "mobs",
+   "x": 35,
+   "y": 26,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "stairs_down": {
+   "sheet": "tiles",
+   "x": 120,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "ui_alert": {
+   "sheet": "ui",
+   "x": 11,
+   "y": 1,
+   "w": 10,
+   "h": 11,
+   "ax": 5,
+   "ay": 11
+  },
+  "ui_cursor": {
+   "sheet": "ui",
+   "x": 1,
+   "y": 1,
+   "w": 9,
+   "h": 8,
+   "ax": 4,
+   "ay": 8
+  },
+  "ui_item_bag": {
+   "sheet": "ui",
+   "x": 22,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "void": {
+   "sheet": "tiles",
+   "x": 103,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_0": {
+   "sheet": "tiles",
+   "x": 239,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_1": {
+   "sheet": "tiles",
+   "x": 1,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_10": {
+   "sheet": "tiles",
+   "x": 154,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_11": {
+   "sheet": "tiles",
+   "x": 171,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_12": {
+   "sheet": "tiles",
+   "x": 188,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_13": {
+   "sheet": "tiles",
+   "x": 205,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_14": {
+   "sheet": "tiles",
+   "x": 222,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_15": {
+   "sheet": "tiles",
+   "x": 239,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_2": {
+   "sheet": "tiles",
+   "x": 18,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_3": {
+   "sheet": "tiles",
+   "x": 35,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_4": {
+   "sheet": "tiles",
+   "x": 52,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_5": {
+   "sheet": "tiles",
+   "x": 69,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_6": {
+   "sheet": "tiles",
+   "x": 86,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_7": {
+   "sheet": "tiles",
+   "x": 103,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_8": {
+   "sheet": "tiles",
+   "x": 120,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "wall_9": {
+   "sheet": "tiles",
+   "x": 137,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  }
+ }
+}

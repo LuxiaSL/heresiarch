@@ -70,7 +70,47 @@ if (p.phase !== "SETUP") throw new Error(`expected SETUP, got ${p.phase}`);
 
 p = act("new_run", { name: "WasmSpike", job_id: "einherjar", seed: 42 });
 p = act("enter_zone", { zone_id: p.zone_select.zones[0].id });
-p = act("fight");
+if (!p.dungeon) throw new Error("dungeon mode: expected a floor payload");
+
+// -- dungeon floor: per-turn latency, then explore until contact --------
+const timeIt = (fn, n) => {
+  const t = performance.now();
+  for (let i = 0; i < n; i++) fn();
+  return (performance.now() - t) / n;
+};
+// wait_turn can trigger an ambush, so time on a copy-safe read first
+const readMs = timeIt(() => call("/api/state"), 20);
+mark(`state read: ${readMs.toFixed(1)} ms/call`);
+
+const frontier = (d) => {
+  let best = null;
+  for (let y = 0; y < d.height; y++) for (let x = 0; x < d.width; x++) {
+    if (!".>".includes(d.tiles[y][x])) continue;
+    const near = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx, dy]) => (d.tiles[y + dy] || "")[x + dx] === " ");
+    const dist = Math.abs(x - d.player_x) + Math.abs(y - d.player_y);
+    if (near && dist && (!best || dist < best[0])) best = [dist, x, y];
+  }
+  return best;
+};
+let turns = 0, turnMs = 0, travels = 0;
+while (p.phase === "IN_ZONE" && travels < 200) {
+  const d = p.dungeon;
+  const foes = d.entities.filter((e) => e.kind !== "ITEM");
+  const before = d.turn;
+  const t = performance.now();
+  if (foes.length) p = act("travel", { x: foes[0].x, y: foes[0].y });
+  else {
+    const f = frontier(d);
+    if (!f) throw new Error("explored everything without meeting a pack");
+    p = act("travel", { x: f[1], y: f[2] });
+  }
+  const dt = performance.now() - t;
+  const after = p.dungeon ? p.dungeon.turn : before + 1;
+  turns += Math.max(1, after - before); turnMs += dt; travels += 1;
+}
+const perTurn = turnMs / Math.max(1, turns);
+mark(`floor: ${travels} travels, ${turns} turns, ${perTurn.toFixed(1)} ms/turn incl. payload → ${p.phase}`);
+if (p.phase !== "COMBAT") throw new Error(`expected contact → COMBAT, got ${p.phase}`);
 
 let rounds = 0;
 let events = 0;

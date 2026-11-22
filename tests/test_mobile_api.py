@@ -18,8 +18,15 @@ from heresiarch.mobile.app import create_app
 
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
-    app = create_app(notes_path=tmp_path / "notes.json")
+    # Linear zones (the classic Fight flow) — still supported via --linear;
+    # dungeon mode has its own tests below.
+    app = create_app(notes_path=tmp_path / "notes.json", dungeon_mode=False)
     return TestClient(app)
+
+
+@pytest.fixture
+def dclient(tmp_path: Path) -> TestClient:
+    return TestClient(create_app(notes_path=tmp_path / "notes.json"))
 
 
 def _act(client: TestClient, tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -634,7 +641,7 @@ def test_battle_record_survives_pwa_relaunch(tmp_path: Path) -> None:
     from heresiarch.engine.replay import find_matching_record
 
     notes = tmp_path / "notes.json"
-    first = TestClient(create_app(notes_path=notes))
+    first = TestClient(create_app(notes_path=notes, dungeon_mode=False))
     _act(first, "new_run", {"name": "Grinder", "job_id": "einherjar", "seed": 42})
     _act(first, "enter_zone", {"zone_id": "zone_01"})
     _act(first, "fight")
@@ -647,7 +654,7 @@ def test_battle_record_survives_pwa_relaunch(tmp_path: Path) -> None:
     assert won.result == "victory" and won.rounds, "pre-save record malformed"
 
     # App relaunch: fresh session over the same storage
-    second = TestClient(create_app(notes_path=notes))
+    second = TestClient(create_app(notes_path=notes, dungeon_mode=False))
     payload = _act(second, "load_run", {"slot": "autosave"})
     assert payload["error"] is None, payload["error"]
 
@@ -674,7 +681,7 @@ def test_auto_start_offered_after_reload_at_low_hp(tmp_path: Path) -> None:
     from heresiarch.engine.models.battle_record import BattleRecord
 
     notes = tmp_path / "notes.json"
-    first = TestClient(create_app(notes_path=notes))
+    first = TestClient(create_app(notes_path=notes, dungeon_mode=False))
     _act(first, "new_run", {"name": "Worn", "job_id": "einherjar", "seed": 42})
     _act(first, "enter_zone", {"zone_id": "zone_01"})
     _act(first, "fight")
@@ -698,7 +705,7 @@ def test_auto_start_offered_after_reload_at_low_hp(tmp_path: Path) -> None:
 
     # Relaunch + load + fight; graft the won record onto this encounter's
     # enemy group (same pattern as the auto-battle replay test above)
-    second = TestClient(create_app(notes_path=notes))
+    second = TestClient(create_app(notes_path=notes, dungeon_mode=False))
     payload = _act(second, "load_run", {"slot": "autosave"})
     assert payload["error"] is None, payload["error"]
     payload = _act(second, "fight")
@@ -742,12 +749,12 @@ def test_town_view_has_priced_shop(client: TestClient) -> None:
 def test_title_saves_list_and_load(tmp_path: Path) -> None:
     """Autosaves show up in the title-screen browser and load from it."""
     notes = tmp_path / "notes.json"
-    first = TestClient(create_app(notes_path=notes))
+    first = TestClient(create_app(notes_path=notes, dungeon_mode=False))
     payload = _act(first, "new_run", {"name": "Keeper", "job_id": "einherjar", "seed": 9})
     assert payload["phase"] == "ZONE_SELECT"  # new_run autosaved
 
     # Fresh session over the same storage = app relaunch
-    second = TestClient(create_app(notes_path=notes))
+    second = TestClient(create_app(notes_path=notes, dungeon_mode=False))
     payload = second.get("/api/state").json()
     assert payload["phase"] == "SETUP"
     slots = {s["slot"]: s for s in payload["saves"]}
@@ -770,7 +777,7 @@ def test_missing_save_reports_in_text(client: TestClient) -> None:
 
 def test_export_import_round_trip(tmp_path: Path) -> None:
     """Export from one device, import on another, keep playing."""
-    src = TestClient(create_app(notes_path=tmp_path / "src" / "notes.json"))
+    src = TestClient(create_app(notes_path=tmp_path / "src" / "notes.json", dungeon_mode=False))
     _act(src, "new_run", {"name": "Traveler", "job_id": "berserker", "seed": 11})
     res = src.post("/api/export_save", json={"slot": "autosave"})
     assert res.status_code == 200
@@ -778,7 +785,7 @@ def test_export_import_round_trip(tmp_path: Path) -> None:
     assert exported["ok"], exported
     assert exported["data"]["run"]
 
-    dst = TestClient(create_app(notes_path=tmp_path / "dst" / "notes.json"))
+    dst = TestClient(create_app(notes_path=tmp_path / "dst" / "notes.json", dungeon_mode=False))
     res = dst.post(
         "/api/import_save", json={"slot": "autosave", "data": exported["data"]},
     )
@@ -807,3 +814,77 @@ def test_import_rejects_garbage(client: TestClient) -> None:
     res = client.post("/api/export_save", json={"slot": "../secrets"})
     exported = res.json()
     assert exported["ok"] is False
+
+
+# ----------------------------------------------------------------------
+# Dungeon mode (the default)
+# ----------------------------------------------------------------------
+
+
+def test_dungeon_floor_payload_and_walk(dclient: TestClient) -> None:
+    p = _act(dclient, "new_run", {"name": "D", "job_id": "einherjar", "seed": 9})
+    p = _act(dclient, "enter_zone", {"zone_id": "zone_01"})
+    assert p["error"] is None, p["error"]
+    d = p["dungeon"]
+    assert d is not None and p["map"] is None  # floor replaces the path map
+    assert d["floor_number"] == 1 and d["total_floors"] >= 1
+    assert len(d["tiles"]) == d["height"] and len(d["tiles"][0]) == d["width"]
+    # Unexplored tiles are masked, the hero's own tile is not
+    assert d["tiles"][d["player_y"]][d["player_x"]] in ".>"
+    assert any(" " in row for row in d["tiles"])
+
+    turn = d["turn"]
+    p = _act(dclient, "wait_turn")
+    assert p["error"] is None
+    if p["phase"] == "IN_ZONE":
+        assert p["dungeon"]["turn"] == turn + 1
+
+    p = _act(dclient, "move", {"direction": "sideways"})
+    assert p["error"] and "direction" in p["error"]
+
+
+def test_dungeon_fight_tool_points_at_walking(dclient: TestClient) -> None:
+    _act(dclient, "new_run", {"name": "D", "job_id": "einherjar", "seed": 9})
+    _act(dclient, "enter_zone", {"zone_id": "zone_01"})
+    p = _act(dclient, "fight")
+    assert p["error"] and "walk into" in p["error"]
+
+
+def test_dungeon_contact_opens_combat_with_opening(dclient: TestClient) -> None:
+    """Travel at the first pack seen; the fight must say how it opened."""
+    _act(dclient, "new_run", {"name": "D", "job_id": "einherjar", "seed": 9})
+    p = _act(dclient, "enter_zone", {"zone_id": "zone_01"})
+    for _ in range(200):
+        if p["phase"] != "IN_ZONE":
+            break
+        d = p["dungeon"]
+        foes = [e for e in d["entities"] if e["kind"] != "ITEM"]
+        if foes:
+            p = _act(dclient, "travel", {"x": foes[0]["x"], "y": foes[0]["y"]})
+            continue
+        # walk to the nearest frontier tile
+        best = None
+        for y, row in enumerate(d["tiles"]):
+            for x, ch in enumerate(row):
+                if ch not in ".>":
+                    continue
+                near_unknown = any(
+                    0 <= y + dy < d["height"] and 0 <= x + dx < d["width"]
+                    and d["tiles"][y + dy][x + dx] == " "
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                )
+                dist = abs(x - d["player_x"]) + abs(y - d["player_y"])
+                if near_unknown and dist and (best is None or dist < best[0]):
+                    best = (dist, x, y)
+        assert best is not None, "explored everything without meeting a pack"
+        p = _act(dclient, "travel", {"x": best[1], "y": best[2]})
+    assert p["phase"] == "COMBAT", p.get("error")
+    combat = p["combat"]
+    assert combat["opening"] in ("first_strike", "ambush")
+    assert combat["opening_text"]
+    assert all(e["sprite"] for e in combat["enemies"])
+
+
+def test_sprites_route_guards_traversal(dclient: TestClient) -> None:
+    assert dclient.get("/sprites/..%2Fapp.py").status_code == 404
+    assert dclient.get("/sprites/nope.png").status_code == 404

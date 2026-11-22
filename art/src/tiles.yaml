@@ -1,0 +1,341 @@
+# Dungeon terrain, Shinto region: warm stone path floors, cedar-canopy wall
+# tops over a stone (ishigaki) embankment face. 3/4 top-down view.
+sheet: tiles
+defaults:
+  palette: shrine
+  ax: 8
+  ay: 16
+
+sprites:
+  # ------------------------------------------------------------- floors
+  floor_0:
+    grid: |
+      2222222222222222
+      2222222212222222
+      2232222222222222
+      2222222222222322
+      2222212222222222
+      2222222222222222
+      2222222222322222
+      2122222222222222
+      2222222222222212
+      2222232222222222
+      2222222222222222
+      2222222221222222
+      2232222222222222
+      2222222222223222
+      2222222122222222
+      2222222222222222
+  floor_1:
+    grid: |
+      2222222222222222
+      2222222212222222
+      2232222222222222
+      2222222222222222
+      222pq22222222222
+      22pqq32222222222
+      2223322222222222
+      2222222222pq2222
+      2222222222q32222
+      2222232222222222
+      2222222222222222
+      22222222222pqq22
+      2232222222qqqr32
+      2222222222233322
+      2222222122222222
+      2222222222222222
+  floor_2:
+    grid: |
+      2222222222222222
+      2222222222222222
+      2232222222222222
+      22222m2m22222222
+      2222nmnmn2222222
+      222onnnno2222222
+      2222oooo22222222
+      2222222222222322
+      2222222222222222
+      2222212222222222
+      22222222222m2222
+      2222222222mnm222
+      2232222222onno22
+      222222222222o222
+      2222222222222222
+      2222222222222222
+  floor_3:
+    grid: |
+      2222222222222222
+      2222222222212222
+      2232222222222222
+      2222222222222222
+      2222222222222222
+      22222pppq2222222
+      2222pqqqqr222222
+      2222qqqqrr322222
+      22222rrr33222222
+      2222222222222222
+      2222222222222222
+      2222222222232222
+      2212222222222222
+      2222222222222222
+      2222222322222222
+      2222222222222222
+  corridor_0:
+    from: floor_0
+    recolor: {"1": "2"}
+  corridor_1:
+    from: floor_1
+    recolor: {"1": "2"}
+  void:
+    grid: |
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+
+  # ------------------------------------------------------------- wall parts
+  wall_top:
+    export: false
+    grid: |
+      eeaabbeeeeaabbee
+      eaabbbbeeaabbbbe
+      abbbbbbcabbbbbbc
+      bbbbbbccbbbbbbcc
+      bbbbbccdbbbbbccd
+      cbbbccddcbbbccdd
+      eccdddeeeccdddee
+      eeddeeeeeeddeeee
+      bbeeeeaabbeeeeaa
+      bbbeeaabbbbeeaab
+      bbbcabbbbbbcabbb
+      bbccbbbbbbccbbbb
+      bccdbbbbbccdbbbb
+      ccddcbbbccddcbbb
+      ddeeeccdddeeeccd
+      eeeeeeddeeeeeedd
+  wall_face:
+    export: false
+    grid: |
+      KKKKKKKKKKKKKKKK
+      zzzzzzzzzzzzzzzz
+      wnnwwzwwwwwwzwww
+      xxxxyzwxxxxyzwxx
+      yyyyyzyyyyyyzyyy
+      zzzzzzzzzzzzzzzz
+      wwzwwwwwwzwwwmnw
+      xyzwxxxxyzwxxxxx
+      yyzyyyyyyzyyyyyy
+      zzzzzzzzzzzzzzzz
+      KKKKKKKKKKKKKKKK
+  wall_edge_n:
+    export: false
+    grid: |
+      KKKKKKKKKKKKKKKK
+      aa.aaa..aaa.aaa.
+  wall_edge_e:
+    export: false
+    grid: |
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+  wall_edge_w:
+    export: false
+    grid: |
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+
+  # ------------------------------------------------------------- features
+  stairs_part:
+    export: false
+    grid: |
+      KKKKKKKKKKKKKKKK
+      KAABAABAABAABAAK
+      KKPKKKKKKKKKKPKK
+      .KPVVVVVVVVVVPK.
+      .KzVVVVVVVVVVzK.
+      .KzyyyyyyyyyyzK.
+      .KzzzzzzzzzzzzK.
+      .KzrrrrrrrrrrzK.
+      .KzyyyyyyyyyyzK.
+      .KzqqqqqqqqqqzK.
+      .KzrrrrrrrrrrzK.
+      .KzppppppppppzK.
+      KwwwwwwwwwwwwwwK
+      KxxxxxxxxxxxxxxK
+      KKKKKKKKKKKKKKKK
+      ................
+  stairs_down:
+    layers:
+      - sprite: floor_0
+      - sprite: stairs_part
+  torii_part:
+    export: false
+    grid: |
+      KKKKKKKKKKKKKKKK
+      KUUUUUUUUUUUUUUK
+      KKRRRRRRRRRRRRKK
+      ..KRSK....KRSK..
+      .KKKKKKKKKKKKKK.
+      .KRSSSSSSSSSSTK.
+      .KKRSKKKKKKRSKK.
+      ..KRSKGPPGKRSK..
+      ..KRSKGGGGKRSK..
+      ..KRSK1GG1KRSK..
+      ..KRSK.11.KRSK..
+      ..KRSK....KRSK..
+      ..KRTK....KRTK..
+      ..KTTK....KTTK..
+      .KzzzzK..KzzzzK.
+      .KKKKKK..KKKKKK.
+  exit_torii:
+    layers:
+      - sprite: floor_3
+      - sprite: torii_part
+
+  # ------------------------------------------------------------- decor
+  decor_lantern:
+    grid: |
+      ................
+      ......KKKK......
+      .....KwwxxK.....
+      ...KKwwwxxyKK...
+      ..KwwwwxxxyyzK..
+      ..KKKKKKKKKKKK..
+      ....KxGGGGyK....
+      ....KxGPPGyK....
+      ....KxGGGGyK....
+      ...KKKKKKKKKK...
+      .....KwxxyK.....
+      .....KwxxyK.....
+      .....KwxxyK.....
+      ....KwwxxyyK....
+      ...KKKKKKKKKK...
+      ....ssssssss....
+  decor_bamboo:
+    grid: |
+      .KmnK...........
+      .KmnK.......KK..
+      .KmnK......KmnK.
+      .KmnK..KK..KmnK.
+      .KmnK.KmnK.KmnK.
+      .KooK.KmnK.KmnK.
+      .KmnK.KmnK.KooK.
+      .KmnK.KmnK.KmnK.
+      .KmnK.KooK.KmnK.
+      .KmnK.KmnK.KmnK.
+      .KmnK.KmnK.KmnK.
+      .KooK.KmnK.KmnK.
+      .KmnK.KmnK.KooK.
+      .KmnK.KmnK.KmnK.
+      .KmnK.KooK.KmnK.
+      .sssssssssssss..
+  decor_grass_0:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ......m.........
+      .....nm.m.......
+      ....onnmn.......
+      .....oono.......
+      ................
+      ................
+  decor_grass_1:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      .........m......
+      ........mn......
+      ..m....nnm.m....
+      .nmn...onnmn....
+      .onno...ooo.....
+      ................
+      ................
+      ................
+      ................
+  decor_grass_2:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ...........S....
+      ....m.....SRS...
+      ...nmn.....S.m..
+      ...onn.......nn.
+      ....o........oo.
+      ................
+
+autotile:
+  - prefix: wall_
+    base: wall_top
+    palette: shrine
+    order: [4, 1, 2, 8]
+    bits:
+      4:
+        - sprite: wall_face
+          at: [0, 5]
+      1:
+        - sprite: wall_edge_n
+      2:
+        - sprite: wall_edge_e
+          at: [14, 0]
+      8:
+        - sprite: wall_edge_w
