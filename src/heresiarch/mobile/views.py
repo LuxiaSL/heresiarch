@@ -103,6 +103,7 @@ class CombatantView(BaseModel):
     id: str
     name: str
     is_player: bool
+    sprite: str = ""  # enemy template id (battle sprite key); "" for players
     hp: int
     max_hp: int
     level: int = 1
@@ -135,6 +136,10 @@ class CombatEventView(BaseModel):
 
 class CombatView(BaseModel):
     round_number: int
+    # How the fight opened on the map (dungeon mode): "first_strike" /
+    # "ambush" / "" plus a one-line description. Shown before round 1.
+    opening: str = ""
+    opening_text: str = ""
     players: list[CombatantView] = Field(default_factory=list)
     enemies: list[CombatantView] = Field(default_factory=list)
     consumables: list[ItemView] = Field(default_factory=list)
@@ -305,6 +310,45 @@ class SaveTransfer(BaseModel):
     error: str | None = None
 
 
+class DungeonEntityView(BaseModel):
+    """Something visible on the floor."""
+
+    id: str
+    kind: str                 # PACK / BOSS / ITEM
+    x: int
+    y: int
+    sprite: str               # enemy template id (lead) or item id
+    label: str = ""
+    count: int = 1            # enemies in the pack
+    level_hint: str = ""      # e.g. "Lv1-2" from the zone/encounter range
+    alerted: bool = False
+
+
+class DungeonView(BaseModel):
+    """The live floor (dungeon mode, IN_ZONE)."""
+
+    zone_id: str
+    zone_name: str
+    floor_number: int
+    total_floors: int = 0     # 0 = unbounded (overstay / endless)
+    turn: int = 0
+    width: int
+    height: int
+    tiles: list[str]          # unexplored tiles are ' '
+    player_x: int
+    player_y: int
+    facing: str = "S"
+    party_jobs: list[str] = Field(default_factory=list)  # active roster, MC first
+    entities: list[DungeonEntityView] = Field(default_factory=list)
+    trail: list[list[int]] = Field(default_factory=list)  # [[x, y], ...] last action
+    messages: list[str] = Field(default_factory=list)
+    outcome: str = ""         # last StepOutcome
+    on_stairs: bool = False
+    on_exit: bool = False
+    is_cleared: bool = False
+    overstay_battles: int = 0
+
+
 class StatePayload(BaseModel):
     """Everything the phone UI needs to render one screen."""
 
@@ -321,6 +365,7 @@ class StatePayload(BaseModel):
     recruit: RecruitView | None = None
     recap: RecapView | None = None
     map: MapVM | None = None
+    dungeon: DungeonView | None = None
     # Last processed round, for paced playback: verbose events (per-type
     # delays), one-line-per-turn summary, and HP at round start so bars
     # can animate down event-by-event. Present in COMBAT and on the
@@ -611,9 +656,16 @@ def _combatant_view(
     if c.is_player and c.is_alive and slowest_enemy_spd > 0:
         speed_bonus = calculate_speed_bonus(c.effective_stats.SPD, slowest_enemy_spd)
 
+    sprite = ""
+    if not c.is_player:
+        # Combat ids are "{template_id}_{n}" (CombatEngine.initialize_combat)
+        base = c.id.rsplit("_", 1)[0]
+        if base in game_data.enemies:
+            sprite = base
     return CombatantView(
         id=c.id,
         name=name,
+        sprite=sprite,
         is_player=c.is_player,
         hp=c.current_hp,
         max_hp=c.max_hp,
@@ -681,8 +733,11 @@ def build_combat_view(session: GameSession) -> CombatView | None:
         auto_halt = "party HP below 50%"
 
     names = _combatant_names(session)
+    opening, opening_text = session.combat_opening
     return CombatView(
         round_number=combat.round_number,
+        opening=opening,
+        opening_text=opening_text,
         players=[
             _combatant_view(c, session, names, slowest_enemy_spd=slowest)
             for c in combat.player_combatants
@@ -947,11 +1002,97 @@ def build_map_view(session: GameSession) -> MapVM | None:
         case Phase.ZONE_SELECT:
             return build_region_map_vm(run, session.game_data, gl)
         case Phase.IN_ZONE:
+            if session.dungeon_mode:
+                return None  # the floor replaces the zone path map
             return build_zone_map_vm(run, session.game_data)
         case Phase.IN_TOWN:
             return build_town_map_vm(run, session.game_data)
         case _:
             return None
+
+
+def build_dungeon_view(session: GameSession) -> DungeonView | None:
+    """The explored floor + visible entities, when in dungeon mode."""
+    from heresiarch.agent.session import Phase
+    from heresiarch.engine.dungeon.models import EntityKind
+    from heresiarch.engine.dungeon.rules import pack_label, visible_entities
+
+    run = session.run
+    if (
+        run is None
+        or not session.dungeon_mode
+        or session.phase != Phase.IN_ZONE
+        or run.zone_state is None
+        or run.zone_state.floor is None
+        or run.current_zone_id is None
+    ):
+        return None
+    zs = run.zone_state
+    floor = zs.floor
+    zone = session.game_data.zones.get(run.current_zone_id)
+
+    tiles = [
+        "".join(
+            floor.tiles[y][x] if floor.is_explored(x, y) else " "
+            for x in range(floor.width)
+        )
+        for y in range(floor.height)
+    ]
+
+    entities: list[DungeonEntityView] = []
+    for e in visible_entities(floor):
+        if e.kind == EntityKind.ITEM:
+            item = session.game_data.items.get(e.item_id or "")
+            entities.append(DungeonEntityView(
+                id=e.id, kind=e.kind.value, x=e.x, y=e.y,
+                sprite=e.item_id or "", label=item.name if item else (e.item_id or ""),
+            ))
+            continue
+        hint = ""
+        if zone is not None and e.encounter_index is not None:
+            enc = zone.encounters[e.encounter_index]
+            if enc.enemy_level_override is not None:
+                hint = f"Lv{enc.enemy_level_override}"
+            else:
+                lo, hi = enc.enemy_level_range or zone.enemy_level_range
+                if lo > 0:
+                    hint = f"Lv{lo}" if lo == hi else f"Lv{lo}-{hi}"
+        entities.append(DungeonEntityView(
+            id=e.id, kind=e.kind.value, x=e.x, y=e.y,
+            sprite=e.enemy_template_ids[0] if e.enemy_template_ids else "",
+            label=pack_label(e), count=max(1, len(e.enemy_template_ids)),
+            level_hint=hint, alerted=e.alerted,
+        ))
+
+    party = run.party
+    jobs = [
+        party.characters[cid].job_id
+        for cid in party.active if cid in party.characters
+    ]
+    step = session.last_step
+    tile = floor.tile(floor.player_x, floor.player_y)
+    return DungeonView(
+        zone_id=run.current_zone_id,
+        zone_name=zone.name if zone else run.current_zone_id,
+        floor_number=floor.floor_number,
+        total_floors=floor.total_floors,
+        turn=floor.turn,
+        width=floor.width,
+        height=floor.height,
+        tiles=tiles,
+        player_x=floor.player_x,
+        player_y=floor.player_y,
+        facing=floor.facing.value,
+        party_jobs=jobs,
+        entities=entities,
+        trail=[[x, y] for x, y in session.last_trail],
+        messages=list(step.messages) if step else [],
+        outcome=step.outcome.value if step else "",
+        on_stairs=tile == ">",
+        on_exit=tile == "X",
+        is_cleared=zs.is_cleared,
+        overstay_battles=zs.overstay_battles,
+    )
 
 
 def build_saves_view(session: GameSession) -> list[SaveSlotView]:
@@ -1025,6 +1166,7 @@ def build_state_payload(
         recruit=_safe(build_recruit_view),
         recap=_safe(build_recap_view),
         map=_safe(build_map_view),
+        dungeon=_safe(build_dungeon_view),
         events=_safe(build_round_events, default=[]),
         events_summary=_safe(build_round_events_summary, default=[]),
         hp_start=_safe(build_hp_start, default={}),

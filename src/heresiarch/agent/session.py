@@ -65,6 +65,23 @@ def _parse_direction(raw: str) -> Direction:
         ) from e
 
 
+def _opening_for(
+    initiative: Initiative | None, step: StepResult | None,
+) -> tuple[str, str]:
+    """Describe how a dungeon fight began, for the battle screen."""
+    from heresiarch.engine.formulas import DUNGEON_FIRST_STRIKE_AP
+
+    if initiative is None:
+        return ("", "")
+    joined = ""
+    if step is not None and len(step.engaged_entity_ids) > 1:
+        joined = f" {len(step.engaged_entity_ids) - 1} more pack(s) piled in!"
+    if initiative == Initiative.PLAYER:
+        bonus = f" +{DUNGEON_FIRST_STRIKE_AP} AP banked." if DUNGEON_FIRST_STRIKE_AP else ""
+        return ("first_strike", f"You struck first!{bonus}{joined}")
+    return ("ambush", f"Ambushed!{joined}")
+
+
 class Phase(str, Enum):
     SETUP = "SETUP"
     ZONE_SELECT = "ZONE_SELECT"
@@ -187,6 +204,7 @@ class GameSession:
         self._engaged_entity_ids: list[str] = []
         self._last_step: StepResult | None = None
         self._last_trail: list[tuple[int, int]] = []  # player path, last action
+        self._combat_opening: tuple[str, str] = ("", "")
 
         self.phase = Phase.SETUP
         self.run: RunState | None = None
@@ -223,6 +241,11 @@ class GameSession:
     def combat_state(self) -> CombatState | None:
         """Live combat state, or None outside combat."""
         return self._combat_state
+
+    @property
+    def combat_opening(self) -> tuple[str, str]:
+        """(kind, text) for how the current fight opened on the map."""
+        return self._combat_opening
 
     @property
     def last_trail(self) -> list[tuple[int, int]]:
@@ -623,6 +646,7 @@ class GameSession:
             characters, enemies, party_gold=run.party.money
         )
         apply_initiative(self._combat_state, initiative)
+        self._combat_opening = _opening_for(initiative, self._last_step)
 
         # Map combatant IDs to template IDs (enemies are created in same order)
         self._enemy_combatant_templates = {}
