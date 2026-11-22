@@ -116,6 +116,8 @@
     }).catch(function () {});
   }
 
+  var MAP_TOOLS = {move: 1, travel: 1, wait_turn: 1, get_map: 1};
+
   window.HX_LOCAL_DISPATCH = async function (path, body) {
     await boot;
     var payload = JSON.parse(handle(path, body ? JSON.stringify(body) : ""));
@@ -128,7 +130,13 @@
       // that bounce off the title screen (failed loads, bad input)
       // must not promote this instance to a sync writer
       dirty = true;
-      schedulePersist();
+      // Map turns write no files (the floor is saved at the next
+      // autosave: combat end, stairs, zone entry) — walking must not
+      // fire an IndexedDB mirror push every 500 ms. A step that STARTS
+      // a fight leaves IN_ZONE, so it still schedules.
+      var tool = body && body.tool;
+      var mapOnly = MAP_TOOLS[tool] && payload.phase === "IN_ZONE";
+      if (!mapOnly) schedulePersist();
     }
     // Reads (/api/state, previews, exports) never trigger a sync
     return payload;
