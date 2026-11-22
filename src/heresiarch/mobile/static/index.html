@@ -136,7 +136,7 @@
   .stage { position: relative; height: 150px; border-radius: 10px; overflow: hidden;
     border: 2px solid #2c2c3a; margin: 6px 0 4px; background: #1d2a1f;
     image-rendering: pixelated; }
-  .stage .foes { position: absolute; left: 0; right: 0; bottom: 14px; display: flex;
+  .stage .foes { position: absolute; left: 0; right: 0; bottom: 9%; display: flex;
     justify-content: center; align-items: flex-end; gap: 6px; }
   .stage .foe { display: flex; flex-direction: column; align-items: center; transition: opacity .3s; }
   .stage .foe.dead { opacity: .15; filter: grayscale(1); }
@@ -1379,8 +1379,12 @@ function dgDrawTile(ctx, v, x, y, px, py) {
   if (c === "#") {
     const mask = (dgWalk(v, x, y - 1) ? 1 : 0) | (dgWalk(v, x + 1, y) ? 2 : 0)
                | (dgWalk(v, x, y + 1) ? 4 : 0) | (dgWalk(v, x - 1, y) ? 8 : 0);
+    // art/README: rock touching floor in ANY of 8 neighbours is a wall
+    // (diagonal-only = wall_0, plain canopy); fully enclosed rock = void
+    const diag = dgWalk(v, x - 1, y - 1) || dgWalk(v, x + 1, y - 1)
+              || dgWalk(v, x - 1, y + 1) || dgWalk(v, x + 1, y + 1);
     if (art) {
-      const f = mask ? frame("wall_" + mask) : firstFrame("void", "wall_0");
+      const f = (mask || diag) ? frame("wall_" + mask) : frame("void");
       if (f && blit(ctx, f, px + (f.ax ?? 8), py + (f.ay ?? 16))) return;
     }
     if (!mask) { ctx.fillStyle = PH.void; ctx.fillRect(px, py, TILE, TILE); return; }
@@ -1436,7 +1440,7 @@ function dgDrawHero(ctx, job, px, py, facing, walkFrame) {
   if (eye !== -1) ctx.fillRect(px + 7 + eye, py + 6, 2, 2);
 }
 function dgDrawEntity(ctx, e, px, py, now) {
-  const bounce = Math.floor(now / 380 + dgHash(e.x, e.id.length) % 2) % 2;
+  const bounce = Math.floor(now / 200 + (e.id.length % 2)) % 2;  // ~2.5 Hz
   if (e.kind === "ITEM") {
     const f = DG.atlasState === "ready" && firstFrame("ui_item_bag");
     if (f && blit(ctx, f, px + 8, py + 16)) return;
@@ -1503,7 +1507,8 @@ function dgDraw(now) {
     const fdir = prev[0] > h[0] ? "E" : prev[0] < h[0] ? "W" : prev[1] < h[1] ? "N" : "S";
     sprites.push({y: h[1] - 0.01, draw: () => dgDrawHero(ctx, jobs[i], h[0] * TILE - camX, h[1] * TILE - camY, fdir, 0)});
   }
-  const walkF = hero.moving ? 1 + (hero.step % 2) : 0;
+  // Walk cycle 0,1,0,2 — two phases per tile so each step shows a stride
+  const walkF = hero.moving ? [1, 0, 2, 0][Math.floor(Math.max(0, now - DG.anim.t0) / (STEP_MS / 2)) % 4] : 0;
   sprites.push({y: hero.y, draw: () => dgDrawHero(ctx, jobs[0] || "default",
     Math.round(hero.x * TILE - camX), Math.round(hero.y * TILE - camY), v.facing, walkF)});
   sprites.sort((a, b) => a.y - b.y).forEach(s => s.draw());
@@ -1627,14 +1632,17 @@ function battleStage() {
   dgLoadAtlas();
   const c = S.combat;
   if (!c || DG.atlasState !== "ready") return "";
+  // The stage IS the backdrop frame, scaled to the app width (5:3)
   const bg = frame("bg_shrine_path");
+  const appW = Math.max(200, (document.getElementById("app")?.clientWidth || 360) - 4);
   let bgStyle = "";
   if (bg && DG.sheets[bg.sheet]) {
     const img = DG.sheets[bg.sheet];
-    const k = 3;
-    bgStyle = `background-image:url('sprites/${esc(DG.atlas.sheets[bg.sheet])}');
+    const k = appW / bg.w;
+    bgStyle = `height:${Math.round(bg.h * k)}px;
+      background-image:url('sprites/${esc(DG.atlas.sheets[bg.sheet])}');
       background-size:${img.naturalWidth * k}px ${img.naturalHeight * k}px;
-      background-position:-${bg.x * k}px calc(100% + ${(img.naturalHeight - bg.y - bg.h) * k}px);
+      background-position:-${bg.x * k}px -${bg.y * k}px;
       background-repeat:no-repeat;`;
   }
   const n = c.enemies.length;
