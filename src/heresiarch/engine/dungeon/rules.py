@@ -173,8 +173,11 @@ def _blocked_for_pack(floor: FloorState, x: int, y: int, mover: MapEntity) -> bo
 
 
 def merge_joiners(floor: FloorState, engaged: MapEntity) -> list[str]:
-    """Alerted packs adjacent to the fight pile in. Bosses fight alone."""
-    if engaged.kind == EntityKind.BOSS:
+    """Alerted packs adjacent to the fight pile in. Bosses fight alone.
+
+    Off at DUNGEON_MERGE_RADIUS = 0 (the default): fights are sequential.
+    """
+    if engaged.kind == EntityKind.BOSS or DUNGEON_MERGE_RADIUS <= 0:
         return []
     out = []
     for e in sorted(floor.entities, key=lambda e: e.id):
@@ -304,6 +307,15 @@ def _pack_label(e: MapEntity) -> str:
     lead = e.enemy_template_ids[0].replace("_", " ").title()
     extra = len(e.enemy_template_ids) - 1
     return f"{lead} +{extra}" if extra else lead
+
+
+def adjacent_threats(floor: FloorState) -> list[MapEntity]:
+    """Alerted packs right next to the player (the next fight in a chain)."""
+    return [
+        e for e in floor.entities
+        if e.kind in _ENEMY_KINDS and e.alerted
+        and chebyshev(e.x, e.y, floor.player_x, floor.player_y) == 1
+    ]
 
 
 def pack_label(e: MapEntity) -> str:

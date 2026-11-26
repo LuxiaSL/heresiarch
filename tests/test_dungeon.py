@@ -176,15 +176,63 @@ def test_chasing_pack_closes_distance() -> None:
     assert pack.x == 5
 
 
-def test_adjacent_alerted_packs_merge_into_fight() -> None:
+def _two_adjacent_packs() -> tuple[FloorState, MapEntity, MapEntity]:
     a = MapEntity(id="pack1", kind=EntityKind.PACK, x=3, y=1, alerted=True,
                   encounter_index=0, enemy_template_ids=["slime"])
     b = MapEntity(id="pack2", kind=EntityKind.PACK, x=4, y=1, alerted=True,
                   encounter_index=1, enemy_template_ids=["swime"])
-    floor = _tiny_floor(["#######", "#.@...#", "#######"], [a, b])
+    return _tiny_floor(["#######", "#.@...#", "#######"], [a, b]), a, b
+
+
+def test_fights_are_sequential_by_default() -> None:
+    floor, _, b = _two_adjacent_packs()
     res = take_turn(floor, Direction.E, random.Random(0))
     assert res.outcome == StepOutcome.CONTACT
+    assert res.engaged_entity_ids == ["pack1"]  # pack2 waits its turn
+    assert b in floor.entities
+
+
+def test_merge_knob_still_piles_packs_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    from heresiarch.engine.dungeon import rules
+
+    monkeypatch.setattr(rules, "DUNGEON_MERGE_RADIUS", 1)
+    floor, _, _ = _two_adjacent_packs()
+    res = take_turn(floor, Direction.E, random.Random(0))
     assert res.engaged_entity_ids == ["pack1", "pack2"]
+
+
+def test_chain_fight_leaves_next_pack_beside_you(dsession: GameSession) -> None:
+    """Win fight 1 → back on the map, pack 2 still adjacent, a warning
+    says so, and bumping it is a first strike."""
+    s = dsession
+    s.enter_zone("zone_01")
+    floor = _floor(s)
+    packs = [e for e in floor.entities if e.kind == EntityKind.PACK][:2]
+    assert len(packs) == 2
+    open_dirs = [
+        d for d in Direction
+        if not d.is_diagonal
+        and can_step(floor, floor.player_x, floor.player_y, d)
+        and floor.entity_at(floor.player_x + d.delta[0], floor.player_y + d.delta[1]) is None
+    ]
+    assert len(open_dirs) >= 2
+    first, second = open_dirs[:2]
+    for pack, d in ((packs[0], first), (packs[1], second)):
+        pack.x = floor.player_x + d.delta[0]
+        pack.y = floor.player_y + d.delta[1]
+        pack.alerted = True
+    s.move(first.value)
+    assert s.phase == Phase.COMBAT
+    assert len(s.combat_state.enemy_combatants) == len(packs[0].enemy_template_ids)  # type: ignore[union-attr]
+    _fight_out(s)
+    assert s.phase == Phase.IN_ZONE
+    remaining = {e.id for e in _floor(s).entities}
+    assert packs[1].id in remaining and packs[0].id not in remaining
+    assert s.last_step is not None
+    assert any("right beside you" in m for m in s.last_step.messages)
+    s.move(second.value)
+    assert s.phase == Phase.COMBAT
+    assert s.combat_opening[0] == "first_strike"
 
 
 def test_bosses_never_merge_or_move() -> None:

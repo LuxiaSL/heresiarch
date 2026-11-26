@@ -1300,8 +1300,32 @@ class GameSession:
             )
 
         self.phase = Phase.IN_ZONE
-        self._last_step = None
+        self._last_step = self._chain_warning()
         return self._zone_view_text()
+
+    def _chain_warning(self) -> StepResult | None:
+        """Back on the map after a fight with another pack beside you:
+        say so — the pacing is the player's call (bump / heal / flee)."""
+        run = self.run
+        if (
+            not self.dungeon_mode or run is None or run.zone_state is None
+            or run.zone_state.floor is None
+        ):
+            return None
+        from heresiarch.engine.dungeon.rules import adjacent_threats, pack_label
+
+        threats = adjacent_threats(run.zone_state.floor)
+        if not threats:
+            return None
+        names = ", ".join(pack_label(e) for e in threats)
+        return StepResult(
+            outcome=StepOutcome.WAITED,
+            turn_spent=False,
+            messages=[
+                f"{names} is right beside you — strike first, heal, "
+                "or flee. Wait and it ambushes."
+            ],
+        )
 
     def _should_offer_recruitment(self) -> bool:
         """Check if a recruitment event should trigger."""
@@ -1402,7 +1426,8 @@ class GameSession:
 
         self._current_candidate = None
         self.phase = Phase.IN_ZONE
-        return result + S.summarize_zone_status(self.run, self.game_data)
+        self._last_step = self._chain_warning()
+        return result + self._zone_view_text()
 
     # ------------------------------------------------------------------
     # Party Management

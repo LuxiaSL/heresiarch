@@ -566,7 +566,11 @@ DUNGEON_ENDLESS_PACKS_PER_FLOOR: int = 4   # packs on an endless-zone floor
 DUNGEON_SIGHT_RADIUS: int = 2           # corridor sight (Chebyshev); rooms are fully lit
 DUNGEON_LOSE_TRACK_RADIUS: int = 7      # chasing packs give up beyond this distance
 DUNGEON_WANDER_CHANCE: float = 0.5      # unalerted pack moves this turn with this chance
-DUNGEON_MERGE_RADIUS: int = 1           # alerted packs this close to a fight join it
+# 0 = sequential (designer 2026-11-25: merged mega-fights get unfair
+# fast): an adjacent pack waits its turn and you choose the pacing —
+# bump it (first strike), heal, escape, or let it ambush. 1 = alerted
+# packs this close to a fight pile into one combined fight.
+DUNGEON_MERGE_RADIUS: int = 0
 DUNGEON_FIRST_STRIKE_AP: int = 1        # AP banked per party member on a first strike
 DUNGEON_AMBUSH_AP: int = -1             # ambushed: every party member starts owing AP
 DUNGEON_AMBUSH_STARTLE_ROUNDS: int = 0  # ambushed: party SPD 0 this many rounds (0 = off)
