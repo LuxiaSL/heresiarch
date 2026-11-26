@@ -387,11 +387,14 @@ def turn_rng(floor: FloorState) -> random.Random:
 # Pathing (tap-to-travel)
 # ----------------------------------------------------------------------
 
-def path_to(floor: FloorState, tx: int, ty: int) -> list[Direction] | None:
+def path_to(
+    floor: FloorState, tx: int, ty: int, avoid_enemies: bool = True,
+) -> list[Direction] | None:
     """Shortest 8-dir path over EXPLORED walkable tiles to (tx, ty).
 
-    Visible enemies block the path, except the target tile itself (walking
-    into it is an attack). None if unreachable through known ground.
+    Visible enemies block the path (unless ``avoid_enemies`` is False),
+    except the target tile itself (walking into it is an attack). None if
+    unreachable through known ground.
     """
     start = (floor.player_x, floor.player_y)
     goal = (tx, ty)
@@ -399,7 +402,7 @@ def path_to(floor: FloorState, tx: int, ty: int) -> list[Direction] | None:
         return []
     blocked = {
         (e.x, e.y) for e in visible_entities(floor)
-        if e.kind in _ENEMY_KINDS and (e.x, e.y) != goal
+        if avoid_enemies and e.kind in _ENEMY_KINDS and (e.x, e.y) != goal
     }
     prev: dict[tuple[int, int], tuple[tuple[int, int], Direction]] = {}
     seen = {start}

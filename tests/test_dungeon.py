@@ -720,3 +720,19 @@ def test_walls_block_corridor_sight() -> None:
     ], [pack])
     floor.explored = ["0" * 5 for _ in range(5)]
     assert visible_entities(floor) == []
+
+
+def test_travel_explains_a_blocking_pack(dsession: GameSession) -> None:
+    s = dsession
+    s.enter_zone("zone_01")
+    floor = _floor(s)
+    # Hand-build a 1-wide corridor with a pack plugging it
+    floor.tiles = ["#######", "#<.s..#", "#######"] + ["#######"] * (floor.height - 3)
+    floor.tiles = [row.replace("s", ".").ljust(floor.width, "#") for row in floor.tiles]
+    floor.explored = ["1" * floor.width for _ in range(floor.height)]
+    floor.rooms = []
+    floor.player_x, floor.player_y = 1, 1
+    floor.entities = [MapEntity(id="pack1", kind=EntityKind.PACK, x=3, y=1,
+                                encounter_index=0, enemy_template_ids=["fodder_slime"])]
+    with pytest.raises(AgentError, match="pack is in the way"):
+        s.travel(5, 1)

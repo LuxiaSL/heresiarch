@@ -482,7 +482,7 @@ def required_frames() -> list[str]:
     req: list[str] = []
     req += [f"floor_{i}" for i in range(4)]
     req += [f"wall_{i}" for i in range(16)]
-    req += ["void", "stairs_down", "exit_torii"]
+    req += ["void", "stairs_down", "stairs_up", "exit_torii"]
     req += [f"hero_{j}_{d}_{f}" for j in JOBS for d in DIRS for f in range(3)]
     req += [f"mob_{t}_{f}" for t in MOB_TEMPLATES for f in range(2)]
     req += [f"battle_{t}_{f}" for t in MOB_TEMPLATES for f in range(2)]

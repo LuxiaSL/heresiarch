@@ -332,7 +332,9 @@ class DungeonDirector:
             path = path_to(floor, tx, ty)
             if not path:
                 if not results:
-                    raise DungeonError("Can't find a way there (yet)")
+                    if path_to(floor, tx, ty, avoid_enemies=False):
+                        raise DungeonError("A pack is in the way.")
+                    raise DungeonError("You haven't found a way there yet.")
                 break
             seen_before = {
                 e.id for e in visible_entities(floor)

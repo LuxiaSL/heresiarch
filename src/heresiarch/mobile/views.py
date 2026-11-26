@@ -143,6 +143,7 @@ class CombatView(BaseModel):
     players: list[CombatantView] = Field(default_factory=list)
     enemies: list[CombatantView] = Field(default_factory=list)
     consumables: list[ItemView] = Field(default_factory=list)
+    escape_items: list[ItemView] = Field(default_factory=list)  # one per kind
     log_lines: list[str] = Field(default_factory=list)
     # Auto-battle: a recorded victory vs this enemy group has rounds left.
     # This ALONE decides whether the Auto button is offered (TUI parity:
@@ -345,6 +346,10 @@ class DungeonView(BaseModel):
     outcome: str = ""         # last StepOutcome
     on_stairs: bool = False
     on_exit: bool = False
+    on_entry: bool = False
+    can_retreat: bool = False  # walking out allowed from this tile
+    escape_items: list[ItemView] = Field(default_factory=list)  # one per kind
+    escape_count: int = 0
     is_cleared: bool = False
     overstay_battles: int = 0
 
@@ -749,6 +754,7 @@ def build_combat_view(session: GameSession) -> CombatView | None:
             for c in combat.enemy_combatants
         ],
         consumables=consumables,
+        escape_items=_escape_item_views(session) if session.dungeon_mode else [],
         log_lines=log_lines,
         auto_available=auto_available,
         auto_halt=auto_halt,
@@ -1013,6 +1019,29 @@ def build_map_view(session: GameSession) -> MapVM | None:
             return None
 
 
+def _escape_item_views(session: GameSession) -> list[ItemView]:
+    """One view per escape item kind held (for the Escape buttons)."""
+    run = session.run
+    if run is None:
+        return []
+    seen: dict[str, ItemView] = {}
+    for iid in run.party.stash:
+        item = _lookup_item(session, iid)
+        if item is not None and item.escape_zone and iid not in seen:
+            seen[iid] = _item_view(item, iid, game_data=session.game_data)
+    return list(seen.values())
+
+
+def _safe_can_retreat(session: GameSession) -> bool:
+    gl = session.game_loop
+    if gl is None or session.run is None:
+        return False
+    try:
+        return gl.dungeon.can_retreat(session.run)
+    except ValueError:
+        return False
+
+
 def build_dungeon_view(session: GameSession) -> DungeonView | None:
     """The explored floor + visible entities, when in dungeon mode."""
     from heresiarch.agent.session import Phase
@@ -1044,6 +1073,12 @@ def build_dungeon_view(session: GameSession) -> DungeonView | None:
     entities: list[DungeonEntityView] = []
     for e in visible_entities(floor):
         if e.kind == EntityKind.ITEM:
+            if e.gold > 0:
+                entities.append(DungeonEntityView(
+                    id=e.id, kind=e.kind.value, x=e.x, y=e.y,
+                    sprite="gold", label=f"{e.gold} gold",
+                ))
+                continue
             item = session.game_data.items.get(e.item_id or "")
             entities.append(DungeonEntityView(
                 id=e.id, kind=e.kind.value, x=e.x, y=e.y,
@@ -1092,6 +1127,13 @@ def build_dungeon_view(session: GameSession) -> DungeonView | None:
         outcome=step.outcome.value if step else "",
         on_stairs=tile == ">",
         on_exit=tile == "X",
+        on_entry=tile == "<",
+        can_retreat=_safe_can_retreat(session),
+        escape_items=_escape_item_views(session),
+        escape_count=sum(
+            1 for iid in party.stash
+            if (it := _lookup_item(session, iid)) is not None and it.escape_zone
+        ),
         is_cleared=zs.is_cleared,
         overstay_battles=zs.overstay_battles,
     )

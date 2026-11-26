@@ -230,6 +230,29 @@ sprites:
     layers:
       - sprite: floor_3
       - sprite: torii_part
+  stairs_up_part:     # the entry: steps rising away to daylight (the way out)
+    export: false
+    grid: |
+      ................
+      ....KKKKKKKK....
+      ....KPPPPPPK....
+      ...KKKKKKKKKK...
+      ...KwwwwwwwwK...
+      ...KyyyyyyyyK...
+      ..KKKKKKKKKKKK..
+      ..KwwwwwwwwwwK..
+      ..KyyyyyyyyyyK..
+      .KKKKKKKKKKKKKK.
+      .KwwwwwwwwwwwwK.
+      .KyyyyyyyyyyyyK.
+      KKKKKKKKKKKKKKKK
+      KwwwwwwwwwwwwwwK
+      KzzzzzzzzzzzzzzK
+      KKKKKKKKKKKKKKKK
+  stairs_up:
+    layers:
+      - sprite: floor_0
+      - sprite: stairs_up_part
 
   # ------------------------------------------------------------- decor
   decor_lantern:

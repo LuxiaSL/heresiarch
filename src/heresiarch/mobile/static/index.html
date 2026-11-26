@@ -129,6 +129,10 @@
   .dg-pad button { min-height: 0; padding: 0; font-size: 18px; border-radius: 12px;
     touch-action: none; user-select: none; -webkit-user-select: none; }
   .dg-pad button.wait { font-size: 13px; color: var(--dim); }
+  .dg-mm-toggle { position: absolute; top: 6px; right: 6px; z-index: 3; min-height: 0;
+    width: 34px; height: 34px; padding: 0; font-size: 15px; border-radius: 8px;
+    background: rgba(13,13,18,.72); color: var(--dim); }
+  .dg-mm-toggle.on { color: var(--gold); border-color: var(--gold); }
   .flash { position: fixed; inset: 0; z-index: 200; pointer-events: none;
     background: #fff; animation: hxflash .36s ease-out forwards; }
   @keyframes hxflash { 0% {opacity: 0} 30% {opacity: .9} 100% {opacity: 0} }
@@ -1114,6 +1118,10 @@ function screenCombat() {
     ${log}
     <div class="section">YOUR MOVE</div>
     ${livingPlayers().map(decisionCard).join("")}
+    ${(c.escape_items || []).length && !ui.pb ? `<div class="card small">${c.escape_items.map(it =>
+      confirmRow(`escape:${it.id}`, `🜁 Flee with ${esc(it.name)}`, "dg-escape", `data-id="${esc(it.id)}"`,
+        "Tear it — abandon the fight")).join(" ")}
+      <div class="dim" style="margin-top:4px">Damage taken stays taken. No XP, no loot.</div></div>` : ""}
     <div class="sticky-bottom">${bottom}</div>`;
 }
 function finalRoundLog() {
@@ -1231,7 +1239,7 @@ function screenVictory() {
 // placeholder renderer draws readable colored tiles instead.
 const TILE = 16, VW = 11, VH = 11;   // viewport in tiles (odd = centered hero)
 const STEP_MS = 85;                  // walk tween per tile
-const WALKABLE = new Set([".", ">", "X"]);
+const WALKABLE = new Set([".", ">", "X", "<"]);
 const DG = {
   canvas: null, ctx: null, raf: 0,
   atlas: null, sheets: {}, atlasState: "idle",  // idle|loading|ready|none
@@ -1241,6 +1249,7 @@ const DG = {
   ents: {},                    // id -> {fx,fy,tx,ty,t0}
   hist: [],                    // hero tile history (followers walk it)
   holdTimer: null, holdDir: null,
+  minimap: (() => { try { return localStorage.getItem("hx_minimap") !== "off"; } catch (e) { return true; } })(),
 };
 
 function dgLoadAtlas() {
@@ -1403,7 +1412,8 @@ function dgDrawTile(ctx, v, x, y, px, py) {
   if (art) {
     const f = frame("floor_" + (dgHash(x, y) & 3)) || frame("floor_0");
     if (f) blit(ctx, f, px + (f.ax ?? 8), py + (f.ay ?? 16));
-    const over = c === ">" ? frame("stairs_down") : c === "X" ? frame("exit_torii") : null;
+    const over = c === ">" ? frame("stairs_down") : c === "X" ? frame("exit_torii")
+      : c === "<" ? frame("stairs_up") : null;
     if (over) { blit(ctx, over, px + (over.ax ?? 8), py + (over.ay ?? 16)); return; }
     if (f) return;
   }
@@ -1413,6 +1423,10 @@ function dgDrawTile(ctx, v, x, y, px, py) {
     ctx.fillStyle = "#2a2418"; ctx.fillRect(px + 2, py + 2, 12, 12);
     ctx.fillStyle = PH.stairs;
     for (let i = 0; i < 4; i++) ctx.fillRect(px + 3 + i, py + 4 + i * 3, 10 - 2 * i, 2);
+  } else if (c === "<") {
+    ctx.fillStyle = "#2a2418"; ctx.fillRect(px + 2, py + 2, 12, 12);
+    ctx.fillStyle = "#9fc3ff";
+    for (let i = 0; i < 4; i++) ctx.fillRect(px + 6 - i, py + 4 + i * 3, 4 + 2 * i, 2);
   } else if (c === "X") {
     ctx.fillStyle = PH.exit;
     ctx.fillRect(px + 2, py + 3, 12, 2); ctx.fillRect(px + 4, py + 6, 8, 1);
@@ -1442,7 +1456,7 @@ function dgDrawHero(ctx, job, px, py, facing, walkFrame) {
 function dgDrawEntity(ctx, e, px, py, now) {
   const bounce = Math.floor(now / 200 + (e.id.length % 2)) % 2;  // ~2.5 Hz
   if (e.kind === "ITEM") {
-    const f = DG.atlasState === "ready" && firstFrame("ui_item_bag");
+    const f = DG.atlasState === "ready" && firstFrame(`item_${e.sprite}`, "ui_item_bag");
     if (f && blit(ctx, f, px + 8, py + 16)) return;
     ctx.fillStyle = "#101018"; ctx.fillRect(px + 4, py + 6, 8, 8);
     ctx.fillStyle = "#d4af37"; ctx.fillRect(px + 5, py + 7, 6, 6);
@@ -1512,6 +1526,48 @@ function dgDraw(now) {
   sprites.push({y: hero.y, draw: () => dgDrawHero(ctx, jobs[0] || "default",
     Math.round(hero.x * TILE - camX), Math.round(hero.y * TILE - camY), v.facing, walkF)});
   sprites.sort((a, b) => a.y - b.y).forEach(s => s.draw());
+  if (DG.minimap) dgDrawMinimap(ctx, v, now);
+}
+
+// PMD-style minimap: explored ground as pale blocks, you blinking gold,
+// sighted packs red, items cyan, stairs/entry/exit marked. Corner inset.
+const MM = 2;  // logical px per tile
+function dgDrawMinimap(ctx, v, now) {
+  // Panel = explored bounds only, so it starts tiny and grows as you map
+  let x0 = v.width, y0 = v.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < v.height; y++) {
+    const row = v.tiles[y];
+    for (let x = 0; x < v.width; x++) {
+      if (!WALKABLE.has(row[x])) continue;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < 0) return;
+  const pad = 2, ox = 4 - x0 * MM, oy = 4 - y0 * MM;
+  const pw = (x1 - x0 + 1) * MM + pad * 2, ph = (y1 - y0 + 1) * MM + pad * 2;
+  ctx.fillStyle = "rgba(6,6,12,0.72)";
+  ctx.fillRect(4 - pad, 4 - pad, pw, ph);
+  ctx.strokeStyle = "rgba(212,175,55,0.55)"; ctx.lineWidth = 1;
+  ctx.strokeRect(4 - pad - 0.5, 4 - pad - 0.5, pw + 1, ph + 1);
+  for (let y = 0; y < v.height; y++) {
+    const row = v.tiles[y];
+    for (let x = 0; x < v.width; x++) {
+      const c = row[x];
+      if (!WALKABLE.has(c)) continue;
+      ctx.fillStyle = c === ">" ? "#7fe08a" : c === "<" ? "#9fc3ff" : c === "X" ? "#ff6a55" : "rgba(214,226,255,0.55)";
+      ctx.fillRect(ox + x * MM, oy + y * MM, MM, MM);
+    }
+  }
+  for (const e of v.entities) {
+    ctx.fillStyle = e.kind === "ITEM" ? (e.sprite === "gold" ? "#ffd23f" : "#5fe3e8")
+      : e.kind === "BOSS" ? "#ff3b3b" : "#ff6a6a";
+    ctx.fillRect(ox + e.x * MM, oy + e.y * MM, MM, MM);
+  }
+  if (Math.floor(now / 350) % 2 === 0 || DG.anim) {
+    ctx.fillStyle = "#ffe14d";
+    ctx.fillRect(ox + v.player_x * MM - 1, oy + v.player_y * MM - 1, MM + 2, MM + 2);
+  }
 }
 
 // --- input ---
@@ -1579,6 +1635,7 @@ function dgMsgHtml() {
   if (v.messages && v.messages.length) return esc(v.messages[v.messages.length - 1]);
   if (v.on_stairs) return "Stairs leading down.";
   if (v.on_exit) return "The way out. The zone is yours.";
+  if (v.on_entry) return "Where you came in — you can walk out from here.";
   const seen = v.entities.filter(e => e.kind !== "ITEM");
   if (seen.length) {
     const e = seen[0];
@@ -1591,7 +1648,12 @@ function dgActionsHtml() {
   const btns = [];
   if (v.on_stairs) btns.push(`<button class="primary" data-a="dg-descend">▼ Descend</button>`);
   if (v.on_exit) btns.push(`<button class="gold" data-a="leave-zone">⛩ Leave zone</button>`);
-  btns.push(`<button class="small" data-a="leave-zone">← Retreat to map</button>`);
+  else if (v.can_retreat) btns.push(`<button class="small" data-a="leave-zone">${v.on_entry ? "⇧ Walk out" : "← Leave via stairs"}</button>`);
+  else btns.push(`<div class="dim small" style="text-align:center;padding:4px 2px">Walk back to ⇧ or ▼ to leave</div>`);
+  for (const it of v.escape_items || []) {
+    btns.push(confirmRow(`escape:${it.id}`, `🜁 ${esc(it.name)}${v.escape_count > 1 ? " ×" + v.escape_count : ""}`,
+      "dg-escape", `data-id="${esc(it.id)}"`, "Tear it — leave now"));
+  }
   return btns.join("");
 }
 function dgBelowHtml() {
@@ -1604,7 +1666,7 @@ function screenDungeon() {
   return topbar() + `
     <div class="dg-hud" id="dg-hud">${dgHudHtml()}</div>
     <div class="dg-msg" id="dg-msg">${dgMsgHtml()}</div>
-    <div class="dg-view" id="dgslot"></div>
+    <div class="dg-view" id="dgslot"><button class="dg-mm-toggle ${DG.minimap ? "on" : ""}" data-a="dg-minimap" aria-label="Minimap">▦</button></div>
     <div class="dg-controls">
       <div class="dg-actions" id="dg-actions">${dgActionsHtml()}</div>
       <div class="dg-pad">${pad}</div>
@@ -1713,6 +1775,13 @@ document.addEventListener("click", (ev) => {
     case "enter-zone": act("enter_zone", {zone_id: id}); break;
     case "leave-zone": act("leave_zone"); break;
     case "dg-descend": act("descend"); break;
+    case "dg-escape": act("escape", {item_id: id}); break;
+    case "dg-minimap": {
+      DG.minimap = !DG.minimap;
+      try { localStorage.setItem("hx_minimap", DG.minimap ? "on" : "off"); } catch (e) {}
+      el.classList.toggle("on", DG.minimap);
+      break;
+    }
     case "enter-town": act("enter_town", {town_id: id}); break;
     case "map-sel": ui.mapSel = id; render(); break;
     case "map-prev":
