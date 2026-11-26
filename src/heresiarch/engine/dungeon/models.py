@@ -189,9 +189,11 @@ class FloorLootEntry(BaseModel):
 
 
 class FloorLootTable(BaseModel):
-    """Random finds per floor: roll ``picks`` (min, max) times."""
+    """Random finds per floor: roll ``picks`` (min, max) times; each pick
+    actually lands with probability ``chance`` (rarity lever)."""
 
     picks: tuple[int, int] = (0, 0)
+    chance: float = Field(default=1.0, ge=0.0, le=1.0)
     entries: list[FloorLootEntry] = Field(default_factory=list)
 
 

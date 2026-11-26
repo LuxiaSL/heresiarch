@@ -616,7 +616,26 @@ def test_ambush_startles_party(game_data: GameData) -> None:
     assert not any(st.id == STARTLED_STATUS_ID for st in combat.player_combatants[0].active_statuses)
 
 
-def test_first_floor_guarantee_lies_in_arrival_room(dsession: GameSession) -> None:
+def _with_near_herb_guarantee(s: GameSession) -> None:
+    """Give zone_01 a floor-1 'near' herb guarantee on a COPY of the data
+    (tests the mechanism, not whatever the shipped YAML happens to hold)."""
+    from heresiarch.engine.dungeon.models import FloorGuarantee, FloorLootTable
+
+    zone = s.game_data.zones["zone_01"].model_copy(update={
+        "floor_loot": FloorLootTable(),  # no random finds: isolate the guarantee
+        "floor_guarantees": [
+            FloorGuarantee(item_id="medicinal_herb", floor=1, placement="near"),
+        ],
+    })
+    zones = dict(s.game_data.zones)
+    zones["zone_01"] = zone
+    gd = s.game_data.model_copy(update={"zones": zones})
+    s.game_data = gd
+    s.game_loop.game_data = gd  # type: ignore[union-attr]
+
+
+def test_near_guarantee_lies_in_arrival_room(dsession: GameSession) -> None:
+    _with_near_herb_guarantee(dsession)
     dsession.enter_zone("zone_01")
     floor = _floor(dsession)
     spawn_room = floor.room_index_at(floor.player_x, floor.player_y)
@@ -630,6 +649,7 @@ def test_first_floor_guarantee_lies_in_arrival_room(dsession: GameSession) -> No
 
 def test_guarantee_claimed_once_per_run(dsession: GameSession) -> None:
     s = dsession
+    _with_near_herb_guarantee(s)
     s.enter_zone("zone_01")
     herb = next(e for e in _floor(s).entities if e.guarantee_key == "0@1")
     s.travel(herb.x, herb.y)
@@ -643,13 +663,48 @@ def test_guarantee_claimed_once_per_run(dsession: GameSession) -> None:
     zs = run.zone_state
     assert zs is not None
     fresh = s.game_loop.dungeon._build_floor(  # type: ignore[union-attr]  # noqa: SLF001
-        run, game_data_zone(s, "zone_01"), zs, 1,
+        run, s.game_data.zones["zone_01"], zs, 1,
     )
     assert not any(e.guarantee_key for e in fresh.entities)
 
 
-def game_data_zone(s: GameSession, zone_id: str):  # type: ignore[no-untyped-def]
-    return s.game_data.zones[zone_id]
+def test_shipped_floor_finds_are_rare(game_data: GameData) -> None:
+    """Designer call 2026-11-25: herbs were 'wayyy too many'. Pin the
+    shipped rate: random finds across regular zones stay well under one
+    per floor (target ≈ 0.25 finds, ≈ 0.17 herbs per floor)."""
+    from heresiarch.engine.dungeon.director import DungeonDirector
+    from heresiarch.engine.game_loop import GameLoop
+    from heresiarch.engine.models.zone import ZoneState
+
+    gl = GameLoop(game_data=game_data, rng=random.Random(7))
+    run = gl.new_run("r", "Hero", "einherjar")
+    director = DungeonDirector(gl)
+    herbs = finds = floors = 0
+    for zid in ("zone_01", "zone_03", "zone_05"):
+        zone = game_data.zones[zid]
+        zs = ZoneState(template_id=zid)
+        for _ in range(400):
+            items = director._roll_items(run, zone, zs, 1)  # noqa: SLF001
+            floors += 1
+            finds += len(items)
+            herbs += sum(1 for i in items if i.item_id == "medicinal_herb")
+    assert finds / floors < 0.35
+    assert herbs / floors < 0.25
+
+
+def test_loot_chance_zero_places_nothing(game_data: GameData) -> None:
+    from heresiarch.engine.dungeon.director import DungeonDirector
+    from heresiarch.engine.dungeon.models import FloorLootEntry, FloorLootTable
+    from heresiarch.engine.game_loop import GameLoop
+    from heresiarch.engine.models.zone import ZoneState
+
+    gl = GameLoop(game_data=game_data, rng=random.Random(1))
+    run = gl.new_run("r", "Hero", "einherjar")
+    zone = game_data.zones["zone_03"].model_copy(update={"floor_loot": FloorLootTable(
+        picks=(3, 3), chance=0.0, entries=[FloorLootEntry(item_id="medicinal_herb")],
+    )})
+    items = DungeonDirector(gl)._roll_items(run, zone, ZoneState(template_id="zone_03"), 1)  # noqa: SLF001
+    assert items == []
 
 
 def test_milestone_guarantees_repeat() -> None:

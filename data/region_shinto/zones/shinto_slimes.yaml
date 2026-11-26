@@ -25,15 +25,16 @@
   # Dungeon floor finds. The shared table is anchored here and reused by
   # every later zone (*shinto_floor_loot). gold rows are supported but
   # weighted 0 (off) until the economy wants them.
+  # Rare by design: one roll per floor that lands 25% of the time
+  # (≈1 herb per 6 floors, ≈1 ofuda per 12). Designer: herbs were
+  # "wayyy too many" at picks [0,2] + a guaranteed tutorial herb.
   floor_loot: &shinto_floor_loot
-    picks: [0, 2]
+    picks: [1, 1]
+    chance: 0.25
     entries:
-      - {item_id: medicinal_herb, weight: 3}
+      - {item_id: medicinal_herb, weight: 2}
       - {item_id: escape_ofuda, weight: 1}
       - {gold: [5, 15], weight: 0}
-  floor_guarantees:
-    # Tutorial: something is always lying near where you arrive
-    - {item_id: medicinal_herb, floor: 1, placement: near}
   encounters:
     - enemy_templates: [fodder_slime]
       enemy_counts: [1]

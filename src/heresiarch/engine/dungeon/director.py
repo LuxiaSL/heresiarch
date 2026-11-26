@@ -125,6 +125,8 @@ class DungeonDirector:
         lo, hi = table.picks
         if valid and hi > 0:
             for _ in range(rng.randint(max(0, lo), max(lo, hi))):
+                if rng.random() >= table.chance:
+                    continue
                 e = rng.choices(valid, weights=[v.weight for v in valid])[0]
                 if e.gold is not None:
                     out.append(FloorItemSpec(gold=rng.randint(*e.gold)))
