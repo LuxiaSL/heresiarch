@@ -480,14 +480,19 @@ STARTLED_STATUS_ID = "startled"
 def apply_initiative(combat: CombatState, initiative: Initiative | None) -> None:
     """How the map opened the fight (mutates combat; the engine is unchanged).
 
-    First strike: every party member banks DUNGEON_FIRST_STRIKE_AP —
-    you win the action economy. Ambush: every party member is Startled,
-    SPD 0 for DUNGEON_AMBUSH_STARTLE_ROUNDS — they win the tempo, every
-    enemy acts first. Survive still resolves at priority, so a startled
-    party can still brace.
+    Initiative is one symmetric AP number. First strike: every party
+    member banks DUNGEON_FIRST_STRIKE_AP (burst comes a turn early).
+    Ambush: every party member starts at DUNGEON_AMBUSH_AP, i.e. owing a
+    turn — the first Survive only climbs back to 0 and Cheat stays
+    locked until AP is positive (burst comes a turn late).
+
+    Optional second ambush knob, off by default: Startled, SPD 0 for
+    DUNGEON_AMBUSH_STARTLE_ROUNDS (every enemy acts first; Survive still
+    resolves at priority).
     """
     from heresiarch.engine.dungeon.models import Initiative
     from heresiarch.engine.formulas import (
+        DUNGEON_AMBUSH_AP,
         DUNGEON_AMBUSH_STARTLE_ROUNDS,
         DUNGEON_FIRST_STRIKE_AP,
         MAX_ACTION_POINT_BANK,
@@ -498,7 +503,16 @@ def apply_initiative(combat: CombatState, initiative: Initiative | None) -> None
             c.action_points = min(
                 c.action_points + DUNGEON_FIRST_STRIKE_AP, MAX_ACTION_POINT_BANK,
             )
-    elif initiative == Initiative.ENEMY and DUNGEON_AMBUSH_STARTLE_ROUNDS > 0:
+        return
+    if initiative != Initiative.ENEMY:
+        return
+    if DUNGEON_AMBUSH_AP:
+        for c in combat.player_combatants:
+            c.action_points = max(
+                -MAX_ACTION_POINT_BANK,
+                min(c.action_points + DUNGEON_AMBUSH_AP, MAX_ACTION_POINT_BANK),
+            )
+    if DUNGEON_AMBUSH_STARTLE_ROUNDS > 0:
         for c in combat.player_combatants:
             # Show it immediately; the engine re-derives at round start
             c.effective_stats = c.effective_stats.model_copy(update={"SPD": 0})

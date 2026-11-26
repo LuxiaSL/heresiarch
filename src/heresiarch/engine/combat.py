@@ -550,7 +550,11 @@ class CombatEngine(EffectPipelineMixin):
 
             case CheatSurviveChoice.CHEAT:
                 combatant.is_surviving = False
-                actions_to_spend = min(decision.cheat_actions, combatant.action_points)
+                # max(0, ...): AP can be negative (dungeon ambush) — a
+                # Cheat must never refund AP or shed debt
+                actions_to_spend = max(
+                    0, min(decision.cheat_actions, combatant.action_points),
+                )
                 combatant.action_points -= actions_to_spend
                 combatant.cheat_debt += actions_to_spend * CHEAT_DEBT_PER_ACTION
                 state.log.append(

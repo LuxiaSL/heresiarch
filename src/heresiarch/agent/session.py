@@ -69,7 +69,11 @@ def _opening_for(
     initiative: Initiative | None, step: StepResult | None,
 ) -> tuple[str, str]:
     """Describe how a dungeon fight began, for the battle screen."""
-    from heresiarch.engine.formulas import DUNGEON_FIRST_STRIKE_AP
+    from heresiarch.engine.formulas import (
+        DUNGEON_AMBUSH_AP,
+        DUNGEON_AMBUSH_STARTLE_ROUNDS,
+        DUNGEON_FIRST_STRIKE_AP,
+    )
 
     if initiative is None:
         return ("", "")
@@ -79,11 +83,16 @@ def _opening_for(
     if initiative == Initiative.PLAYER:
         bonus = f" +{DUNGEON_FIRST_STRIKE_AP} AP banked." if DUNGEON_FIRST_STRIKE_AP else ""
         return ("first_strike", f"You struck first!{bonus}{joined}")
-    return (
-        "ambush",
-        f"Ambushed! Your party is Startled — every enemy acts first this "
-        f"round (Survive still braces in time).{joined}",
-    )
+    bits = []
+    if DUNGEON_AMBUSH_AP:
+        bits.append(
+            f"everyone starts at {DUNGEON_AMBUSH_AP} AP — your first Survive "
+            "only climbs back to 0"
+        )
+    if DUNGEON_AMBUSH_STARTLE_ROUNDS > 0:
+        bits.append("Startled: every enemy acts first (Survive still braces in time)")
+    detail = f" {'; '.join(bits)[0].upper()}{'; '.join(bits)[1:]}." if bits else ""
+    return ("ambush", f"Ambushed!{detail}{joined}")
 
 
 class Phase(str, Enum):

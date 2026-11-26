@@ -568,7 +568,8 @@ DUNGEON_LOSE_TRACK_RADIUS: int = 7      # chasing packs give up beyond this dist
 DUNGEON_WANDER_CHANCE: float = 0.5      # unalerted pack moves this turn with this chance
 DUNGEON_MERGE_RADIUS: int = 1           # alerted packs this close to a fight join it
 DUNGEON_FIRST_STRIKE_AP: int = 1        # AP banked per party member on a first strike
-DUNGEON_AMBUSH_STARTLE_ROUNDS: int = 1  # ambushed: party SPD is 0 this many rounds
+DUNGEON_AMBUSH_AP: int = -1             # ambushed: every party member starts owing AP
+DUNGEON_AMBUSH_STARTLE_ROUNDS: int = 0  # ambushed: party SPD 0 this many rounds (0 = off)
 DUNGEON_ROAM_CHANCE: float = 0.04       # idle pack picks another room to wander to
 # Floor finds are data now: zone YAML floor_loot / floor_guarantees.
 

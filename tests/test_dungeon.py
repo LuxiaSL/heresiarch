@@ -584,23 +584,80 @@ def test_escape_without_item_refused(dsession: GameSession) -> None:
         dsession.escape("escape_ofuda")
 
 
-def test_ambush_startles_party(game_data: GameData) -> None:
-    from heresiarch.engine.dungeon.director import STARTLED_STATUS_ID, apply_initiative
+def _opening_combat(game_data: GameData, seed: int = 3):  # type: ignore[no-untyped-def]
     from heresiarch.engine.game_loop import GameLoop
 
-    gl = GameLoop(game_data=game_data, rng=random.Random(3))
+    gl = GameLoop(game_data=game_data, rng=random.Random(seed))
     run = gl.new_run("r", "Hero", "einherjar")
     zone = game_data.zones["zone_01"]
     enemies = gl.encounter_generator.generate_encounter(zone.encounters[1], 1)
     chars = [run.party.characters[c] for c in run.party.active]
-    combat = gl.combat_engine.initialize_combat(chars, enemies)
+    return gl, gl.combat_engine.initialize_combat(chars, enemies)
+
+
+def test_ambush_costs_ap(game_data: GameData) -> None:
+    from heresiarch.engine.dungeon.director import apply_initiative
+    from heresiarch.engine.formulas import DUNGEON_AMBUSH_AP
+
+    assert DUNGEON_AMBUSH_AP < 0
+    _, combat = _opening_combat(game_data)
+    apply_initiative(combat, Initiative.ENEMY)
+    for p in combat.player_combatants:
+        assert p.action_points == DUNGEON_AMBUSH_AP
+        assert not p.active_statuses  # Startled knob is off by default
+
+
+def test_survive_climbs_out_of_ambush_debt(game_data: GameData) -> None:
+    from heresiarch.engine.dungeon.director import apply_initiative
+    from heresiarch.engine.models.combat_state import (
+        CheatSurviveChoice,
+        PlayerTurnDecision,
+    )
+
+    gl, combat = _opening_combat(game_data)
+    apply_initiative(combat, Initiative.ENEMY)
+    p = combat.player_combatants[0]
+    templates = {e.id: game_data.enemies[e.id.rsplit("_", 1)[0]] for e in combat.enemy_combatants}
+    combat = gl.combat_engine.process_round(combat, {p.id: PlayerTurnDecision(
+        combatant_id=p.id, cheat_survive=CheatSurviveChoice.SURVIVE,
+    )}, templates)
+    assert combat.player_combatants[0].action_points == 0
+
+
+def test_cheat_with_negative_ap_never_refunds(game_data: GameData) -> None:
+    """Engine guard: min(requested, AP) with AP < 0 used to *add* AP."""
+    from heresiarch.engine.models.combat_state import (
+        CheatSurviveChoice,
+        CombatAction,
+        PlayerTurnDecision,
+    )
+
+    gl, combat = _opening_combat(game_data)
+    p = combat.player_combatants[0]
+    p.action_points = -1
+    templates = {e.id: game_data.enemies[e.id.rsplit("_", 1)[0]] for e in combat.enemy_combatants}
+    target = combat.enemy_combatants[0].id
+    combat = gl.combat_engine.process_round(combat, {p.id: PlayerTurnDecision(
+        combatant_id=p.id, cheat_survive=CheatSurviveChoice.CHEAT, cheat_actions=2,
+        primary_action=CombatAction(actor_id=p.id, ability_id="basic_attack", target_ids=[target]),
+    )}, templates)
+    after = combat.player_combatants[0]
+    assert after.action_points <= -1
+    assert after.cheat_debt == 0
+
+
+def test_startled_knob_still_works(game_data: GameData, monkeypatch: pytest.MonkeyPatch) -> None:
+    from heresiarch.engine import formulas
+    from heresiarch.engine.dungeon.director import STARTLED_STATUS_ID, apply_initiative
+    from heresiarch.engine.models.combat_state import CombatAction, PlayerTurnDecision
+
+    monkeypatch.setattr(formulas, "DUNGEON_AMBUSH_STARTLE_ROUNDS", 1)
+    monkeypatch.setattr(formulas, "DUNGEON_AMBUSH_AP", 0)
+    gl, combat = _opening_combat(game_data)
     apply_initiative(combat, Initiative.ENEMY)
     p = combat.player_combatants[0]
     assert any(st.id == STARTLED_STATUS_ID for st in p.active_statuses)
-    assert p.effective_stats.SPD == 0
-    assert p.action_points == 0
-    # Round 1: SPD re-derived from the status → enemies first in turn order
-    from heresiarch.engine.models.combat_state import CombatAction, PlayerTurnDecision
+    assert p.effective_stats.SPD == 0 and p.action_points == 0
     decision = PlayerTurnDecision(
         combatant_id=p.id,
         primary_action=CombatAction(
@@ -612,8 +669,9 @@ def test_ambush_startles_party(game_data: GameData) -> None:
     combat = gl.combat_engine.process_round(combat, {p.id: decision}, templates)
     order = combat.turn_order
     assert order.index(p.id) == len(order) - 1 or not combat.living_enemies
-    # Expires after round 1
-    assert not any(st.id == STARTLED_STATUS_ID for st in combat.player_combatants[0].active_statuses)
+    assert not any(
+        st.id == STARTLED_STATUS_ID for st in combat.player_combatants[0].active_statuses
+    )
 
 
 def _with_near_herb_guarantee(s: GameSession) -> None:

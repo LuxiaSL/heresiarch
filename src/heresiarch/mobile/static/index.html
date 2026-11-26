@@ -64,6 +64,7 @@
   .badge { display: inline-block; padding: 2px 7px; border-radius: 9px; font-size: 11px;
     border: 1px solid var(--line); color: var(--dim); margin-left: 4px; }
   .badge.ap { color: var(--blue); border-color: var(--blue); }
+  .badge.ap.neg { color: var(--red); border-color: var(--red); }
   .badge.ins { color: var(--accent); border-color: var(--accent); }
   .badge.frz { color: var(--red); border-color: var(--red); }
   .badge.debt { color: var(--yellow); border-color: var(--yellow); }
@@ -1012,7 +1013,7 @@ function decisionCard(p) {
   const ab = abilityOf(p, d.ability);
   const taunters = taunterIdsFor(p);
   const badges =
-    `<span class="badge ap">AP ${p.ap}</span>` +
+    `<span class="badge ap${p.ap < 0 ? " neg" : ""}">AP ${p.ap}</span>` +
     (p.cheat_debt ? `<span class="badge debt">debt ${p.cheat_debt}</span>` : "") +
     (p.insight ? `<span class="badge ins">insight ${p.insight}</span>` : "") +
     (p.frenzy_level > 1 ? `<span class="badge frz">frenzy ×${p.frenzy_level.toFixed(2)}</span>` : "") +
