@@ -897,3 +897,33 @@ def test_travel_explains_a_blocking_pack(dsession: GameSession) -> None:
                                 encounter_index=0, enemy_template_ids=["fodder_slime"])]
     with pytest.raises(AgentError, match="pack is in the way"):
         s.travel(5, 1)
+
+
+def test_map_item_use_is_a_turn(dsession: GameSession) -> None:
+    s = dsession
+    s.enter_zone("zone_01")
+    _give(s, "minor_potion")
+    turn = _floor(s).turn
+    mc = next(iter(s.run.party.characters))  # type: ignore[union-attr]
+    s.use_consumable("minor_potion", mc)
+    if s.phase == Phase.IN_ZONE:
+        assert _floor(s).turn == turn + 1
+        assert s.last_step is not None and s.last_step.messages[0].startswith("Used")
+
+
+def test_healing_next_to_alerted_pack_gets_you_ambushed(dsession: GameSession) -> None:
+    s = dsession
+    s.enter_zone("zone_01")
+    _give(s, "minor_potion")
+    floor = _floor(s)
+    pack = next(e for e in floor.entities if e.kind == EntityKind.PACK)
+    for d in Direction:
+        nx, ny = floor.player_x + d.delta[0], floor.player_y + d.delta[1]
+        if (not d.is_diagonal and can_step(floor, floor.player_x, floor.player_y, d)
+                and floor.entity_at(nx, ny) is None):
+            break
+    pack.x, pack.y, pack.alerted = nx, ny, True
+    mc = next(iter(s.run.party.characters))  # type: ignore[union-attr]
+    s.use_consumable("minor_potion", mc)
+    assert s.phase == Phase.COMBAT
+    assert s.combat_opening[0] == "ambush"

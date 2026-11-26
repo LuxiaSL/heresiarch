@@ -120,8 +120,9 @@
   .dg-msg { min-height: 18px; font-size: 12px; margin: 0 2px 6px; color: #cfc8b0; }
   .dg-view { position: relative; border: 2px solid #2c2c3a; border-radius: 10px;
     overflow: hidden; background: #06060a; }
-  #dcanvas { display: block; width: 100%; image-rendering: pixelated;
+  #dcanvas { display: block; margin: 0 auto; image-rendering: pixelated;
     image-rendering: crisp-edges; touch-action: none; }
+  .dg-mm-toggle.dg-zoom { right: 46px; width: 40px; }
   .dg-controls { display: flex; gap: 10px; margin-top: 8px; align-items: stretch; }
   .dg-actions { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .dg-actions button { width: 100%; }
@@ -1238,7 +1239,16 @@ function screenVictory() {
 // each innerHTML swap) so walk tweens and idle bobs never restart.
 // Art comes from sprites/atlas.json (art/build.py); with no atlas, a
 // placeholder renderer draws readable colored tiles instead.
-const TILE = 16, VW = 11, VH = 11;   // viewport in tiles (odd = centered hero)
+const TILE = 16;
+// Zoom: viewport width in tiles (odd = centered hero). Square view.
+const ZOOMS = [11, 15, 19];
+let VW = 15, VH = 15;
+(() => {
+  try {
+    const z = parseInt(localStorage.getItem("hx_zoom") || "", 10);
+    if (ZOOMS.includes(z)) { VW = VH = z; }
+  } catch (e) { /* storage blocked: default zoom */ }
+})();
 const STEP_MS = 85;                  // walk tween per tile
 const WALKABLE = new Set([".", ">", "X", "<"]);
 const DG = {
@@ -1353,14 +1363,19 @@ function dgMount() {
     DG.canvas.addEventListener("pointerup", dgTap);
   }
   slot.appendChild(DG.canvas);
-  // Integer backing scale: crisp pixels at any CSS width
+  // Whole device pixels per art pixel at every zoom: the backing store
+  // is an integer multiple of the art, and the CSS size is set so the
+  // browser never resamples it (no shimmer, no filter needed).
+  const dpr = window.devicePixelRatio || 1;
   const cssW = slot.clientWidth || 340;
-  const scale = Math.max(1, Math.floor((cssW * (window.devicePixelRatio || 1)) / (VW * TILE)));
+  const scale = Math.max(1, Math.floor((cssW * dpr) / (VW * TILE)));
   const w = VW * TILE * scale, h = VH * TILE * scale;
   if (DG.canvas.width !== w || DG.canvas.height !== h) {
     DG.canvas.width = w; DG.canvas.height = h;
-    DG.scale = scale;
   }
+  DG.scale = scale;
+  DG.canvas.style.width = `${w / dpr}px`;
+  DG.canvas.style.height = `${h / dpr}px`;
   DG.ctx = DG.canvas.getContext("2d");
   if (!DG.raf) DG.raf = requestAnimationFrame(dgLoop);
 }
@@ -1667,7 +1682,7 @@ function screenDungeon() {
   return topbar() + `
     <div class="dg-hud" id="dg-hud">${dgHudHtml()}</div>
     <div class="dg-msg" id="dg-msg">${dgMsgHtml()}</div>
-    <div class="dg-view" id="dgslot"><button class="dg-mm-toggle ${DG.minimap ? "on" : ""}" data-a="dg-minimap" aria-label="Minimap">▦</button></div>
+    <div class="dg-view" id="dgslot"><button class="dg-mm-toggle ${DG.minimap ? "on" : ""}" data-a="dg-minimap" aria-label="Minimap">▦</button><button class="dg-mm-toggle dg-zoom" data-a="dg-zoom" aria-label="Zoom">🔍<span style="font-size:9px">${VW}</span></button></div>
     <div class="dg-controls">
       <div class="dg-actions" id="dg-actions">${dgActionsHtml()}</div>
       <div class="dg-pad">${pad}</div>
@@ -1777,6 +1792,12 @@ document.addEventListener("click", (ev) => {
     case "leave-zone": act("leave_zone"); break;
     case "dg-descend": act("descend"); break;
     case "dg-escape": act("escape", {item_id: id}); break;
+    case "dg-zoom": {
+      VW = VH = ZOOMS[(ZOOMS.indexOf(VW) + 1) % ZOOMS.length];
+      try { localStorage.setItem("hx_zoom", String(VW)); } catch (e) {}
+      render();
+      break;
+    }
     case "dg-minimap": {
       DG.minimap = !DG.minimap;
       try { localStorage.setItem("hx_minimap", DG.minimap ? "on" : "off"); } catch (e) {}

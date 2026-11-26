@@ -1594,7 +1594,7 @@ class GameSession:
             raise AgentError(str(e)) from e
 
         char = self.run.party.characters[character_id]
-        return (
+        return self._item_turn(
             f"Used {item_id} on {char.name}.\n"
             f"Abilities: {', '.join(char.abilities)}"
         )
@@ -1614,10 +1614,32 @@ class GameSession:
 
         char = self.run.party.characters[character_id]
         healed = char.current_hp - old_hp
-        return (
+        text = (
             f"Used {item_id} on {char.name}. Healed {healed} HP.\n"
             f"HP: {char.current_hp}/{char.max_hp}"
         )
+        return self._item_turn(text)
+
+    def _item_turn(self, text: str) -> str:
+        """On a dungeon floor, using an item is a turn: packs act after it.
+
+        (PMD rule; designer 2026-11-25.) An adjacent alerted pack can
+        therefore ambush you mid-heal — heal-or-strike-first is a real
+        trade in a fight chain. Menus off the floor stay free.
+        """
+        run = self.run
+        if (
+            not self.dungeon_mode
+            or self.phase != Phase.IN_ZONE
+            or run is None
+            or run.zone_state is None
+            or run.zone_state.floor is None
+        ):
+            return text
+        view = self._map_turn(None)
+        if self._last_step is not None:
+            self._last_step.messages.insert(0, text.split("\n")[0])
+        return text + "\n\n" + view
 
     def mc_swap_job(self, job_id: str) -> str:
         """Change MC's job."""
