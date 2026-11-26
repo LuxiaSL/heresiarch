@@ -12,6 +12,7 @@ import random
 from collections import deque
 
 from heresiarch.engine.dungeon.models import (
+    TILE_ENTRY,
     TILE_EXIT,
     TILE_STAIRS,
     Direction,
@@ -25,6 +26,7 @@ from heresiarch.engine.dungeon.models import (
 from heresiarch.engine.formulas import (
     DUNGEON_LOSE_TRACK_RADIUS,
     DUNGEON_MERGE_RADIUS,
+    DUNGEON_ROAM_CHANCE,
     DUNGEON_SIGHT_RADIUS,
     DUNGEON_WANDER_CHANCE,
 )
@@ -63,9 +65,37 @@ def rooms_in_view(floor: FloorState) -> set[int]:
     return out
 
 
+def _line_clear(floor: FloorState, x0: int, y0: int, x1: int, y1: int) -> bool:
+    """Bresenham line of sight: every tile strictly between is walkable."""
+    dx, dy = abs(x1 - x0), -abs(y1 - y0)
+    sx, sy = (1 if x0 < x1 else -1), (1 if y0 < y1 else -1)
+    err = dx + dy
+    x, y = x0, y0
+    while True:
+        if (x, y) == (x1, y1):
+            return True
+        if (x, y) != (x0, y0) and not floor.is_walkable(x, y):
+            return False
+        e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x += sx
+        if e2 <= dx:
+            err += dx
+            y += sy
+
+
+def in_close_sight(floor: FloorState, x: int, y: int) -> bool:
+    """Within corridor sight radius AND not behind a wall."""
+    px, py = floor.player_x, floor.player_y
+    if chebyshev(x, y, px, py) > DUNGEON_SIGHT_RADIUS:
+        return False
+    return _line_clear(floor, px, py, x, y)
+
+
 def is_visible(floor: FloorState, x: int, y: int) -> bool:
     """Can the player see this tile right now? (lit room or close by)"""
-    if chebyshev(x, y, floor.player_x, floor.player_y) <= DUNGEON_SIGHT_RADIUS:
+    if in_close_sight(floor, x, y):
         return True
     for i in rooms_in_view(floor):
         r = floor.rooms[i]
@@ -83,9 +113,11 @@ def reveal_around_player(floor: FloorState) -> None:
         if 0 <= y < floor.height and 0 <= x < floor.width:
             rows[y][x] = "1"
 
-    for dy in (-1, 0, 1):
-        for dx in (-1, 0, 1):
-            mark(px + dx, py + dy)
+    r = DUNGEON_SIGHT_RADIUS
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            if in_close_sight(floor, px + dx, py + dy):
+                mark(px + dx, py + dy)
     for i in rooms_in_view(floor):
         r = floor.rooms[i]
         for y in range(r.y - 1, r.y + r.h + 1):
@@ -136,8 +168,8 @@ def _blocked_for_pack(floor: FloorState, x: int, y: int, mover: MapEntity) -> bo
     for e in floor.entities:
         if e is not mover and e.x == x and e.y == y:
             return True
-    # Packs don't loiter on stairs/exit (keeps the way down readable)
-    return floor.tile(x, y) in (TILE_STAIRS, TILE_EXIT)
+    # Packs don't loiter on stairs/exit/entry (keeps the ways out readable)
+    return floor.tile(x, y) in (TILE_STAIRS, TILE_EXIT, TILE_ENTRY)
 
 
 def merge_joiners(floor: FloorState, engaged: MapEntity) -> list[str]:
@@ -202,6 +234,15 @@ def _enemy_phase(floor: FloorState, rng: random.Random) -> StepResult | None:
                     best, best_d = (nx, ny), nd
             if best is not None:
                 e.x, e.y = best
+        elif e.roam_x is not None and e.roam_y is not None:
+            # Roaming to another room: walk the corridors, then settle there
+            _roam_step(floor, e)
+        elif rng.random() < DUNGEON_ROAM_CHANCE and len(floor.rooms) > 1:
+            target_room = rng.choice(
+                [i for i in range(len(floor.rooms)) if i != e.home_room]
+            )
+            e.roam_x, e.roam_y = floor.rooms[target_room].center
+            e.home_room = target_room
         elif rng.random() < DUNGEON_WANDER_CHANCE:
             options = []
             for d in ALL_DIRECTIONS:
@@ -218,6 +259,43 @@ def _enemy_phase(floor: FloorState, rng: random.Random) -> StepResult | None:
             if options:
                 e.x, e.y = rng.choice(options)
     return None
+
+
+def _roam_step(floor: FloorState, e: MapEntity) -> None:
+    """One step along a BFS path toward the roam target (packs don't
+    path through other entities; a blocked roamer just waits)."""
+    assert e.roam_x is not None and e.roam_y is not None
+    goal = (e.roam_x, e.roam_y)
+    if (e.x, e.y) == goal or chebyshev(e.x, e.y, *goal) <= 1:
+        e.roam_x = e.roam_y = None
+        return
+    start = (e.x, e.y)
+    prev: dict[tuple[int, int], tuple[int, int]] = {}
+    seen = {start}
+    q: deque[tuple[int, int]] = deque([start])
+    found = False
+    while q:
+        x, y = q.popleft()
+        if (x, y) == goal:
+            found = True
+            break
+        for d in ALL_DIRECTIONS:
+            if not can_step(floor, x, y, d):
+                continue
+            n = (x + d.delta[0], y + d.delta[1])
+            if n in seen:
+                continue
+            seen.add(n)
+            prev[n] = (x, y)
+            q.append(n)
+    if not found:
+        e.roam_x = e.roam_y = None
+        return
+    step = goal
+    while prev[step] != start:
+        step = prev[step]
+    if not _blocked_for_pack(floor, step[0], step[1], e):
+        e.x, e.y = step
 
 
 def _pack_label(e: MapEntity) -> str:
@@ -274,10 +352,12 @@ def take_turn(
 
     item = floor.entity_at(floor.player_x, floor.player_y)
     if item is not None and item.kind == EntityKind.ITEM and direction is not None:
-        if can_pickup:
+        if item.gold > 0 or can_pickup:  # gold needs no stash room
             floor.entities = [e for e in floor.entities if e.id != item.id]
             result.outcome = StepOutcome.PICKUP
             result.picked_item_id = item.item_id
+            result.picked_gold = item.gold
+            result.picked_guarantee_key = item.guarantee_key
         else:
             result.outcome = StepOutcome.STASH_FULL
             result.messages.append("Your stash is full — you leave it lying there.")

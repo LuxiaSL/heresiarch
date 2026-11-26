@@ -22,6 +22,18 @@
   loot_tier: 1
   next_zone: zone_02
   unlock_requires: []
+  # Dungeon floor finds. The shared table is anchored here and reused by
+  # every later zone (*shinto_floor_loot). gold rows are supported but
+  # weighted 0 (off) until the economy wants them.
+  floor_loot: &shinto_floor_loot
+    picks: [0, 2]
+    entries:
+      - {item_id: medicinal_herb, weight: 3}
+      - {item_id: escape_ofuda, weight: 1}
+      - {gold: [5, 15], weight: 0}
+  floor_guarantees:
+    # Tutorial: something is always lying near where you arrive
+    - {item_id: medicinal_herb, floor: 1, placement: near}
   encounters:
     - enemy_templates: [fodder_slime]
       enemy_counts: [1]
@@ -56,6 +68,10 @@
   random_spawns:
     - enemy_template_id: bandit_slime
       chance: 0.10
+  floor_loot: *shinto_floor_loot
+  floor_guarantees:
+    # Worth the detour: the far room of the last floor holds a way out
+    - {item_id: escape_ofuda, floor: 2, placement: far}
   encounters:
     # Encounter 1: "These aren't fodder anymore"
     - enemy_templates: [slime]
@@ -98,6 +114,7 @@
   random_spawns:
     - enemy_template_id: bandit_slime
       chance: 0.10
+  floor_loot: *shinto_floor_loot
   encounters:
     # Introduces Brute Oni — "what IS that thing"
     - enemy_templates: [brute_oni, slime]
@@ -139,6 +156,7 @@
   random_spawns:
     - enemy_template_id: bandit_slime
       chance: 0.10
+  floor_loot: *shinto_floor_loot
   encounters:
     # Split Slime introduced — kill it and deal with the swarm
     - enemy_templates: [split_slime, slime]
@@ -175,6 +193,7 @@
   random_spawns:
     - enemy_template_id: bandit_slime
       chance: 0.10
+  floor_loot: *shinto_floor_loot
   encounters:
     # Leech Slime introduced — outlasts you if ignored
     - enemy_templates: [leech_slime, slime]
@@ -211,6 +230,7 @@
   random_spawns:
     - enemy_template_id: bandit_slime
       chance: 0.10
+  floor_loot: *shinto_floor_loot
   encounters:
     - enemy_templates: [brute_oni, caster_kitsune, mystic_slime]
       enemy_counts: [1, 1, 1]
@@ -259,6 +279,10 @@
   unlock_requires:
     - type: zone_clear
       zone_id: zone_06
+  floor_loot: *shinto_floor_loot
+  floor_guarantees:
+    # Endless milestone: every 5th floor down, a way back up
+    - {item_id: escape_ofuda, floor: 5, every: 5, placement: far}
   encounters: []  # empty — generated dynamically
 
 # Zone 7: Final zone. Giga Slime Lair.
@@ -276,6 +300,7 @@
   random_spawns:
     - enemy_template_id: bandit_slime
       chance: 0.10
+  floor_loot: *shinto_floor_loot
   encounters:
     - enemy_templates: [brute_oni, caster_kitsune, slime]
       enemy_counts: [1, 1, 2]

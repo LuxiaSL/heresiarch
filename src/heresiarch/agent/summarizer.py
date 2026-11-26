@@ -1006,8 +1006,9 @@ def _render_combat_event(
 def summarize_floor(run: RunState, game_data: GameData, last_step=None) -> str:
     """ASCII view of the explored floor + what's in sight.
 
-    Legend: @ you, # wall, . floor, > stairs, X exit, ! item,
-    a-z enemy packs (letter = list below), B boss, space = unexplored.
+    Legend: @ you, # wall, . floor, < entry (way out), > stairs, X exit,
+    ! item, $ gold, a-z enemy packs (letter = list below), B boss,
+    space = unexplored.
     """
     from heresiarch.engine.dungeon.models import EntityKind
     from heresiarch.engine.dungeon.rules import pack_label, visible_entities
@@ -1032,7 +1033,10 @@ def summarize_floor(run: RunState, game_data: GameData, last_step=None) -> str:
     for e in seen:
         dx, dy = e.x - floor.player_x, e.y - floor.player_y
         where = f"{_rel(dx, dy)} ({max(abs(dx), abs(dy))} steps)"
-        if e.kind == EntityKind.ITEM:
+        if e.kind == EntityKind.ITEM and e.gold > 0:
+            rows[e.y][e.x] = "$"
+            lines_ents.append(f"  $ {e.gold} gold — {where}")
+        elif e.kind == EntityKind.ITEM:
             rows[e.y][e.x] = "!"
             item = game_data.items.get(e.item_id or "")
             lines_ents.append(f"  ! {item.name if item else e.item_id} — {where}")
@@ -1069,10 +1073,26 @@ def summarize_floor(run: RunState, game_data: GameData, last_step=None) -> str:
     tile = floor.tile(floor.player_x, floor.player_y)
     lines.append("")
     if tile == ">":
-        lines.append("You're on the stairs — `descend` to go down.")
+        lines.append("You're on the stairs — `descend` to go down, or `leave_zone` to walk out.")
     elif tile == "X":
         lines.append("The way out — `leave_zone` to return, or keep exploring.")
-    lines.append("Actions: move <N|NE|E|SE|S|SW|W|NW>, wait_turn, descend, leave_zone")
+    elif tile == "<":
+        lines.append("Where you came in — `leave_zone` walks out from here.")
+    else:
+        lines.append(
+            "Walking out needs the entry (<), stairs (>) or exit (X); "
+            "an escape item works anywhere."
+        )
+    escapes = sorted({
+        iid for iid in run.party.stash
+        if (it := game_data.items.get(iid)) is not None and it.escape_zone
+    })
+    if escapes:
+        lines.append(f"Escape items: {', '.join(escapes)} (`escape <item_id>`, also mid-fight)")
+    lines.append(
+        "Actions: move <N|NE|E|SE|S|SW|W|NW>, travel <x> <y>, wait_turn, "
+        "descend, leave_zone, escape"
+    )
     return "\n".join(lines)
 
 

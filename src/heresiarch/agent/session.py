@@ -79,7 +79,11 @@ def _opening_for(
     if initiative == Initiative.PLAYER:
         bonus = f" +{DUNGEON_FIRST_STRIKE_AP} AP banked." if DUNGEON_FIRST_STRIKE_AP else ""
         return ("first_strike", f"You struck first!{bonus}{joined}")
-    return ("ambush", f"Ambushed!{joined}")
+    return (
+        "ambush",
+        f"Ambushed! Your party is Startled — every enemy acts first this "
+        f"round (Survive still braces in time).{joined}",
+    )
 
 
 class Phase(str, Enum):
@@ -132,7 +136,7 @@ _PHASE_TOOLS: dict[Phase, set[str]] = {
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
     },
     Phase.IN_ZONE: {
-        "new_run", "fight", "move", "travel", "wait_turn", "descend", "get_map", "party_status", "equip", "unequip", "dismiss", "swap_roster",
+        "new_run", "fight", "move", "travel", "wait_turn", "descend", "get_map", "escape", "party_status", "equip", "unequip", "dismiss", "swap_roster",
         "use_scroll", "use_consumable",
         "leave_zone", "get_zone_status", "get_battle_record",
         "lookup_job", "lookup_ability", "lookup_item", "lookup_enemy",
@@ -140,7 +144,7 @@ _PHASE_TOOLS: dict[Phase, set[str]] = {
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
     },
     Phase.COMBAT: {
-        "submit_decisions", "auto_battle_round", "get_combat_state",
+        "submit_decisions", "auto_battle_round", "get_combat_state", "escape",
         "lookup_job", "lookup_ability", "lookup_item", "lookup_enemy",
         "lookup_zone", "lookup_formula", "get_state",
         "save_note", "read_notes", "save_run", "load_run", "list_saves",
@@ -424,6 +428,18 @@ class GameSession:
         run = self._require_run()
         gl = self._require_game_loop()
 
+        if (
+            self.dungeon_mode
+            and run.zone_state is not None
+            and run.zone_state.floor is not None
+            and not gl.dungeon.can_retreat(run)
+        ):
+            raise AgentError(
+                "You can only walk out from where you arrived on this floor "
+                "(<), the stairs (>), or the exit — or use an escape item "
+                "(escape <item_id>)."
+            )
+
         self.run = gl.leave_zone(run)
         self.phase = Phase.ZONE_SELECT
         self._autosave()
@@ -610,6 +626,35 @@ class GameSession:
                 header += f"\n{len(result.engaged_entity_ids) - 1} more pack(s) join the fight!"
             return header + "\n\n" + text
         return self._zone_view_text()
+
+    def escape(self, item_id: str) -> str:
+        """Use an escape item: out of the zone from anywhere — even mid-fight."""
+        self._require_phase("escape")
+        run = self._require_run()
+        gl = self._require_game_loop()
+        if not self.dungeon_mode:
+            raise AgentError("Not in dungeon mode — just leave_zone.")
+        try:
+            if self.phase == Phase.COMBAT:
+                if self._combat_state is None:
+                    raise AgentError("No active combat.")
+                run = gl.dungeon.escape_combat(run, self._combat_state, item_id)
+                lead = "You tear the ofuda — the fight dissolves around you."
+                self._combat_state = None
+                self._engaged_entity_ids = []
+                self._combat_opening = ("", "")
+                self._round_events = []
+            else:
+                run = gl.dungeon.escape(run, item_id)
+                lead = "You tear the ofuda and the floor falls away."
+        except DungeonError as e:
+            raise AgentError(str(e)) from e
+        self.run = gl.leave_zone(run)
+        self._last_step = None
+        self.phase = Phase.ZONE_SELECT
+        self._autosave()
+        zones = gl.get_available_zones(self.run)
+        return lead + "\n\n" + S.summarize_zone_select(self.run, zones, self.game_data)
 
     def descend(self) -> str:
         """Take the stairs you're standing on down to the next floor."""
@@ -1168,6 +1213,11 @@ class GameSession:
             item = run.party.items.get(item_id)
         if item is None or not item.is_consumable:
             raise ValueError(f"{cid}: '{item_id}' is not a consumable.")
+        if item.escape_zone:
+            raise ValueError(
+                f"{cid}: '{item_id}' is an escape item — use the escape action, "
+                "not a combat item use."
+            )
 
         target = combat.get_combatant(target_id)
         if target is None or not target.is_player:

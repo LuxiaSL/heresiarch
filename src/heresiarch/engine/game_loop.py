@@ -1233,6 +1233,10 @@ class GameLoop:
             raise ValueError(
                 f"'{item_id}' is a teach scroll — use use_teach_scroll instead"
             )
+        if item.escape_zone:
+            raise ValueError(
+                f"'{item_id}' is an escape item — use it with escape, on a floor"
+            )
 
         char = party.characters[target_character_id]
         job = self.game_data.jobs[char.job_id]

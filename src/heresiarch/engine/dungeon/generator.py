@@ -17,12 +17,14 @@ from collections import deque
 from dataclasses import dataclass
 
 from heresiarch.engine.dungeon.models import (
+    TILE_ENTRY,
     TILE_FLOOR,
     TILE_STAIRS,
     TILE_WALL,
     EntityKind,
     FloorState,
     MapEntity,
+    Placement,
     Room,
 )
 from heresiarch.engine.dungeon.rules import reveal_around_player
@@ -46,6 +48,16 @@ class PackSpec:
 
     encounter_index: int | None
     enemy_template_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class FloorItemSpec:
+    """A pickup to place: an item or loose gold, where, and its guarantee key."""
+
+    item_id: str | None = None
+    gold: int = 0
+    placement: Placement = "any"
+    guarantee_key: str | None = None
 
 
 @dataclass
@@ -220,7 +232,7 @@ def generate_floor(
     total_floors: int,
     packs: list[PackSpec],
     boss: PackSpec | None = None,
-    item_ids: list[str] | None = None,
+    items: list[FloorItemSpec] | None = None,
     has_stairs: bool = True,
     width: int = FLOOR_WIDTH,
     height: int = FLOOR_HEIGHT,
@@ -247,10 +259,11 @@ def generate_floor(
             ]
         return rng.choice(candidates) if candidates else None
 
-    # Player spawn
+    # Player spawn — marked as the entry ('<'), the way back out
     spawn_room_idx = rng.randrange(len(rooms))
     spawn = free_tile_in(rooms[spawn_room_idx]) or rooms[spawn_room_idx].center
     occupied.add(spawn)
+    grid[spawn[1]][spawn[0]] = TILE_ENTRY
 
     dist = bfs_distances(grid, spawn)
 
@@ -308,16 +321,23 @@ def generate_floor(
             home_room=room_idx,
         ))
 
-    # Items: anywhere in a room, including the spawn room
-    for item_id in item_ids or []:
-        room_idx = rng.randrange(len(rooms))
+    # Pickups: "far" = the farthest room from the entry (worth the
+    # detour), "near" = the arrival room, "any" = anywhere
+    for spec in items or []:
+        if spec.placement == "far":
+            room_idx = far_rooms[0]
+        elif spec.placement == "near":
+            room_idx = spawn_room_idx
+        else:
+            room_idx = rng.randrange(len(rooms))
         pos = free_tile_in(rooms[room_idx], spacing=0)
         if pos is None:
             continue
         occupied.add(pos)
         entities.append(MapEntity(
             id=next_id("item"), kind=EntityKind.ITEM, x=pos[0], y=pos[1],
-            item_id=item_id,
+            item_id=spec.item_id, gold=spec.gold,
+            guarantee_key=spec.guarantee_key,
         ))
 
     floor = FloorState(

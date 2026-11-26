@@ -46,6 +46,9 @@ class RunState(BaseModel):
     is_dead: bool = False
     created_at: str = ""
     last_recruit_job_id: str | None = None
+    # Floor guarantees already picked up, per zone ("<index>@<floor>"),
+    # so a guaranteed find is once per run — not re-farmable via the lodge.
+    floor_guarantees_claimed: dict[str, list[str]] = Field(default_factory=dict)
 
     def record_macro(
         self,

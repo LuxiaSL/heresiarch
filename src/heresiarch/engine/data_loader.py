@@ -109,6 +109,11 @@ class GameData(BaseModel):
                 errors.append(
                     f"Item '{item_id}' casts unknown ability '{item.casts_ability_id}'"
                 )
+
+        # Zone unlock requirements + dungeon floor finds. (The unlock check
+        # used to sit inside the item loop above, validating only the last
+        # zone over and over.)
+        for zone_id, zone in self.zones.items():
             for req in zone.unlock_requires:
                 if req.type == "zone_clear" and req.zone_id not in self.zones:
                     errors.append(
@@ -117,6 +122,12 @@ class GameData(BaseModel):
                 if req.type == "item" and req.item_id not in self.items:
                     errors.append(
                         f"Zone '{zone_id}' unlock requires unknown item '{req.item_id}'"
+                    )
+            finds = [*zone.floor_loot.entries, *zone.floor_guarantees]
+            for entry in finds:
+                if entry.item_id is not None and entry.item_id not in self.items:
+                    errors.append(
+                        f"Zone '{zone_id}' floor loot references unknown item '{entry.item_id}'"
                     )
 
         for town_id, town in self.towns.items():

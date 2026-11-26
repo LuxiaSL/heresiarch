@@ -728,3 +728,27 @@
   casts_ability_id: damage_split
   base_price: 700
   description: "Tattered scroll; if you read closely you can see that it casts Damage Split."
+
+# ===================================================================
+# Floor finds (dungeon mode): lie on the map, never drop from enemies
+# (loot_category "floor" is in no drop pool) and aren't sold in shops.
+# Placed by zone floor_loot / floor_guarantees.
+# ===================================================================
+
+- id: medicinal_herb
+  name: Medicinal Herb
+  tier: 1
+  is_consumable: true
+  loot_category: floor
+  heal_amount: 25
+  base_price: 12
+  description: "Restores 25 HP. Bitter, grows by shrine steps."
+
+- id: escape_ofuda
+  name: Escape Ofuda
+  tier: 1
+  is_consumable: true
+  loot_category: floor
+  escape_zone: true
+  base_price: 40
+  description: "Tear it to leave the zone from anywhere — even mid-fight. Damage taken stays taken."

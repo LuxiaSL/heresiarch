@@ -70,6 +70,9 @@ class Item(BaseModel):
     casts_ability_id: str | None = None  # One-time cast scroll: consumed, performs ability once
     # Stat tonic: grants a combat-duration stat buff when consumed
     combat_stat_buff: dict[str, int] = Field(default_factory=dict)
+    # Escape item (dungeon mode): leaves the zone from anywhere on a floor,
+    # or ends a fight and gets you out. Never usable as a combat heal.
+    escape_zone: bool = False
     description: str = ""
 
     @property

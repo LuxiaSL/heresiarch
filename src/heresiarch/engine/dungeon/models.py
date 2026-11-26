@@ -11,16 +11,21 @@ and trivially renderable.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # Tile glyphs. Kept as single characters so a floor serializes as text.
 TILE_WALL = "#"
 TILE_FLOOR = "."
 TILE_STAIRS = ">"
 TILE_EXIT = "X"  # appears where the boss fell; stepping on it leaves the zone
+TILE_ENTRY = "<"  # where you arrived on this floor — the way back out
 
-WALKABLE_TILES: frozenset[str] = frozenset({TILE_FLOOR, TILE_STAIRS, TILE_EXIT})
+WALKABLE_TILES: frozenset[str] = frozenset({TILE_FLOOR, TILE_STAIRS, TILE_EXIT, TILE_ENTRY})
+# Tiles you may walk out of the zone from (retreat rule). Anywhere else
+# needs an escape item.
+RETREAT_TILES: frozenset[str] = frozenset({TILE_STAIRS, TILE_EXIT, TILE_ENTRY})
 
 
 class Direction(str, Enum):
@@ -96,10 +101,17 @@ class MapEntity(BaseModel):
     # PACK/BOSS: template ids for display/sprites (lead first). For endless
     # packs this IS the composition; for zone packs it mirrors the template.
     enemy_template_ids: list[str] = Field(default_factory=list)
-    home_room: int | None = None  # wander tether
+    home_room: int | None = None  # wander tether (the room it currently haunts)
     alerted: bool = False         # has spotted the player and is chasing
-    # ITEM
+    # Roaming: an idle pack occasionally sets off for another room
+    roam_x: int | None = None
+    roam_y: int | None = None
+    # ITEM (an item, or loose gold when gold > 0)
     item_id: str | None = None
+    gold: int = 0
+    # Set when this pickup fulfils a zone's floor guarantee — claimed on
+    # pickup so a guaranteed find appears once per run, not per visit.
+    guarantee_key: str | None = None
 
 
 class FloorState(BaseModel):
@@ -155,6 +167,54 @@ class FloorState(BaseModel):
         return False
 
 
+# ----------------------------------------------------------------------
+# Floor loot (zone YAML): random tables + guaranteed placements
+# ----------------------------------------------------------------------
+
+Placement = Literal["far", "near", "any"]
+
+
+class FloorLootEntry(BaseModel):
+    """One weighted row: an item, or loose gold in a [min, max] range."""
+
+    item_id: str | None = None
+    gold: tuple[int, int] | None = None
+    weight: float = 1.0
+
+    @model_validator(mode="after")
+    def _one_payload(self) -> FloorLootEntry:
+        if (self.item_id is None) == (self.gold is None):
+            raise ValueError("floor loot entry needs exactly one of item_id / gold")
+        return self
+
+
+class FloorLootTable(BaseModel):
+    """Random finds per floor: roll ``picks`` (min, max) times."""
+
+    picks: tuple[int, int] = (0, 0)
+    entries: list[FloorLootEntry] = Field(default_factory=list)
+
+
+class FloorGuarantee(FloorLootEntry):
+    """A find that is always there: on floor ``floor`` (and every ``every``
+    floors after it, for endless milestones). ``placement`` far = the
+    room farthest from where you arrive (worth the detour), near = your
+    arrival room, any = anywhere. Claimed once per run on pickup."""
+
+    floor: int
+    every: int = 0
+    placement: Placement = "far"
+
+    def applies_to(self, floor_number: int) -> bool:
+        if floor_number == self.floor:
+            return True
+        return (
+            self.every > 0
+            and floor_number > self.floor
+            and (floor_number - self.floor) % self.every == 0
+        )
+
+
 class StepOutcome(str, Enum):
     MOVED = "MOVED"
     BLOCKED = "BLOCKED"      # wall / diagonal corner — no turn spent
@@ -179,5 +239,7 @@ class StepResult(BaseModel):
     engaged_entity_ids: list[str] = Field(default_factory=list)
     initiative: Initiative | None = None
     picked_item_id: str | None = None
+    picked_gold: int = 0
+    picked_guarantee_key: str | None = None
     messages: list[str] = Field(default_factory=list)
     turn_spent: bool = True

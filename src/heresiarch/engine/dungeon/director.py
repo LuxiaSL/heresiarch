@@ -20,8 +20,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from heresiarch.engine.dungeon.generator import PackSpec, generate_floor
+from heresiarch.engine.dungeon.generator import FloorItemSpec, PackSpec, generate_floor
 from heresiarch.engine.dungeon.models import (
+    RETREAT_TILES,
+    TILE_ENTRY,
     TILE_EXIT,
     Direction,
     EntityKind,
@@ -37,8 +39,6 @@ from heresiarch.engine.dungeon.rules import (
 )
 from heresiarch.engine.formulas import (
     DUNGEON_ENDLESS_PACKS_PER_FLOOR,
-    DUNGEON_ITEM_CHANCE,
-    DUNGEON_ITEMS_PER_FLOOR_MAX,
     DUNGEON_OVERSTAY_PACKS_PER_FLOOR,
     calculate_dungeon_floor_count,
 )
@@ -51,7 +51,8 @@ from heresiarch.engine.models.zone import ZoneState, ZoneTemplate
 if TYPE_CHECKING:
     from heresiarch.engine.dungeon.models import Initiative
     from heresiarch.engine.game_loop import GameLoop
-    from heresiarch.engine.models.combat_state import CombatState
+
+from heresiarch.engine.models.combat_state import CombatState, StatusEffect
 
 
 TRAVEL_MAX_STEPS: int = 60
@@ -104,15 +105,47 @@ class DungeonDirector:
             progress[run.current_zone_id] = zs
         return run.model_copy(update={"zone_state": zs, "zone_progress": progress})
 
-    def _roll_items(self, zone: ZoneTemplate) -> list[str]:
-        pool = [i for i in zone.floor_items if i in self.gl.game_data.items]
-        if not pool:
-            return []
-        return [
-            self.gl.rng.choice(pool)
-            for _ in range(DUNGEON_ITEMS_PER_FLOOR_MAX)
-            if self.gl.rng.random() < DUNGEON_ITEM_CHANCE
+    def _roll_items(
+        self, run: RunState, zone: ZoneTemplate, zs: ZoneState, floor_number: int,
+    ) -> list[FloorItemSpec]:
+        """Floor finds: the zone's random table + any guarantees due here.
+
+        Guarantees only fire while a zone is still being cleared (or in
+        endless zones) and only until picked up once in this run.
+        """
+        items = self.gl.game_data.items
+        rng = self.gl.rng
+        out: list[FloorItemSpec] = []
+
+        table = zone.floor_loot
+        valid = [
+            e for e in table.entries
+            if e.weight > 0 and (e.gold is not None or e.item_id in items)
         ]
+        lo, hi = table.picks
+        if valid and hi > 0:
+            for _ in range(rng.randint(max(0, lo), max(lo, hi))):
+                e = rng.choices(valid, weights=[v.weight for v in valid])[0]
+                if e.gold is not None:
+                    out.append(FloorItemSpec(gold=rng.randint(*e.gold)))
+                else:
+                    out.append(FloorItemSpec(item_id=e.item_id))
+
+        if zone.is_endless or not zs.is_cleared:
+            claimed = set(run.floor_guarantees_claimed.get(zone.id, []))
+            for i, g in enumerate(zone.floor_guarantees):
+                key = f"{i}@{floor_number}"
+                if not g.applies_to(floor_number) or key in claimed:
+                    continue
+                if g.item_id is not None and g.item_id not in items:
+                    continue
+                out.append(FloorItemSpec(
+                    item_id=g.item_id,
+                    gold=rng.randint(*g.gold) if g.gold else 0,
+                    placement=g.placement,
+                    guarantee_key=key,
+                ))
+        return out
 
     def _endless_pack(self, zone: ZoneTemplate) -> PackSpec:
         pool = [t for t in zone.endless_enemy_pool if t in self.gl.game_data.enemies]
@@ -121,13 +154,15 @@ class DungeonDirector:
         n = self.gl.rng.randint(ENDLESS_MIN_ENEMIES, ENDLESS_MAX_ENEMIES)
         return PackSpec(None, tuple(self.gl.rng.choice(pool) for _ in range(n)))
 
-    def _build_floor(self, zone: ZoneTemplate, zs: ZoneState, floor_number: int) -> FloorState:
+    def _build_floor(
+        self, run: RunState, zone: ZoneTemplate, zs: ZoneState, floor_number: int,
+    ) -> FloorState:
         seed = self.gl.rng.getrandbits(31)
-        items = self._roll_items(zone)
+        items = self._roll_items(run, zone, zs, floor_number)
 
         if zone.is_endless:
             packs = [self._endless_pack(zone) for _ in range(DUNGEON_ENDLESS_PACKS_PER_FLOOR)]
-            return generate_floor(seed, floor_number, 0, packs, item_ids=items)
+            return generate_floor(seed, floor_number, 0, packs, items=items)
 
         if zs.is_cleared:
             non_boss = [i for i, e in enumerate(zone.encounters) if not e.is_boss]
@@ -139,7 +174,7 @@ class DungeonDirector:
                     for _ in range(DUNGEON_OVERSTAY_PACKS_PER_FLOOR)
                 )
             ]
-            return generate_floor(seed, floor_number, 0, packs, item_ids=items)
+            return generate_floor(seed, floor_number, 0, packs, items=items)
 
         plan = floor_plan(zone)
         total = len(plan)
@@ -162,7 +197,7 @@ class DungeonDirector:
                 packs.extend(PackSpec(i, _template_ids(zone, i)) for i in bosses[1:])
         return generate_floor(
             seed, floor_number, total, packs,
-            boss=boss, item_ids=items, has_stairs=not is_last,
+            boss=boss, items=items, has_stairs=not is_last,
         )
 
     # ------------------------------------------------------------------
@@ -181,7 +216,7 @@ class DungeonDirector:
         if zs.floor is not None:
             return run
         number = max(1, zs.floor_number)
-        floor = self._build_floor(zone, zs, number)
+        floor = self._build_floor(run, zone, zs, number)
         return self._with_zone_state(
             run, zs.model_copy(update={"floor": floor, "floor_number": number}),
         )
@@ -206,11 +241,78 @@ class DungeonDirector:
         assert zs is not None
         run = self._with_zone_state(run, zs.model_copy(update={"floor": floor}))
 
-        if result.outcome == StepOutcome.PICKUP and result.picked_item_id:
-            run = self.gl.apply_loot(run, _empty_loot(), [result.picked_item_id])
-            name = self.gl.game_data.items[result.picked_item_id].name
-            result.messages.append(f"Picked up {name}.")
+        if result.outcome == StepOutcome.PICKUP:
+            if result.picked_item_id:
+                run = self.gl.apply_loot(run, _empty_loot(), [result.picked_item_id])
+                name = self.gl.game_data.items[result.picked_item_id].name
+                result.messages.append(f"Picked up {name}.")
+            if result.picked_gold > 0:
+                run = run.model_copy(update={"party": run.party.model_copy(
+                    update={"money": run.party.money + result.picked_gold},
+                )})
+                result.messages.append(f"Picked up {result.picked_gold} gold.")
+            if result.picked_guarantee_key and run.current_zone_id:
+                claimed = dict(run.floor_guarantees_claimed)
+                zone_claims = list(claimed.get(run.current_zone_id, []))
+                if result.picked_guarantee_key not in zone_claims:
+                    zone_claims.append(result.picked_guarantee_key)
+                claimed[run.current_zone_id] = zone_claims
+                run = run.model_copy(update={"floor_guarantees_claimed": claimed})
         return run, result
+
+    # ------------------------------------------------------------------
+    # Leaving: the retreat rule and escape items
+    # ------------------------------------------------------------------
+
+    def can_retreat(self, run: RunState) -> bool:
+        """Walking out is only possible from the entry, stairs or exit.
+
+        Floors saved before entry tiles existed (no '<' anywhere) keep the
+        old free retreat rather than stranding the player.
+        """
+        floor = self.floor(run)
+        if not any(TILE_ENTRY in row for row in floor.tiles):
+            return True
+        return floor.tile(floor.player_x, floor.player_y) in RETREAT_TILES
+
+    def _take_escape_item(self, run: RunState, item_id: str) -> RunState:
+        item = self.gl.game_data.items.get(item_id) or run.party.items.get(item_id)
+        if item_id not in run.party.stash:
+            raise DungeonError(f"'{item_id}' is not in your stash")
+        if item is None or not item.escape_zone:
+            raise DungeonError(f"'{item_id}' can't get you out of here")
+        stash = list(run.party.stash)
+        stash.remove(item_id)
+        return run.model_copy(update={"party": run.party.model_copy(update={"stash": stash})})
+
+    def escape(self, run: RunState, item_id: str) -> RunState:
+        """Use an escape item on the map: out of the zone from anywhere.
+
+        The caller then leaves the zone (``GameLoop.leave_zone``), which
+        saves floor progress exactly like a normal retreat.
+        """
+        self.floor(run)  # must be on a floor
+        return self._take_escape_item(run, item_id)
+
+    def escape_combat(
+        self, run: RunState, combat: CombatState, item_id: str,
+    ) -> RunState:
+        """Use an escape item mid-fight: the fight is abandoned.
+
+        Damage taken so far sticks (HP is written back from the fight);
+        no XP, no loot, and the pack is still on the floor next time.
+        Fallen party members stay at 1 HP — escaping is a rescue, not a
+        revive, but it never kills anyone the fight didn't.
+        """
+        run = self._take_escape_item(run, item_id)
+        chars = dict(run.party.characters)
+        for c in combat.player_combatants:
+            ch = chars.get(c.id)
+            if ch is None:
+                continue
+            hp = c.current_hp if c.is_alive else 1
+            chars[c.id] = ch.model_copy(update={"current_hp": max(1, min(hp, ch.max_hp))})
+        return run.model_copy(update={"party": run.party.model_copy(update={"characters": chars})})
 
     def travel(
         self, run: RunState, tx: int, ty: int, max_steps: int = TRAVEL_MAX_STEPS,
@@ -262,7 +364,7 @@ class DungeonDirector:
         zs = run.zone_state
         assert zs is not None
         number = floor.floor_number + 1
-        new_floor = self._build_floor(zone, zs, number)
+        new_floor = self._build_floor(run, zone, zs, number)
         return self._with_zone_state(
             run, zs.model_copy(update={"floor": new_floor, "floor_number": number}),
         )
@@ -368,18 +470,37 @@ def _empty_loot():  # local import keeps the module graph shallow
     return LootResult()
 
 
-def apply_initiative(combat: "CombatState", initiative: "Initiative | None") -> None:
-    """First strike banks AP for every party member (mutates combat).
+STARTLED_STATUS_ID = "startled"
 
-    The only way the map layer touches a fight's opening state; the
-    combat engine itself is unchanged. Ambushes are already their own
-    punishment (you didn't choose the fight or the merge), so ENEMY
-    initiative adds nothing for now — a designer lever if it needs teeth.
+
+def apply_initiative(combat: CombatState, initiative: Initiative | None) -> None:
+    """How the map opened the fight (mutates combat; the engine is unchanged).
+
+    First strike: every party member banks DUNGEON_FIRST_STRIKE_AP —
+    you win the action economy. Ambush: every party member is Startled,
+    SPD 0 for DUNGEON_AMBUSH_STARTLE_ROUNDS — they win the tempo, every
+    enemy acts first. Survive still resolves at priority, so a startled
+    party can still brace.
     """
     from heresiarch.engine.dungeon.models import Initiative
-    from heresiarch.engine.formulas import DUNGEON_FIRST_STRIKE_AP, MAX_ACTION_POINT_BANK
+    from heresiarch.engine.formulas import (
+        DUNGEON_AMBUSH_STARTLE_ROUNDS,
+        DUNGEON_FIRST_STRIKE_AP,
+        MAX_ACTION_POINT_BANK,
+    )
 
-    if initiative != Initiative.PLAYER or DUNGEON_FIRST_STRIKE_AP <= 0:
-        return
-    for c in combat.player_combatants:
-        c.action_points = min(c.action_points + DUNGEON_FIRST_STRIKE_AP, MAX_ACTION_POINT_BANK)
+    if initiative == Initiative.PLAYER and DUNGEON_FIRST_STRIKE_AP > 0:
+        for c in combat.player_combatants:
+            c.action_points = min(
+                c.action_points + DUNGEON_FIRST_STRIKE_AP, MAX_ACTION_POINT_BANK,
+            )
+    elif initiative == Initiative.ENEMY and DUNGEON_AMBUSH_STARTLE_ROUNDS > 0:
+        for c in combat.player_combatants:
+            # Show it immediately; the engine re-derives at round start
+            c.effective_stats = c.effective_stats.model_copy(update={"SPD": 0})
+            c.active_statuses.append(StatusEffect(
+                id=STARTLED_STATUS_ID,
+                name="Startled",
+                stat_modifiers={"SPD": -c.equipment_stats.SPD},
+                rounds_remaining=DUNGEON_AMBUSH_STARTLE_ROUNDS,
+            ))

@@ -10,8 +10,14 @@ import pytest
 from heresiarch.agent.session import AgentError, GameSession, Phase
 from heresiarch.engine.data_loader import GameData
 from heresiarch.engine.dungeon.director import floor_plan
-from heresiarch.engine.dungeon.generator import PackSpec, bfs_distances, generate_floor
+from heresiarch.engine.dungeon.generator import (
+    FloorItemSpec,
+    PackSpec,
+    bfs_distances,
+    generate_floor,
+)
 from heresiarch.engine.dungeon.models import (
+    TILE_ENTRY,
     TILE_EXIT,
     TILE_STAIRS,
     WALKABLE_TILES,
@@ -30,6 +36,7 @@ from heresiarch.engine.dungeon.rules import (
     visible_entities,
 )
 from heresiarch.engine.formulas import DUNGEON_FIRST_STRIKE_AP
+from heresiarch.engine.models.loot import LootResult
 
 # ----------------------------------------------------------------------
 # Generation
@@ -48,7 +55,7 @@ def _walkable(floor: FloorState) -> set[tuple[int, int]]:
 @pytest.mark.parametrize("seed", range(40))
 def test_floor_is_fully_connected(seed: int) -> None:
     packs = [PackSpec(i, ("fodder_slime",)) for i in range(3)]
-    floor = generate_floor(seed, 1, 2, packs, item_ids=["minor_potion"])
+    floor = generate_floor(seed, 1, 2, packs, items=[FloorItemSpec(item_id="minor_potion")])
     reach = set(bfs_distances(floor.tiles, (floor.player_x, floor.player_y)))
     assert _walkable(floor) <= reach
     # Everything placed stands on reachable ground
@@ -228,6 +235,11 @@ def _fight_out(s: GameSession) -> None:
     while s.phase == Phase.COMBAT:
         combat = s.combat_state
         assert combat is not None
+        # Test-only invulnerability: these tests check map FLOW, and a
+        # lv1 basic-attack bot is a coin flip vs a 3-slime pack even at
+        # full HP — the outcome must not depend on combat luck.
+        for c in combat.living_players:
+            c.current_hp = c.max_hp
         target = combat.living_enemies[0].id
         s.submit_decisions({
             c.id: {"mode": "normal", "action": "basic_attack", "target": target}
@@ -417,10 +429,28 @@ def test_leave_and_reenter_keeps_floor(dsession: GameSession) -> None:
     assert s.run.zone_state.floor == floor  # type: ignore[union-attr]
 
 
+def _walk_to(s: GameSession, glyph: str) -> None:
+    """Travel onto the first explored tile showing ``glyph``."""
+    for _ in range(20):
+        floor = s.run.zone_state.floor  # type: ignore[union-attr]
+        if floor.tile(floor.player_x, floor.player_y) == glyph:
+            return
+        spots = [
+            (x, y) for y in range(floor.height) for x in range(floor.width)
+            if floor.tiles[y][x] == glyph and floor.is_explored(x, y)
+        ]
+        assert spots, f"no explored {glyph!r} tile"
+        s.travel(*spots[0])
+        if s.phase != Phase.IN_ZONE:
+            _fight_out(s)
+    raise AssertionError(f"never reached {glyph!r}")
+
+
 def test_cleared_zone_reentry_starts_overstay_floor(dsession: GameSession) -> None:
     s = dsession
     s.enter_zone("zone_01")
     _bot_play_zone(s)
+    _walk_to(s, TILE_EXIT)
     s.leave_zone()
     s.enter_zone("zone_01")
     zs = s.run.zone_state  # type: ignore[union-attr]
@@ -447,3 +477,246 @@ def test_linear_mode_unchanged(game_data: GameData, tmp_path: Path) -> None:
     assert s.phase == Phase.COMBAT
     with pytest.raises(AgentError):
         s.move("N")
+
+
+# ----------------------------------------------------------------------
+# Wave 2: retreat rule, escape, ambush (Startled), floor finds, roaming
+# ----------------------------------------------------------------------
+
+
+def _floor(s: GameSession) -> FloorState:
+    floor = s.run.zone_state.floor  # type: ignore[union-attr]
+    assert floor is not None
+    return floor
+
+
+def _give(s: GameSession, item_id: str) -> None:
+    run = s.run
+    assert run is not None
+    s.run = s.game_loop.apply_loot(run, LootResult(), [item_id])  # type: ignore[union-attr]
+
+
+def _step_off_entry(s: GameSession) -> None:
+    floor = _floor(s)
+    for d in Direction:
+        if can_step(floor, floor.player_x, floor.player_y, d):
+            nx, ny = floor.player_x + d.delta[0], floor.player_y + d.delta[1]
+            if floor.entity_at(nx, ny) is None and floor.tile(nx, ny) == ".":
+                s.move(d.value)
+                return
+    raise AssertionError("no free floor tile next to the entry")
+
+
+def test_floor_spawn_is_marked_entry(dsession: GameSession) -> None:
+    dsession.enter_zone("zone_01")
+    floor = _floor(dsession)
+    assert floor.tile(floor.player_x, floor.player_y) == TILE_ENTRY
+    assert sum(row.count(TILE_ENTRY) for row in floor.tiles) == 1
+
+
+def test_retreat_only_from_entry_stairs_or_exit(dsession: GameSession) -> None:
+    s = dsession
+    s.enter_zone("zone_01")
+    _step_off_entry(s)
+    if s.phase != Phase.IN_ZONE:
+        pytest.skip("stepped into an ambush")
+    with pytest.raises(AgentError, match="walk out"):
+        s.leave_zone()
+    _walk_to(s, TILE_ENTRY)
+    s.leave_zone()
+    assert s.phase == Phase.ZONE_SELECT
+
+
+def test_escape_on_map_consumes_item_and_saves_floor(dsession: GameSession) -> None:
+    s = dsession
+    s.enter_zone("zone_01")
+    _give(s, "escape_ofuda")
+    _step_off_entry(s)
+    if s.phase != Phase.IN_ZONE:
+        pytest.skip("stepped into an ambush")
+    floor = _floor(s)
+    s.escape("escape_ofuda")
+    assert s.phase == Phase.ZONE_SELECT
+    assert "escape_ofuda" not in s.run.party.stash  # type: ignore[union-attr]
+    s.enter_zone("zone_01")
+    assert _floor(s) == floor  # progress kept, like any retreat
+
+
+def test_escape_mid_fight_keeps_damage_and_pack(dsession: GameSession) -> None:
+    s = dsession
+    s.enter_zone("zone_01")
+    _give(s, "escape_ofuda")
+    floor = _floor(s)
+    pack = next(e for e in floor.entities if e.kind == EntityKind.PACK)
+    for d in Direction:
+        nx, ny = floor.player_x + d.delta[0], floor.player_y + d.delta[1]
+        if can_step(floor, floor.player_x, floor.player_y, d) and floor.entity_at(nx, ny) is None:
+            break
+    pack.x, pack.y = nx, ny
+    s.move(d.value)
+    assert s.phase == Phase.COMBAT
+    combat = s.combat_state
+    assert combat is not None
+    mc = combat.player_combatants[0]
+    mc.current_hp = max(1, mc.max_hp // 2)
+    xp_before = s.run.party.characters[mc.id].xp  # type: ignore[union-attr]
+    s.escape("escape_ofuda")
+    run = s.run
+    assert run is not None
+    assert s.phase == Phase.ZONE_SELECT and s.combat_state is None
+    assert run.party.characters[mc.id].current_hp == mc.max_hp // 2
+    assert run.party.characters[mc.id].xp == xp_before
+    assert pack.id in {e.id for e in run.zone_progress["zone_01"].floor.entities}  # type: ignore[union-attr]
+
+
+def test_escape_items_are_not_combat_heals(dsession: GameSession) -> None:
+    s = dsession
+    s.enter_zone("zone_01")
+    _give(s, "escape_ofuda")
+    mc = next(iter(s.run.party.characters))  # type: ignore[union-attr]
+    with pytest.raises(AgentError, match="escape"):
+        s.use_consumable("escape_ofuda", mc)
+
+
+def test_escape_without_item_refused(dsession: GameSession) -> None:
+    dsession.enter_zone("zone_01")
+    with pytest.raises(AgentError, match="stash"):
+        dsession.escape("escape_ofuda")
+
+
+def test_ambush_startles_party(game_data: GameData) -> None:
+    from heresiarch.engine.dungeon.director import STARTLED_STATUS_ID, apply_initiative
+    from heresiarch.engine.game_loop import GameLoop
+
+    gl = GameLoop(game_data=game_data, rng=random.Random(3))
+    run = gl.new_run("r", "Hero", "einherjar")
+    zone = game_data.zones["zone_01"]
+    enemies = gl.encounter_generator.generate_encounter(zone.encounters[1], 1)
+    chars = [run.party.characters[c] for c in run.party.active]
+    combat = gl.combat_engine.initialize_combat(chars, enemies)
+    apply_initiative(combat, Initiative.ENEMY)
+    p = combat.player_combatants[0]
+    assert any(st.id == STARTLED_STATUS_ID for st in p.active_statuses)
+    assert p.effective_stats.SPD == 0
+    assert p.action_points == 0
+    # Round 1: SPD re-derived from the status → enemies first in turn order
+    from heresiarch.engine.models.combat_state import CombatAction, PlayerTurnDecision
+    decision = PlayerTurnDecision(
+        combatant_id=p.id,
+        primary_action=CombatAction(
+            actor_id=p.id, ability_id="basic_attack",
+            target_ids=[combat.enemy_combatants[0].id],
+        ),
+    )
+    templates = {e.id: game_data.enemies[e.id.rsplit("_", 1)[0]] for e in combat.enemy_combatants}
+    combat = gl.combat_engine.process_round(combat, {p.id: decision}, templates)
+    order = combat.turn_order
+    assert order.index(p.id) == len(order) - 1 or not combat.living_enemies
+    # Expires after round 1
+    assert not any(st.id == STARTLED_STATUS_ID for st in combat.player_combatants[0].active_statuses)
+
+
+def test_first_floor_guarantee_lies_in_arrival_room(dsession: GameSession) -> None:
+    dsession.enter_zone("zone_01")
+    floor = _floor(dsession)
+    spawn_room = floor.room_index_at(floor.player_x, floor.player_y)
+    herbs = [
+        e for e in floor.entities
+        if e.kind == EntityKind.ITEM and e.guarantee_key == "0@1"
+    ]
+    assert len(herbs) == 1 and herbs[0].item_id == "medicinal_herb"
+    assert floor.room_index_at(herbs[0].x, herbs[0].y) == spawn_room
+
+
+def test_guarantee_claimed_once_per_run(dsession: GameSession) -> None:
+    s = dsession
+    s.enter_zone("zone_01")
+    herb = next(e for e in _floor(s).entities if e.guarantee_key == "0@1")
+    s.travel(herb.x, herb.y)
+    if s.phase != Phase.IN_ZONE:
+        pytest.skip("interrupted by a fight")
+    run = s.run
+    assert run is not None
+    assert "medicinal_herb" in run.party.stash
+    assert run.floor_guarantees_claimed == {"zone_01": ["0@1"]}
+    # A regenerated floor 1 (as after a lodge reset) no longer places it
+    zs = run.zone_state
+    assert zs is not None
+    fresh = s.game_loop.dungeon._build_floor(  # type: ignore[union-attr]  # noqa: SLF001
+        run, game_data_zone(s, "zone_01"), zs, 1,
+    )
+    assert not any(e.guarantee_key for e in fresh.entities)
+
+
+def game_data_zone(s: GameSession, zone_id: str):  # type: ignore[no-untyped-def]
+    return s.game_data.zones[zone_id]
+
+
+def test_milestone_guarantees_repeat() -> None:
+    from heresiarch.engine.dungeon.models import FloorGuarantee
+
+    g = FloorGuarantee(item_id="escape_ofuda", floor=5, every=5)
+    assert [n for n in range(1, 21) if g.applies_to(n)] == [5, 10, 15, 20]
+    once = FloorGuarantee(item_id="escape_ofuda", floor=2)
+    assert [n for n in range(1, 10) if once.applies_to(n)] == [2]
+
+
+def test_floor_loot_entry_needs_one_payload() -> None:
+    from pydantic import ValidationError
+
+    from heresiarch.engine.dungeon.models import FloorLootEntry
+
+    with pytest.raises(ValidationError):
+        FloorLootEntry(item_id="minor_potion", gold=(1, 2))
+    with pytest.raises(ValidationError):
+        FloorLootEntry()
+
+
+def test_gold_pickup_ignores_full_stash() -> None:
+    gold = MapEntity(id="item1", kind=EntityKind.ITEM, x=3, y=1, gold=12)
+    floor = _tiny_floor(["#####", "#.@.#", "#####"], [gold])
+    res = take_turn(floor, Direction.E, random.Random(0), can_pickup=False)
+    assert res.outcome == StepOutcome.PICKUP and res.picked_gold == 12
+
+
+def test_unknown_floor_item_fails_validation(game_data: GameData) -> None:
+    from heresiarch.engine.dungeon.models import FloorLootEntry
+
+    zone = game_data.zones["zone_03"]
+    bad = zone.model_copy(update={"floor_loot": zone.floor_loot.model_copy(
+        update={"entries": [FloorLootEntry(item_id="no_such_item")]},
+    )})
+    zones = dict(game_data.zones)
+    zones["zone_03"] = bad
+    gd = game_data.model_copy(update={"zones": zones})
+    errors = gd.validate_cross_references()
+    assert any("no_such_item" in e for e in errors)
+
+
+def test_roaming_pack_walks_to_another_room() -> None:
+    from heresiarch.engine.dungeon.rules import _roam_step
+
+    pack = MapEntity(id="pack1", kind=EntityKind.PACK, x=1, y=1,
+                     encounter_index=0, enemy_template_ids=["slime"],
+                     roam_x=9, roam_y=1)
+    floor = _tiny_floor(["###########", "#.........#", "#####@#####", "#####.#####"], [pack])
+    for _ in range(10):
+        if pack.roam_x is None:
+            break
+        _roam_step(floor, pack)
+    assert pack.roam_x is None  # arrived (within 1)
+    assert pack.x >= 8
+
+
+def test_walls_block_corridor_sight() -> None:
+    pack = MapEntity(id="pack1", kind=EntityKind.PACK, x=3, y=3,
+                     encounter_index=0, enemy_template_ids=["slime"])
+    floor = _tiny_floor([
+        "#####",
+        "#@..#",
+        "#####",
+        "#..##",
+        "#####",
+    ], [pack])
+    floor.explored = ["0" * 5 for _ in range(5)]
+    assert visible_entities(floor) == []

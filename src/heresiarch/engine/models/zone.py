@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from heresiarch.engine.dungeon.models import FloorState
+from heresiarch.engine.dungeon.models import FloorGuarantee, FloorLootTable, FloorState
 from heresiarch.engine.models.loot import LootPool
 
 
@@ -70,7 +70,8 @@ class ZoneTemplate(BaseModel):
     endless_max_level: int = 0
     # Dungeon layer (map mode). 0 floors = auto from encounter count.
     dungeon_floors: int = 0
-    floor_items: list[str] = Field(default_factory=list)  # item ids that can lie on floors
+    floor_loot: FloorLootTable = Field(default_factory=FloorLootTable)
+    floor_guarantees: list[FloorGuarantee] = Field(default_factory=list)
 
 
 class ZoneState(BaseModel):

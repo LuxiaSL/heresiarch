@@ -568,8 +568,9 @@ DUNGEON_LOSE_TRACK_RADIUS: int = 7      # chasing packs give up beyond this dist
 DUNGEON_WANDER_CHANCE: float = 0.5      # unalerted pack moves this turn with this chance
 DUNGEON_MERGE_RADIUS: int = 1           # alerted packs this close to a fight join it
 DUNGEON_FIRST_STRIKE_AP: int = 1        # AP banked per party member on a first strike
-DUNGEON_ITEMS_PER_FLOOR_MAX: int = 1    # rare floor finds (no regen: finds are the sustain)
-DUNGEON_ITEM_CHANCE: float = 0.4        # chance for each item slot to actually spawn
+DUNGEON_AMBUSH_STARTLE_ROUNDS: int = 1  # ambushed: party SPD is 0 this many rounds
+DUNGEON_ROAM_CHANCE: float = 0.04       # idle pack picks another room to wander to
+# Floor finds are data now: zone YAML floor_loot / floor_guarantees.
 
 
 def calculate_dungeon_floor_count(regular_encounters: int, override: int = 0) -> int:

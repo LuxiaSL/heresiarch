@@ -830,7 +830,7 @@ def test_dungeon_floor_payload_and_walk(dclient: TestClient) -> None:
     assert d["floor_number"] == 1 and d["total_floors"] >= 1
     assert len(d["tiles"]) == d["height"] and len(d["tiles"][0]) == d["width"]
     # Unexplored tiles are masked, the hero's own tile is not
-    assert d["tiles"][d["player_y"]][d["player_x"]] in ".>"
+    assert d["tiles"][d["player_y"]][d["player_x"]] == "<"  # arrival = entry
     assert any(" " in row for row in d["tiles"])
 
     turn = d["turn"]
@@ -866,7 +866,7 @@ def test_dungeon_contact_opens_combat_with_opening(dclient: TestClient) -> None:
         best = None
         for y, row in enumerate(d["tiles"]):
             for x, ch in enumerate(row):
-                if ch not in ".>":
+                if ch not in ".><":
                     continue
                 near_unknown = any(
                     0 <= y + dy < d["height"] and 0 <= x + dx < d["width"]

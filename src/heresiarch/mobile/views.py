@@ -383,6 +383,8 @@ class StatePayload(BaseModel):
 
 
 def _item_kind(item: Item) -> str:
+    if item.escape_zone:
+        return "escape"
     if item.equip_type:
         return "equip"
     if item.teaches_ability_id:
@@ -710,7 +712,7 @@ def build_combat_view(session: GameSession) -> CombatView | None:
             _item_view(_lookup_item(session, iid), iid, game_data=session.game_data)
             for iid in run.party.stash
         )
-        if v.is_consumable
+        if v.is_consumable and v.kind != "escape"
     ]
 
     # Auto-battle availability: a recorded win vs this group with rounds
