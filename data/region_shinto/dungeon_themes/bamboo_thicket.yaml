@@ -1,9 +1,10 @@
-# Zone 3 — dense and maze-like: many small rooms, lots of loops.
+# Zone 3 — dense and maze-like: many small rooms, lots of loops, light
+# falling through the canopy.
 id: bamboo_thicket
 name: Bamboo Thicket
-notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
-backdrop: shrine_path
-decor: [decor_bamboo, decor_grass_0]
+notes: "Theme fork A. Small rooms, many loops; art in art/src/themes/bamboo_thicket.yaml."
+backdrop: bamboo_thicket
+decor: [decor_shoot, decor_litter, decor_fleck]
 decor_density: 0.06
 layout:
   grid_cols: 4

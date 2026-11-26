@@ -1,10 +1,11 @@
-# Zone 2 — overgrown: rooms soften at the edges, moss creeps in.
+# Zone 2 — overgrown and damp: rooms soften at the edges, moss creeps in,
+# puddles and glowing caps in the hollows.
 id: mossy_path
 name: Mossy Path
-notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
-backdrop: shrine_path
-decor: [decor_grass_0, decor_grass_1, decor_grass_2]
-decor_density: 0.08
+notes: "Theme fork A. Organic mixed rooms with ragged edges; art in art/src/themes/mossy_path.yaml."
+backdrop: mossy_path
+decor: [decor_fern, decor_glowcap, decor_mossrock, decor_puddle]
+decor_density: 0.05
 layout:
   room_shape: mixed
   edge_jitter: 0.25
