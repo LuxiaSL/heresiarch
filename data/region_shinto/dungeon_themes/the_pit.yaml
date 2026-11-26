@@ -1,10 +1,10 @@
-# The Pit (endless) — ragged caverns going down forever.
+# The Pit (endless) — ragged, cold caverns going down forever.
 id: the_pit
 name: The Pit
-notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
-backdrop: shrine_path
-decor: []
-decor_density: 0.0
+notes: "Theme fork C. Cold, sparse caverns; lone wall tiles become crystal-tipped spires."
+backdrop: the_pit
+decor: [decor_crystal, decor_fungus, decor_rubble]
+decor_density: 0.03
 layout:
   width: 46
   height: 32
