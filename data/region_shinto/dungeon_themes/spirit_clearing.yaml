@@ -1,10 +1,12 @@
-# Zone 4 — a few wide round clearings joined by thin paths.
+# Zone 4 — Spirit Clearing: hushed night glades. Wide round clearings of
+# pale spirit-moss joined by thin paths, under a wisteria canopy; wisps,
+# mushroom rings and roped standing stones. The kappa waits by its pool.
 id: spirit_clearing
 name: Spirit Clearing
-notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
-backdrop: shrine_path
-decor: [decor_grass_0, decor_grass_1, decor_lantern]
-decor_density: 0.05
+notes: "Art + layout by theme fork B (heresiarch-10). Round glades, soft edges."
+backdrop: spirit_clearing
+decor: [decor_mushrooms, decor_wisp, decor_bells]
+decor_density: 0.045
 layout:
   grid_cols: 3
   grid_rows: 2
@@ -15,3 +17,4 @@ layout:
   room_shape: round
   min_rooms: 4
   room_chance: 0.85
+  edge_jitter: 0.12

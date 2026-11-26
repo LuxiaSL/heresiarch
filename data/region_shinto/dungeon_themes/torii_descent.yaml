@@ -1,10 +1,12 @@
-# Zone 5 — processional: a long, wide floor with broad two-tile halls.
+# Zone 5 — Torii Descent: a dusk procession down stone steps through
+# senbon torii. A long floor of broad two-tile halls; fox statues, paper
+# lanterns and fallen maple leaves along the way.
 id: torii_descent
 name: Torii Descent
-notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
-backdrop: shrine_path
-decor: [decor_lantern]
-decor_density: 0.03
+notes: "Art + layout by theme fork B (heresiarch-10). Long processional halls."
+backdrop: torii_descent
+decor: [decor_fox, decor_chochin, decor_leaves, decor_lantern]
+decor_density: 0.035
 layout:
   width: 52
   height: 24
