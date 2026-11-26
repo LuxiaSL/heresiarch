@@ -1,10 +1,11 @@
-# Zone 6 — halls of columns: big rectangular rooms full of pillars.
+# Zone 6 — the shrine's interior: halls of vermilion columns on polished
+# floorboards, shoji walls glowing behind them.
 id: inner_sanctum
 name: Inner Sanctum
-notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
-backdrop: shrine_path
-decor: [decor_lantern]
-decor_density: 0.02
+notes: "Theme fork C. Pillar halls: wall_15 renders as a freestanding vermilion column."
+backdrop: inner_sanctum
+decor: [decor_offering, decor_andon, decor_incense]
+decor_density: 0.025
 layout:
   grid_cols: 3
   grid_rows: 2

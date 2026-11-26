@@ -1,0 +1,651 @@
+# The Pit (endless): ragged dark caverns going down forever. Cold
+# slate floors (kept mid-value so actors read), near-black faceted
+# rock with crystal flecks, crystal-tipped spires for lone wall tiles
+# (wall_15, 16x24), faint bioluminescent decor, and one pale shaft of
+# light from far above in the backdrop.
+# Authored procedurally by theme fork C; this file is the source of truth.
+theme: the_pit
+sheet: theme_the_pit
+colors:
+  pit_floor1: "#b7bdd0"
+  pit_floor2: "#8f96ae"
+  pit_floor3: "#6d738e"
+  pit_floor4: "#4b4f68"
+  pit_rock1: "#66709a"
+  pit_rock2: "#424a70"
+  pit_rock3: "#2a2f4e"
+  pit_rock4: "#181b32"
+  pit_cry1: "#d2fcff"
+  pit_cry2: "#78e6f4"
+  pit_cry3: "#2fa9cc"
+  pit_cry4: "#1c6c8e"
+  pit_cap1: "#ff9ad8"
+  pit_cap2: "#c64fa0"
+  pit_stem: "#e4e0f0"
+  pit_light: "#e6f0ff"
+  pit_dark1: "#0b0c18"
+  pit_dark2: "#131628"
+palettes:
+  pit:
+    "K": ink
+    "V": void
+    "a": pit_floor1
+    "b": pit_floor2
+    "c": pit_floor3
+    "d": pit_floor4
+    "p": pit_rock1
+    "q": pit_rock2
+    "t": pit_rock3
+    "u": pit_rock4
+    "C": pit_cry1
+    "D": pit_cry2
+    "E": pit_cry3
+    "F": pit_cry4
+    "M": pit_cap1
+    "N": pit_cap2
+    "P": pit_stem
+    "L": pit_light
+    "h": pit_dark1
+    "i": pit_dark2
+    "S": ver2
+    "T": ver3
+defaults:
+  palette: pit
+  ax: 8
+  ay: 16
+sprites:
+  the_pit.floor_0:
+    grid: |
+      bbbbbbbbbbbbbbbb
+      bbbbabbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbcbbbbbbbbbbb
+      babbbbbcbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbcbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbabbbbbbbb
+      cbbbbbbbbbbbbbbb
+  the_pit.floor_1:
+    grid: |
+      bbbbbbbbbbbbbbbb
+      cbbbbbbbbbabbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      abbbbbbbbbabbbbb
+      bbbbbbbbbbcdbbbb
+      bbcbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbabbbbbbbbbbb
+      bbbccdbbbbbbbbbb
+      bbbbbbbbbbbbabba
+      bbbbbbbbbbbbcbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbcbbbbbbbb
+  the_pit.floor_2:
+    grid: |
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbcbbbbbb
+      bbddbbbbbbbbbbbb
+      bbbbdbbbbbbbbbbb
+      bbbbbddbbbbbbbbb
+      bbbbbbbdbbbbbbbb
+      bbbbbcbbddbbbbbb
+      bbbbbbbbbbdbbbbb
+      bbbbbbbbbbbddbbb
+      bbbbbcbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      babbbbbbbabbbbbb
+      bbbbbbbbbbbbbbbc
+      bbbbbbbbcabbbbbb
+  the_pit.floor_3:
+    grid: |
+      bbbbbbbcbbbabbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbabbbbbbbbbbbb
+      bbbcbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbabbbbabbbbbbb
+      bbbbbbbbcdbbbbbb
+      bbbbbbbbbcbbbbbb
+      bbbbbbbbbbbbcbbb
+      bbbbbbbbbbbbbbbb
+      bbcbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+  the_pit.wall_0:
+    grid: |
+      tqqptqqqqqqtqqpt
+      qqtqqptqqqqqqtqq
+      qqqqtqqptqqqqqqt
+      qqqqqqtqqptqqqqq
+      ptqqqCqqtqqptqqq
+      qqptDqquqqtqqptq
+      qtqqptqqqqqqtqqp
+      uqqtqqptqqqqqqtq
+      qqqqqtqqptqqqqqq
+      tqqqqqqtqqptuqqq
+      qptqqqqqqtqquCqq
+      tqqptqqqqqqtDqpt
+      qqtqqptquqqqqtqq
+      qqqqtqqptqqqqqqt
+      uqqqqqtqqptqqqqq
+      ptqqqqqqtqqptqqq
+  the_pit.wall_1:
+    grid: |
+      KKKKKKKKKKKKKKKK
+      tpptpptpptpptppt
+      qqqqtqqptqqqqqqt
+      qqqqqqtqqptqqqqq
+      ptqqqCqqtqqptqqq
+      qqptDqquqqtqqptq
+      qtqqptqqqqqqtqqp
+      uqqtqqptqqqqqqtq
+      qqqqqtqqptqqqqqq
+      tqqqqqqtqqptuqqq
+      qptqqqqqqtqquCqq
+      tqqptqqqqqqtDqpt
+      qqtqqptquqqqqtqq
+      qqqqtqqptqqqqqqt
+      uqqqqqtqqptqqqqq
+      ptqqqqqqtqqptqqq
+  the_pit.wall_2:
+    grid: |
+      tqqptqqqqqqtqquK
+      qqtqqptqqqqqqtuK
+      qqqqtqqptqqqqquK
+      qqqqqqtqqptqqquK
+      ptqqqCqqtqqptquK
+      qqptDqquqqtqqpuK
+      qtqqptqqqqqqtquK
+      uqqtqqptqqqqqquK
+      qqqqqtqqptqqqquK
+      tqqqqqqtqqptuquK
+      qptqqqqqqtqquCuK
+      tqqptqqqqqqtDquK
+      qqtqqptquqqqqtuK
+      qqqqtqqptqqqqquK
+      uqqqqqtqqptqqquK
+      ptqqqqqqtqqptquK
+  the_pit.wall_3:
+    grid: |
+      KKKKKKKKKKKKKKuK
+      tpptpptpptpptpuK
+      qqqqtqqptqqqqquK
+      qqqqqqtqqptqqquK
+      ptqqqCqqtqqptquK
+      qqptDqquqqtqqpuK
+      qtqqptqqqqqqtquK
+      uqqtqqptqqqqqquK
+      qqqqqtqqptqqqquK
+      tqqqqqqtqqptuquK
+      qptqqqqqqtqquCuK
+      tqqptqqqqqqtDquK
+      qqtqqptquqqqqtuK
+      qqqqtqqptqqqqquK
+      uqqqqqtqqptqqquK
+      ptqqqqqqtqqptquK
+  the_pit.wall_4:
+    grid: |
+      tqqptqqqqqqtqqpt
+      qqtqqptqqqqqqtqq
+      qqqqtqqptqqqqqqt
+      qqqqqqtqqptqqqqq
+      ptqqqCqqtqqptqqq
+      KKKKKKKKKKKKKKKK
+      pppppppppppppppp
+      pqtpqqptqpqqpqqp
+      qqtqqqqtqqqqtqqq
+      qqtquqqtqqqDtqqq
+      qqtquqqtqqEutqqq
+      qqtquqqtqqqutqqq
+      qqtquqqtqqqutqqq
+      qqtquqqtqqqutqqq
+      uuuuuuuuuuuuuuuu
+      KKKKKKKKKKKKKKKK
+  the_pit.wall_5:
+    grid: |
+      KKKKKKKKKKKKKKKK
+      tpptpptpptpptppt
+      qqqqtqqptqqqqqqt
+      qqqqqqtqqptqqqqq
+      ptqqqCqqtqqptqqq
+      KKKKKKKKKKKKKKKK
+      pppppppppppppppp
+      pqtpqqptqpqqpqqp
+      qqtqqqqtqqqqtqqq
+      qqtquqqtqqqDtqqq
+      qqtquqqtqqEutqqq
+      qqtquqqtqqqutqqq
+      qqtquqqtqqqutqqq
+      qqtquqqtqqqutqqq
+      uuuuuuuuuuuuuuuu
+      KKKKKKKKKKKKKKKK
+  the_pit.wall_6:
+    grid: |
+      tqqptqqqqqqtqquK
+      qqtqqptqqqqqqtuK
+      qqqqtqqptqqqqquK
+      qqqqqqtqqptqqquK
+      ptqqqCqqtqqptquK
+      KKKKKKKKKKKKKKuK
+      ppppppppppppppuK
+      pqtpqqptqpqqpquK
+      qqtqqqqtqqqqtquK
+      qqtquqqtqqqDtquK
+      qqtquqqtqqEutquK
+      qqtquqqtqqqutquK
+      qqtquqqtqqqutquK
+      qqtquqqtqqqutquK
+      uuuuuuuuuuuuuuuK
+      KKKKKKKKKKKKKKuK
+  the_pit.wall_7:
+    grid: |
+      KKKKKKKKKKKKKKuK
+      tpptpptpptpptpuK
+      qqqqtqqptqqqqquK
+      qqqqqqtqqptqqquK
+      ptqqqCqqtqqptquK
+      KKKKKKKKKKKKKKuK
+      ppppppppppppppuK
+      pqtpqqptqpqqpquK
+      qqtqqqqtqqqqtquK
+      qqtquqqtqqqDtquK
+      qqtquqqtqqEutquK
+      qqtquqqtqqqutquK
+      qqtquqqtqqqutquK
+      qqtquqqtqqqutquK
+      uuuuuuuuuuuuuuuK
+      KKKKKKKKKKKKKKuK
+  the_pit.wall_8:
+    grid: |
+      Kqqptqqqqqqtqqpt
+      Kqtqqptqqqqqqtqq
+      Kqqqtqqptqqqqqqt
+      Kqqqqqtqqptqqqqq
+      KtqqqCqqtqqptqqq
+      KqptDqquqqtqqptq
+      Ktqqptqqqqqqtqqp
+      Kqqtqqptqqqqqqtq
+      Kqqqqtqqptqqqqqq
+      Kqqqqqqtqqptuqqq
+      KptqqqqqqtqquCqq
+      KqqptqqqqqqtDqpt
+      Kqtqqptquqqqqtqq
+      Kqqqtqqptqqqqqqt
+      Kqqqqqtqqptqqqqq
+      Ktqqqqqqtqqptqqq
+  the_pit.wall_9:
+    grid: |
+      KKKKKKKKKKKKKKKK
+      Kpptpptpptpptppt
+      Kqqqtqqptqqqqqqt
+      Kqqqqqtqqptqqqqq
+      KtqqqCqqtqqptqqq
+      KqptDqquqqtqqptq
+      Ktqqptqqqqqqtqqp
+      Kqqtqqptqqqqqqtq
+      Kqqqqtqqptqqqqqq
+      Kqqqqqqtqqptuqqq
+      KptqqqqqqtqquCqq
+      KqqptqqqqqqtDqpt
+      Kqtqqptquqqqqtqq
+      Kqqqtqqptqqqqqqt
+      Kqqqqqtqqptqqqqq
+      Ktqqqqqqtqqptqqq
+  the_pit.wall_10:
+    grid: |
+      KqqptqqqqqqtqquK
+      KqtqqptqqqqqqtuK
+      KqqqtqqptqqqqquK
+      KqqqqqtqqptqqquK
+      KtqqqCqqtqqptquK
+      KqptDqquqqtqqpuK
+      KtqqptqqqqqqtquK
+      KqqtqqptqqqqqquK
+      KqqqqtqqptqqqquK
+      KqqqqqqtqqptuquK
+      KptqqqqqqtqquCuK
+      KqqptqqqqqqtDquK
+      KqtqqptquqqqqtuK
+      KqqqtqqptqqqqquK
+      KqqqqqtqqptqqquK
+      KtqqqqqqtqqptquK
+  the_pit.wall_11:
+    grid: |
+      KKKKKKKKKKKKKKuK
+      KpptpptpptpptpuK
+      KqqqtqqptqqqqquK
+      KqqqqqtqqptqqquK
+      KtqqqCqqtqqptquK
+      KqptDqquqqtqqpuK
+      KtqqptqqqqqqtquK
+      KqqtqqptqqqqqquK
+      KqqqqtqqptqqqquK
+      KqqqqqqtqqptuquK
+      KptqqqqqqtqquCuK
+      KqqptqqqqqqtDquK
+      KqtqqptquqqqqtuK
+      KqqqtqqptqqqqquK
+      KqqqqqtqqptqqquK
+      KtqqqqqqtqqptquK
+  the_pit.wall_12:
+    grid: |
+      Kqqptqqqqqqtqqpt
+      Kqtqqptqqqqqqtqq
+      Kqqqtqqptqqqqqqt
+      Kqqqqqtqqptqqqqq
+      KtqqqCqqtqqptqqq
+      KKKKKKKKKKKKKKKK
+      Kppppppppppppppp
+      Kqtpqqptqpqqpqqp
+      Kqtqqqqtqqqqtqqq
+      KqtquqqtqqqDtqqq
+      KqtquqqtqqEutqqq
+      Kqtquqqtqqqutqqq
+      Kqtquqqtqqqutqqq
+      Kqtquqqtqqqutqqq
+      Kuuuuuuuuuuuuuuu
+      KKKKKKKKKKKKKKKK
+  the_pit.wall_13:
+    grid: |
+      KKKKKKKKKKKKKKKK
+      Kpptpptpptpptppt
+      Kqqqtqqptqqqqqqt
+      Kqqqqqtqqptqqqqq
+      KtqqqCqqtqqptqqq
+      KKKKKKKKKKKKKKKK
+      Kppppppppppppppp
+      Kqtpqqptqpqqpqqp
+      Kqtqqqqtqqqqtqqq
+      KqtquqqtqqqDtqqq
+      KqtquqqtqqEutqqq
+      Kqtquqqtqqqutqqq
+      Kqtquqqtqqqutqqq
+      Kqtquqqtqqqutqqq
+      Kuuuuuuuuuuuuuuu
+      KKKKKKKKKKKKKKKK
+  the_pit.wall_14:
+    grid: |
+      KqqptqqqqqqtqquK
+      KqtqqptqqqqqqtuK
+      KqqqtqqptqqqqquK
+      KqqqqqtqqptqqquK
+      KtqqqCqqtqqptquK
+      KKKKKKKKKKKKKKuK
+      KpppppppppppppuK
+      KqtpqqptqpqqpquK
+      KqtqqqqtqqqqtquK
+      KqtquqqtqqqDtquK
+      KqtquqqtqqEutquK
+      KqtquqqtqqqutquK
+      KqtquqqtqqqutquK
+      KqtquqqtqqqutquK
+      KuuuuuuuuuuuuuuK
+      KKKKKKKKKKKKKKuK
+  the_pit.wall_15:
+    ay: 24
+    grid: |
+      .......KK.......
+      ......KCDK......
+      ......KCEKKK....
+      .....KKDEKCDK...
+      ....KCDDEKCEK...
+      ....KCEDEKDEK...
+      ....KDEDEKDEK...
+      ....KDEDEKDEK...
+      bbbbKDEDEtDEKbbb
+      bbbbKDEDEtDEKbbb
+      bbbbKpqqqqtKbbbb
+      bbbbKpqqqqtKbbbb
+      babbKpqqqqtKbbbb
+      bbbbKpqqqqtKbbbb
+      bbbKptqqqqqtKbbb
+      bbbKpqqqqqqtKbbb
+      bbbKpqqqqqqtKbbb
+      bbbKpqqqqqqtKbbb
+      bbKpqqqqqqqqtKbb
+      bbKpqqqqqqqqtKbb
+      bbKpqqqqqqqqtKbb
+      bbKptqqqqqqqtKbb
+      bKpqqqqqqqqqqtKb
+      cbKKKKKKKKKKKKbb
+  the_pit.void:
+    grid: |
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+  the_pit.stairs_down:
+    grid: |
+      bbbbbbbbbbbbbbbb
+      bbbbabbbbbbbbbbb
+      bbbbbbKKKKbbbbbb
+      bbbbKppppppKbbbb
+      baKKppttttppKKbb
+      bbKpttttttttpKbb
+      bKpttuuuuuuttpKb
+      bKptuuVVVVuutpKb
+      bptuuVVFVVVuutpb
+      bptuVVVVVVVVutpb
+      bKtuVFVVVVVVutKb
+      bKptuVVVVFVutpKb
+      bbKtuuVVEVuutKbb
+      bbKKttuuuuttKKbb
+      bbbbKppttppKbbbb
+      cbbbbbKKKKbbbbbb
+  the_pit.stairs_up:
+    grid: |
+      bbbbbbbbbbbbbbbb
+      bbbbKKKKKKKKbbbb
+      bbbbKLLLLLLKbbbb
+      bbbKKKKKKKKKKbbb
+      babKppppppppKbbb
+      bbbKttttttttKbbb
+      bbKKKKKKKKKKKKbb
+      bbKppppppppppKbb
+      bbKttttttttttKbb
+      bKKKKKKKKKKKKKKb
+      bKppppppppppppKb
+      bKttttttttttttKb
+      KKKKKKKKKKKKKKKK
+      KqqqqqqqqqqqqqqK
+      KuuuuuuuuuuuuuuK
+      KKKKKKKKKKKKKKKK
+  the_pit.exit_torii:
+    grid: |
+      bbbbbbbbbbbbbbbb
+      KKKKKKKKKKKbbbbb
+      KppppppppppKKbbb
+      KKtttttttttttKbb
+      baKpqKbcbbKpqKbb
+      bKKKKKKKKKKKKKKb
+      bKpqqqqTSqqqqtKb
+      bKKpqKKKKKKpqKKb
+      bbKpqKbbbbKpqKbb
+      bbKpqKbbbbKpqKbb
+      bbKpqKbbbbKpqKbb
+      bbKpqKbbbbKpqKbb
+      bbKptKbbbbKptKbb
+      bbKttKbbbbKttKbb
+      bKuuuuKabKuuuuKb
+      cKKKKKKbbKKKKKKb
+  the_pit.decor_crystal:
+    grid: |
+      ................
+      ................
+      .......KK.......
+      ......KCEK......
+      ......KCEK......
+      ......KDEKKK....
+      ......KDEKCEK...
+      ....KKKDEKCEK...
+      ...KCEKDEKDEK...
+      ...KCEKDEKDEKK..
+      ...KDEKDEKDECEK.
+      ...KDEKDEKDECEK.
+      ...KDEKDEKDEDEK.
+      ...KDEKDEKDEDEK.
+      ...KDEKDEKDEDEK.
+      ..KqqqqqqqqqqqK.
+  the_pit.decor_fungus:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ...KKKKK........
+      ..KPMMMNK.......
+      .KNMMMMNNKKKK...
+      ..KNNNNNKKPMNK..
+      ...KKPKKKNMMNNK.
+      ....KPK..KNNNK..
+      ....KPK...KPK...
+      ....KPK...KPK...
+      .....K....KPK...
+      ...........K....
+  the_pit.decor_rubble:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      .......KKK......
+      ....KKKqqqK.....
+      ...KqqqqqqK.....
+      ..KppppqqqKK....
+      .KqppppqqppqK...
+      ..KqqqqqqqqqqK..
+      ...KqqqKKqqqK...
+      ....KKK..KKK....
+  bg_the_pit:
+    ax: 0
+    ay: 0
+    grid: |
+      huuutttthhhhhhuuutttthhhhhhuuutttthhhhhhuuutttthhhhhhuuutttthhhhhhuuutttthhhhhhuuutttthhqhLquuutttthhhhhhuuutttthhhhhhuuutttthhhhhhuuutttthhhhhhuuutttthhhhhhhhh
+      huuuttthhhhhhhuuuttthhhhhhhuuuttthhhhhhhuuuttthhhhhhhuuuttthhhhhhhuuuttthhhhhhhuuuttthhqhqqLuuuttthhhhhhhuuuttthhhhhhhuuuttthhhhhhhuuuttthhhhhhhuuuttthhhhhhhhhh
+      huuuttthhhhhhhuuuttthhhhhhhuuuttthhhhhhhhuuttthhhhhhhuuuttthhhhhhhhuuttthhhhhhhuuuttthqhqhLquuuttthhhhhhhhuutthhhhhhhhuuuttthhhhhhhhuutthhhhhhhhuuuttthhhhhhhhhh
+      hhuuttthhhhhhhuuuttthhhhhhhhuutthhhhhhhhhuutthhhhhhhhuuuttthhhhhhhhuutthhhhhhhhuuutttqhqhLqLquuttthhhhhhhhuutthhhhhhhhuuuttthhhhhhhhuutthhhhhhhhuuuttthhhhhhhhhh
+      hhuutthhhhhhhhhuutthhhhhhhhhuutthhhhhhhhhhutthhhhhhhhhuutthhhhhhhhhhutthhhhhhhhuuuttthqhqqLqLuutthhhhhhhhhhuthhhhhhhhhhuuttthhhhhhhhhuthhhhhhhhhhuutthhhhhhhhhhh
+      hhuutthhhhhhhhhuutthhhhhhhhhhuthhhhhhhhhhhuthhhhhhhhhhuutthhhhhhhhhhuthhhhhhhhhhuutthqhqhLqLquutthhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhh
+      hhhutthhhhhhhhhuutthhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhhhhhhhhhhhhhuuttqhqhLqLqLqutthhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhh
+      hhhuthhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhhhhhhhhhhhhhuutthqhqqLqLqquthhhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhh
+      hhhuthhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhuuttqhqhLqLqLhuthhhhhhhhhhhhhhhhhhhhhhhhutthhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhhutqhqhqqLqLqqhqhhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhhuthqhqqLqLqLhqhhhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhutqhqhLqLqLqqhqhhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuthqhqqLqLqqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqqLqLqLhqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhLqLqLqqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhqqLqLqLhqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqqLqLqLqqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhLqLqLqqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhqqLqLqLhqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhqqLqLqLqqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhLqLqLqLhqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhqqLqLqLqqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhqhLqLqLqqhqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhLqLqLqLhqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhqqLqLqLqqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhqhLqLqLqLhqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhLqLqLqLqqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhqqLqLqLqqhqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhqhLqLqLqLhqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhqhqhLqLqLqLqqhqhqhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+      ihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihqhqhqqLqLqLqLhqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihih
+      hihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihqhqhqhLqLqLqLqqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihi
+      ihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihqhqhqqLqLqLqqhqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihih
+      hihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihqhqhqqLqLqLqLhqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihi
+      ihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihqhqhqhLqLqLqLqqhqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihih
+      hihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihqhqhqqLqLqLqLhqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihi
+      ihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihqhqhqqLqLqLqLqqhqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihih
+      hihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihqhqhqhLqLqLqLqqhqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihi
+      ihiuihihihihihihihihihiuihihihihihihihihihihihihihihihihihihihihihihihihqhqhqhqqLqLqLqLhqhqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihih
+      huuuuihihihihihihihihiuuuuhuuihihihihihihihihihihihihihihihihihihihihihihqhqhqqLqLqLqLqqhqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihi
+      uuuuuuihihihihihihihiuuuuuuuuuihihihihihihuuihihihihihihihihihihihihihihqhqhqhLqLqLqLqLhqhqhihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihihih
+      uuuuuuuiiuiuiiiiiiiiuuuuuuuuuuuuuuuiiuiuuuuuuuuuiiiiiiiiiiiiiiiiiiiiiiiqiqiqiqqLqLqLqLqqiqiqiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+      uuuuuuuuuuuuuiuiiiuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuiuiiiiiiiiiiiiiiiiiiiiiqiqiqqLqLqLqLqLiqiqiiiiiiiiiiiiiiiiiiiiiiiiiiuuuuuuuiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+      uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuiiiiiiiiiiiiiiiiiiqiqiqiLqLqLqLqLiqiqiqiiiiiiiiiiiiiiiiiiiiiuuuuuuuuuuuuuiiiuuiiiiiiiiiiiuiiuuiiiiiiiiiiiii
+      uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuiiiiuiuuiiiiiiiiqiqiqiqqLqLqLqLqqiqiqiiiiiiititttttttttuttuttuuuuuuttuuuuiuuuuuiiiuuuiutuutttuttttttiittti
+      uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuiuiuuiiqiquqiLqLqLqLqLiqiqiqtttttttttttttttttttttttttuuttttttuuuuuuuuuuuuttttttttttttttttttttttt
+      uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuquququLqLqLqLqLqqiqiqtttttttttttttttttttttttttttttttttttuuuuuuuuuttttttttttttttttttttttttt
+      uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuquququqqLqLqLqLqLuqiqttttttttttttttttttttttttttttttttttttttttttuttttttttttttttttttttttttttt
+      uuuuuuuuttuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuquququLqLqLqLqLuquqtqttttttttttttttttttttttttttttttttttttttttttttttttttttCEttttttttttttttt
+      uutttttttttuuuuuttuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuquququLqLqLqLqLqquqtqttttttttttttttttttttttttttttttttttttttttttttCEtttttttDEttttttttttttttt
+      uttttttttttttuuttCEtCEuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuquququqqLqLqLqLqLuqtqtqtttttttttttttttttttttttttttttttttttttttttttDEtCEttttDEttttttttttttttt
+      tttttttttttttttttDEtDEuuuutttttttuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuquququLqLqLqLqLqqtqtqttttttttttttttttttttttttttttttttttttttttttttDEtDEtCEtDEttttttttttttttt
+      tttttttttttttttttDEtDEttttttttttttuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuquququLqLqLqLqLqLtqtqtqtttttttttttttttttttttttttttttttttttttttttttDEtDEtDEtDEttttttttttttttt
+      tttttttttttttttttDEtDEtCEttttCEtttttttuuuuuuuuuuuuuuuuuuuCEuuuuuuuuquququqqLqLqLqLqLtqtqtqttttttttttttttttttttttttttttttttttttttttttttDEtDEtDEtDEttttttttttttttt
+      tttttttttttttttttDEtDEtDEtCEtDEtttttttttuuuuuuuuuuuCEuuuuDEuuuuuuuuuququqtLqLqLqLqLqqtqtqtttttttttttttttttttttttttttttttttttttttttttttDEtDEtDEtDEttttttttttttttt
+      tttttttttttttttttDEtDEtDEtDEtDEttttttttttuuuuuuuuuuDEuuuuDEuuuuuuuuquqtqtqqLqLqLqLqLtqtqtqttttttttttttttttttttttttttttttttttttttttttttDEtDEtDEtDEttttttttttttttt
+      tttttttttttttttttDEtDEtDEtDEtDEttttttttttttuuuuuuuuDEuuuuDEuuuuuuuquqtqtqqLqLqLqLqLqqtqtqtttttttttttttttttttttttttCEttttttttttttttttttDEtDEtDEtDEttttttttttttttt
+      tttttttttttttttttDEtDEtDEtDEtDEttttttttttttttuuuuuuDEuuuuDEuuuuuuquqtqtqtLqLqLqLqLqLtqtqtqttttttttttttttttttttttttDEttttttttttttttttttDEtDEtDEtDEttttttttttttttt
+      tttttttttttttttttDEtDEtDEtDEtDEttttttttttttttttuuuuDEuuuuDEuuuuuuuqtqtqtqqLqLqLqLqLtqtqtqtttttttttttttttttttttttttDEttttttttttttttFFFFFFFFFFFFFFFFFttttttttttttt
+      tttttttttttttttttDEtDEtDEtDEtDEtttttttttttttttttuuuDEuCEuDEuuuuutqtqtqtqqLqLqLqLqLqqtqtqtqtttttttttttttttttttttCEtDEtCEtttttttttFFFFFFFFFFFFFFFFFFFFFttttttttttt
+      tttttttttttttttttDEtDEtDEtDEtDEttttttttttttttttttttDEtDEtDEtttttqtqtqtqtLqLqLqLqLqLtqtqtqttttttttttttttttttttttDEtDEtDEtttttttttttFFFFFFFFFFFFFFFFFttttttttttttt
+      tttttttttttttttttDEtDEtDEtDEtDEttttttttttttttttttttDEtDEtDEttttttqtqtqtqqLqLqLqLqLqqtqtqtqtttttttttttttttttttttDEtDEtDEttttttttttttttttttttttttttttttttttttttttt
+      ttttttttttttFFFFFFFFFFFFFFFFFFFFFttttttttttttttttttDEtDEtDEtttttqtqtqtqqLqLqLqLqLqLtqtqtqttttttttttttttttttttttDEtDEtDEttttttttttttttttttttttttttttttttttttttttt
+      tttttttttFFFFFFFFFFFFFFFFFFFFFFFFFFFtttttttttttttttDEtDEtDEttttqtqtqtqtLqLqLqLqLqLtqtqtqtttttttttttttttttttttttDEtDEtDEttttttttttttttttttttttttttttttttttttttttt
+      ttttttttttttFFFFFFFFFFFFFFFFFFFFFttttttttttttttttttDEtDEtDEtttttqtqtqtqqLqLqLqLqLqqtqtqtqttttttttttttttttttttttDEtDEtDEttttttttttttttttttttttttttttttttttttttttt
+      tttttttttttttttttttttttttttttttttttttttttttttttttttDEtDEtDEttttqtqtqtqqLqLqLqLqLqLtqtqtqtttttttttttttttttttttttDEtDEtDEttttttttttttttttttttttttttttttttttttttttt
+      ttttttttttttttttttttttttttttttttttttttttttttttttFFFFFFFFFFFFFtqtqtqtqtLqLqLqLqLqLqqtqtqtqttttttttttttttttttttttDEtDEtDEttttttttttttttttttttttttttttttttttttttttt
+      tttttttttttttttttttttttttttttttttttttttttttttttFFFFFFFFFFFFFFFtqtqtqtqqLqLqLqLqLqLtqtqtqtttttttttttttttttttttttDEtDEtDEttttttttttttttttttttttttttttttttttttttttt
+      ttttttttttttttttttttttttttttttttttttttttttttttttFFFFFFFFFFFFFtqtqtqtqtLqLqLqLqLqLtqtqtqtqtttttttttttttttttttFFFFFFFFFFFFFttttttttttttttttttttttttttttttttttttttt
+      tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttqtqtqtqtLqLqLqLqLqLqqtqtqtqtttttttttttttttttttFFFFFFFFFFFFFFFtttttttttttttttttttttttttttttttttttttt
+      ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttqtqtqtqqLqLqLqLqLqLtqtqtqtttttttttttttttttttttFFFFFFFFFFFFFttttttttttttttttttttttttttttttttttttttt
+      tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttqtqtqtqtLqLqLqLqLqLqqtqtqtqtttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt
+      dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+      ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccaccccccccccccccccccccccccccccccccccccccccccccccccccccccccccacccccccccccccccccccccccccccccccccccccccccc
+      ccccccccccccccccccccaccccccccccccccccccccccccccccccccccccccccccccccccccccccccccaccccccccccccccccccccccccccccccccccccccccccccccccccccccccccaccccccccccccccccccccc
+      bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbba
+      bbbabbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabababacabababababbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbcbbb
+      bbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbcbbbbbbbbbbabababababababababababababbbbbcbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbb
+      bbbbbbbabbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabababaaababababababababababababbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbb
+      bbbbbcbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbcbbbbbbbbbbbababababababababababababababaaababbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbabbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbababacabababababababababababababbbbbbbbbbbbbbbcbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbb
+      cbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbabababababababababababababbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbabbbbbbbbbpqqbbbbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbababababababababbbbbbbbbabbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbpppppqqbbbbbbabbbbbbbbb
+      bbbbbbbbbbbbbbbbbbbpqqbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbcbbbbbbbbbbbbbbbbbqqqpqqqqqbbbbbbbbbbbbbbc
+      bbbbbbbbbbbbbcbabpppppqqbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbcqqqqqqqbbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbqqqpqqqqqbbbbbbcbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbqqqbbbbbbbbbbbbabbbbb
+      bbbbbbbbcbbbbbbbbqqqqqqqbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbbbbqqqbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbcbbbbbbbbbb
+      bbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbab
+      bbabbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbacbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbpqqbcbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbabbbbbbbbbbbbbbpppppqqbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbqqqpqqqqqbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbb
+      bbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbqqqqqqqbbbbbbbbbbbbcbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbb
+      bbbbbbbbbbbcbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbcbbbbbqqqbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbabbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbb

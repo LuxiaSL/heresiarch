@@ -1,0 +1,653 @@
+# Giga Slime Lair (zone 7, final zone): a slime-flooded cave. Wet
+# mauve stone floor, violet rock walls capped and dripping with lime
+# ooze, slimy stalagmites for lone wall tiles (wall_15, 16x24), and a
+# backdrop where the Giga Slime looms in the dark.
+# Authored procedurally by theme fork C; this file is the source of truth.
+theme: giga_slime_lair
+sheet: theme_giga_slime_lair
+colors:
+  lair_floor1: "#dcc4e6"
+  lair_floor2: "#b898cb"
+  lair_floor3: "#8e6ea8"
+  lair_floor4: "#634a82"
+  lair_goo1: "#f4ffb4"
+  lair_goo2: "#b9f064"
+  lair_goo3: "#63cc4f"
+  lair_goo4: "#2b8a47"
+  lair_goo5: "#16543a"
+  lair_rock1: "#ab88d2"
+  lair_rock2: "#7657a6"
+  lair_rock3: "#4b347a"
+  lair_rock4: "#2c1d4d"
+  lair_bone: "#efe4cc"
+  lair_bone2: "#c2b294"
+  lair_eye: "#ff5ad0"
+  lair_dark1: "#160e25"
+  lair_dark2: "#23173b"
+palettes:
+  lair:
+    "K": ink
+    "V": void
+    "a": lair_floor1
+    "b": lair_floor2
+    "c": lair_floor3
+    "d": lair_floor4
+    "G": lair_goo1
+    "H": lair_goo2
+    "I": lair_goo3
+    "J": lair_goo4
+    "j": lair_goo5
+    "p": lair_rock1
+    "q": lair_rock2
+    "t": lair_rock3
+    "u": lair_rock4
+    "P": lair_bone
+    "W": lair_bone2
+    "O": lair_eye
+    "h": lair_dark1
+    "i": lair_dark2
+    "R": ver1
+    "S": ver2
+    "T": ver3
+    "U": ver4
+    "z": stone3
+defaults:
+  palette: lair
+  ax: 8
+  ay: 16
+sprites:
+  giga_slime_lair.floor_0:
+    grid: |
+      cbbbbabbbbbbbbbb
+      bbabbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbabcb
+      bbbbbbbbbbbbbbbc
+  giga_slime_lair.floor_1:
+    grid: |
+      bbbbbbbbbbbbbbbb
+      bbbbbbabbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      abbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbcbbbbbbbbbbbbb
+      bccbbbbbbbbbbbbc
+      cbbbbbbbbbbbbbbc
+      bbbbbbbjIjjjbbbb
+      bbbbbajJJJJJjbbb
+      bbbbbbbjjjjjbbab
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+  giga_slime_lair.floor_2:
+    grid: |
+      bbbbbbbbbabbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbabbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbdbbbbbbbbbabb
+      bbbbddbbbbbbbbbb
+      bbbbbbdbbbbbbbbb
+      bbbbbbdbbbbbbbbb
+      abbbbbbbbbbbbbbb
+      bbbbbbbbccbbbbbb
+      bbbbbbbbbbcdbbbb
+      bbbbbbbbbbbbdbbb
+      bbbbbbbbbbbbdbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+  giga_slime_lair.floor_3:
+    grid: |
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbabbb
+      bbbbbbbbbbbabbbb
+      bbbbbbbbbbbcbbbb
+      bbbcbbbbbbbbcbbb
+      bbbccbbbabbbbbbb
+      bbbbcbbbbbbbbbbb
+      bbbbbcbbbbbbbbbb
+      bbbbabbbbbbbbbbb
+      bbbbccbbababbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbcbbbbbb
+      bbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbb
+  giga_slime_lair.wall_0:
+    grid: |
+      qtppptttttttqqqq
+      qttttttpptttGHJq
+      qtGHIJJptttJIIJJ
+      qJIIIIIJtttqJJJq
+      qIIIIIIJtttqqqqq
+      qJIIIIJJttqqqqqq
+      qqJJJJJqqqqqqqqq
+      qqqqqqqttqqqqqqq
+      qqqqqtppttqqqqtq
+      qqqtqtttttGHIIJt
+      tppptttttJIIIIJJ
+      ttttttqqqJIIIIIJ
+      qppttttqqJIIIIJJ
+      qppttttqqqJJJJJq
+      qtttttqqqqqqqqqq
+      qqtttttqqqqqqqqq
+  giga_slime_lair.wall_1:
+    grid: |
+      KKKKKKKKKKKKKKKK
+      HIIIHIIIHIIIHIII
+      qtGHIJJptttJIIJJ
+      qJIIIIIJtttqJJJq
+      qIIIIIIJtttqqqqq
+      qJIIIIJJttqqqqqq
+      qqJJJJJqqqqqqqqq
+      qqqqqqqttqqqqqqq
+      qqqqqtppttqqqqtq
+      qqqtqtttttGHIIJt
+      tppptttttJIIIIJJ
+      ttttttqqqJIIIIIJ
+      qppttttqqJIIIIJJ
+      qppttttqqqJJJJJq
+      qtttttqqqqqqqqqq
+      qqtttttqqqqqqqqq
+  giga_slime_lair.wall_2:
+    grid: |
+      qtppptttttttqquK
+      qttttttpptttGHuK
+      qtGHIJJptttJIIuK
+      qJIIIIIJtttqJJuK
+      qIIIIIIJtttqqquK
+      qJIIIIJJttqqqquK
+      qqJJJJJqqqqqqquK
+      qqqqqqqttqqqqquK
+      qqqqqtppttqqqquK
+      qqqtqtttttGHIIuK
+      tppptttttJIIIIuK
+      ttttttqqqJIIIIuK
+      qppttttqqJIIIIuK
+      qppttttqqqJJJJuK
+      qtttttqqqqqqqquK
+      qqtttttqqqqqqquK
+  giga_slime_lair.wall_3:
+    grid: |
+      KKKKKKKKKKKKKKuK
+      HIIIHIIIHIIIHIuK
+      qtGHIJJptttJIIuK
+      qJIIIIIJtttqJJuK
+      qIIIIIIJtttqqquK
+      qJIIIIJJttqqqquK
+      qqJJJJJqqqqqqquK
+      qqqqqqqttqqqqquK
+      qqqqqtppttqqqquK
+      qqqtqtttttGHIIuK
+      tppptttttJIIIIuK
+      ttttttqqqJIIIIuK
+      qppttttqqJIIIIuK
+      qppttttqqqJJJJuK
+      qtttttqqqqqqqquK
+      qqtttttqqqqqqquK
+  giga_slime_lair.wall_4:
+    grid: |
+      qtppptttttttqqqq
+      qttttttpptttGHJq
+      qtGHIJJptttJIIJJ
+      qJIIIIIJtttqJJJq
+      qIIIIIIJtttqqqqq
+      KKKKKKKKKKKKKKKK
+      GHHHHGHHHHGHHHHG
+      IIIIIIIIIIIIIIII
+      qqIJqqqIJqqqIJqq
+      pqIJqqpIJpqqIJqp
+      qqIJqqqGJqqqIJqq
+      qqIJqqqHIqqqIJqq
+      qtGJqtqqqtqqIJqq
+      qqHIqqqqqqqqGJqq
+      ttttttttttttHItt
+      KKKKKKKKKKKKKKKK
+  giga_slime_lair.wall_5:
+    grid: |
+      KKKKKKKKKKKKKKKK
+      HIIIHIIIHIIIHIII
+      qtGHIJJptttJIIJJ
+      qJIIIIIJtttqJJJq
+      qIIIIIIJtttqqqqq
+      KKKKKKKKKKKKKKKK
+      GHHHHGHHHHGHHHHG
+      IIIIIIIIIIIIIIII
+      qqIJqqqIJqqqIJqq
+      pqIJqqpIJpqqIJqp
+      qqIJqqqGJqqqIJqq
+      qqIJqqqHIqqqIJqq
+      qtGJqtqqqtqqIJqq
+      qqHIqqqqqqqqGJqq
+      ttttttttttttHItt
+      KKKKKKKKKKKKKKKK
+  giga_slime_lair.wall_6:
+    grid: |
+      qtppptttttttqquK
+      qttttttpptttGHuK
+      qtGHIJJptttJIIuK
+      qJIIIIIJtttqJJuK
+      qIIIIIIJtttqqquK
+      KKKKKKKKKKKKKKuK
+      GHHHHGHHHHGHHHuK
+      IIIIIIIIIIIIIIuK
+      qqIJqqqIJqqqIJuK
+      pqIJqqpIJpqqIJuK
+      qqIJqqqGJqqqIJuK
+      qqIJqqqHIqqqIJuK
+      qtGJqtqqqtqqIJuK
+      qqHIqqqqqqqqGJuK
+      ttttttttttttHIuK
+      KKKKKKKKKKKKKKuK
+  giga_slime_lair.wall_7:
+    grid: |
+      KKKKKKKKKKKKKKuK
+      HIIIHIIIHIIIHIuK
+      qtGHIJJptttJIIuK
+      qJIIIIIJtttqJJuK
+      qIIIIIIJtttqqquK
+      KKKKKKKKKKKKKKuK
+      GHHHHGHHHHGHHHuK
+      IIIIIIIIIIIIIIuK
+      qqIJqqqIJqqqIJuK
+      pqIJqqpIJpqqIJuK
+      qqIJqqqGJqqqIJuK
+      qqIJqqqHIqqqIJuK
+      qtGJqtqqqtqqIJuK
+      qqHIqqqqqqqqGJuK
+      ttttttttttttHIuK
+      KKKKKKKKKKKKKKuK
+  giga_slime_lair.wall_8:
+    grid: |
+      Ktppptttttttqqqq
+      KttttttpptttGHJq
+      KtGHIJJptttJIIJJ
+      KJIIIIIJtttqJJJq
+      KIIIIIIJtttqqqqq
+      KJIIIIJJttqqqqqq
+      KqJJJJJqqqqqqqqq
+      Kqqqqqqttqqqqqqq
+      Kqqqqtppttqqqqtq
+      KqqtqtttttGHIIJt
+      KppptttttJIIIIJJ
+      KtttttqqqJIIIIIJ
+      KppttttqqJIIIIJJ
+      KppttttqqqJJJJJq
+      Ktttttqqqqqqqqqq
+      Kqtttttqqqqqqqqq
+  giga_slime_lair.wall_9:
+    grid: |
+      KKKKKKKKKKKKKKKK
+      KIIIHIIIHIIIHIII
+      KtGHIJJptttJIIJJ
+      KJIIIIIJtttqJJJq
+      KIIIIIIJtttqqqqq
+      KJIIIIJJttqqqqqq
+      KqJJJJJqqqqqqqqq
+      Kqqqqqqttqqqqqqq
+      Kqqqqtppttqqqqtq
+      KqqtqtttttGHIIJt
+      KppptttttJIIIIJJ
+      KtttttqqqJIIIIIJ
+      KppttttqqJIIIIJJ
+      KppttttqqqJJJJJq
+      Ktttttqqqqqqqqqq
+      Kqtttttqqqqqqqqq
+  giga_slime_lair.wall_10:
+    grid: |
+      KtppptttttttqquK
+      KttttttpptttGHuK
+      KtGHIJJptttJIIuK
+      KJIIIIIJtttqJJuK
+      KIIIIIIJtttqqquK
+      KJIIIIJJttqqqquK
+      KqJJJJJqqqqqqquK
+      KqqqqqqttqqqqquK
+      KqqqqtppttqqqquK
+      KqqtqtttttGHIIuK
+      KppptttttJIIIIuK
+      KtttttqqqJIIIIuK
+      KppttttqqJIIIIuK
+      KppttttqqqJJJJuK
+      KtttttqqqqqqqquK
+      KqtttttqqqqqqquK
+  giga_slime_lair.wall_11:
+    grid: |
+      KKKKKKKKKKKKKKuK
+      KIIIHIIIHIIIHIuK
+      KtGHIJJptttJIIuK
+      KJIIIIIJtttqJJuK
+      KIIIIIIJtttqqquK
+      KJIIIIJJttqqqquK
+      KqJJJJJqqqqqqquK
+      KqqqqqqttqqqqquK
+      KqqqqtppttqqqquK
+      KqqtqtttttGHIIuK
+      KppptttttJIIIIuK
+      KtttttqqqJIIIIuK
+      KppttttqqJIIIIuK
+      KppttttqqqJJJJuK
+      KtttttqqqqqqqquK
+      KqtttttqqqqqqquK
+  giga_slime_lair.wall_12:
+    grid: |
+      Ktppptttttttqqqq
+      KttttttpptttGHJq
+      KtGHIJJptttJIIJJ
+      KJIIIIIJtttqJJJq
+      KIIIIIIJtttqqqqq
+      KKKKKKKKKKKKKKKK
+      KHHHHGHHHHGHHHHG
+      KIIIIIIIIIIIIIII
+      KqIJqqqIJqqqIJqq
+      KqIJqqpIJpqqIJqp
+      KqIJqqqGJqqqIJqq
+      KqIJqqqHIqqqIJqq
+      KtGJqtqqqtqqIJqq
+      KqHIqqqqqqqqGJqq
+      KtttttttttttHItt
+      KKKKKKKKKKKKKKKK
+  giga_slime_lair.wall_13:
+    grid: |
+      KKKKKKKKKKKKKKKK
+      KIIIHIIIHIIIHIII
+      KtGHIJJptttJIIJJ
+      KJIIIIIJtttqJJJq
+      KIIIIIIJtttqqqqq
+      KKKKKKKKKKKKKKKK
+      KHHHHGHHHHGHHHHG
+      KIIIIIIIIIIIIIII
+      KqIJqqqIJqqqIJqq
+      KqIJqqpIJpqqIJqp
+      KqIJqqqGJqqqIJqq
+      KqIJqqqHIqqqIJqq
+      KtGJqtqqqtqqIJqq
+      KqHIqqqqqqqqGJqq
+      KtttttttttttHItt
+      KKKKKKKKKKKKKKKK
+  giga_slime_lair.wall_14:
+    grid: |
+      KtppptttttttqquK
+      KttttttpptttGHuK
+      KtGHIJJptttJIIuK
+      KJIIIIIJtttqJJuK
+      KIIIIIIJtttqqquK
+      KKKKKKKKKKKKKKuK
+      KHHHHGHHHHGHHHuK
+      KIIIIIIIIIIIIIuK
+      KqIJqqqIJqqqIJuK
+      KqIJqqpIJpqqIJuK
+      KqIJqqqGJqqqIJuK
+      KqIJqqqHIqqqIJuK
+      KtGJqtqqqtqqIJuK
+      KqHIqqqqqqqqGJuK
+      KtttttttttttHIuK
+      KKKKKKKKKKKKKKuK
+  giga_slime_lair.wall_15:
+    ay: 24
+    grid: |
+      ................
+      ................
+      ......KKK.......
+      .....KHIIK......
+      .....KHGIIK.....
+      .....KHIIIK.....
+      .....KGIIIK.....
+      .....KHIIIK.....
+      cbbbKHIIIIIKbbbb
+      bbabKHIIIIIKbbbb
+      bbbbKHIIIIIKbbbb
+      bbbbKHIIIIIKbbbb
+      bbbKpqIqqIqtKbbb
+      bbbKpqIqqIttKbbb
+      bbbKpqIqqIttKbbb
+      bbbKpqIqqIqtKbbb
+      bbKpqqIqqIqttKbb
+      bbKpqqHqqIqttKbb
+      bbKpqqqqqIqqtKbb
+      bbKpqqqqqIqttKbb
+      bKpqqqqqqHqqttKb
+      bKpqqqqqqqqqqtKb
+      bKpqqqqqqqqqttKb
+      bbKKKKKKKKKKKKbc
+  giga_slime_lair.void:
+    grid: |
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+  giga_slime_lair.stairs_down:
+    grid: |
+      cbbbbabbbbbbbbbb
+      bbabbbbbbbbbbbbb
+      bbbbbbbKKbbbbbbb
+      bbbbHKIIIIKHbbbb
+      bbbGIJJJJJJIKbbb
+      bbKJJJuVVuJJJKbb
+      bKIJuVVVVVVuJIKb
+      bKJuVVVVVVVVuJKb
+      bIJuVVVVVVVVuJIb
+      bIJuVVVVVVVVuJIb
+      bKJuuVVVVVVuuJKb
+      bKIJttttttttJIKb
+      bbKIJqqqqqqJIKbb
+      bbbKIIttttIIKbbb
+      bbbbKKIIIIKKabcb
+      bbbbbbbKKbbbbbbc
+  giga_slime_lair.stairs_up:
+    grid: |
+      cbbbbabbbbbbbbbb
+      bbabKKKKKKKKbbbb
+      bbbbKaaaaaaKbbbb
+      bbbKKKKKKKKKKbbb
+      bbbKpIppppppKbbb
+      bbbKttItttttKbbb
+      bbKKKKKKKKKKKKbb
+      bbKpppppppIppKbb
+      bbKtttttttIttKbb
+      bKKKKKKKKKKKKKKb
+      bKppIpppppppppKb
+      bKttttttttttttKb
+      KKKKKKKKKKKKKKKK
+      KqqqqqqqqqqqqqqK
+      KuuuuuuuuuuuuuuK
+      KKKKKKKKKKKKKKKK
+  giga_slime_lair.exit_torii:
+    grid: |
+      KKKKKKKKKKKKKKKK
+      KUUUUUUUUUUUUUUK
+      KKRRIIRRRRRIIRKK
+      bbKRIKbIbbKIRKbb
+      bKKKKKKHKKKKKKKb
+      bKRSSSSSSSSSSTKb
+      bKKRSKKKKKKRSKKb
+      bbKRSKbbbbKRSKbb
+      bbKRSKbbbbKISKbb
+      bbKRSKbbbbKISKbb
+      bbKRSKbbbbKRHKbb
+      bbKRSKbbbbKRSKbb
+      bbKRTKbbbbKRTKbb
+      bbKTTKbbbbKTTKbb
+      bKzzzzKbbKzzzzKb
+      bKKKKKKbbKKKKKKc
+  giga_slime_lair.decor_bubbles:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      .....KKKKKK.....
+      ..KKKjjjjjjKKK..
+      .KjJJJJJHJJJJjK.
+      KjJJIJIJJJJJJJjK
+      KjjHJJJJJIJIJjjK
+      .KjjjJJJJJJjjjK.
+      ..KKKjjjjjjKKK..
+      .....KKKKKK.....
+  giga_slime_lair.decor_bones:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ....KKKKKK......
+      ...KPWWPPPK.....
+      ...KPWWPPPK.....
+      ..KPPKPPKPPK..K.
+      ...KPKPPKPK..KPK
+      ...KPPPPPPK..KKP
+      ...KPWPWPWKKKPPK
+      ...IIIKKKKKPPKK.
+      ...III.KPPPKK...
+      ........KPK.....
+  giga_slime_lair.decor_drip:
+    grid: |
+      ................
+      ................
+      ................
+      .......KK.......
+      ......KGIK......
+      ......KIIK......
+      .....KpIItK.....
+      .....KpIItK.....
+      .....KpqqIK.....
+      ....KpqqqItK....
+      ....KpqqqItK....
+      ....KpqqqItK....
+      ...KpqqqqHqtK...
+      ...KpqqqqqqtK...
+      ...KpqqqqqqqtK..
+      ....KKKKKKKKK...
+  bg_giga_slime_lair:
+    ax: 0
+    ay: 0
+    grid: |
+      ttuuuutttttttttttttuuuuKJHIIJIHIJIKhuuuutttthhhhhhhhhuuuutttthhhhhhhhhuuuutttthhhhhhhhhuuuutttthhhhhhhhhuuuutttthhhhhhhhhuuuuttKJIHIJIIKqtuuuutttttttttttttuuuut
+      tttuuuttttttttttttttuuuKJHIIJIHIJIKhhuuuttthhhhhhhhhhhuuuttthhhhhhhhhhhuuuttthhhhhhhhhhhuuuttthhhhhhhhhhhuuuttthhhhhhhhhhhuuuttKJIHIJIIKhpquuuttttttttttttttuuut
+      tttuuutttttttttttttquuuKIHIJIIHJIIKhhuuuttthhhhhhhhhhhuuuttthhhhhhhhhhhuuuttthhhhhhhhhhhuuuttthhhhhhhhhhhuuuttthhhhhhhhhhhuuuttKIIHJIIIKhhpuuuttttttttttttttuuut
+      tttuuuttttttttttttttuuuKIIIHIIIJHIKhhhuutthhhhhhhhhhhhuuuttthhhhhhhhhhhhuutthhhhhhhhhhhhhuutthhhhhhhhhhhhuuuttthhhhhhhhhhhuuuttKIIIJHIIKqqtuuutttttttttttttttuut
+      ttttuutttttttttttttttuuKIIJHIIJIHIKhhhuutthhhhhhhhhhhhhuutthhhhhhhhhhhhhuutthhhhhhhhhhhhhuutthhhhhhhhhhhhuuuttthhhhhhhhhhhuuuttKIIJIHIJKpqquuutttttttttttttttuut
+      ttttuutttttttttttttqquuKIIJHIIJIHIKhhhhuthhhhhhhhhhhhhhuutthhhhhhhhhhhhhhuthhhhhhhhhhhhhhhuthhhhhhhhhhhhhhuutthhhhhhhhhhhhuuuttKIIJIHIJKhhpquuttttttttttttttttut
+      ttttuutttttttttttttttuuKHJIIIHIIIJKhhhhuthhhhhhhhhhhhhhuutthhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhhhhuuttKIHIIIJHKpqqtuuttttttttttttttttut
+      tttttutttttttttttttttquKHJIIIHIIIJKhhhhhHhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhhhhuuttKIHIIIJHKpqqtuutttttttttttttttttH
+      tttttutttttttttttttqqpuKHIIIJHIIJIKhhhhhIhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuutthhhhhhhhhhhhhuuttKJHIIJIHKhhpquutttttttttttttttttI
+      tttttuttttttttttttttqqpKJIHIJIIHJIKhhhhhIhhhhhhhhhhhhhhhhHhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhuuttKJIIHJIIKhpqqtutttttttttttttttttI
+      ttttttHtttttttttttttttqKIIHJIIIHIIKhhhhhIhhhhhhhhhhhhhhhhIhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhuthKIIIHIIIKqqtttutttttttttttttttttI
+      ttttttItttttttttttttqqpKIIHJIIIHIIKhhhhhIhhhhhhhhhhhhhhhhIhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhuthKIIIHIIIKhpqqtutttttttttttttttttI
+      ttttttIttttttttttttttqqKIIJIHIJIIHKhhhhhIhhhhhhhhhhhhhhhhIhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhuthhhhhhhhhhhhhhhuthKHIJIIHJKpqqtttHttttttttttttttttt
+      ttttttIttttttttttttttttKIIJIHIJIIHKhhhhhIhhhhhhhhhhhhhhhhIhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhHhhhhhhhhhhhhhhhuthKHIJIIHJKqtttttIttttttttttttttttt
+      tttttttttttttttttttttqqKIJIIHJIIIHKhhhhhhhhhhhhhhhhhhhhhhIhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhIhhhhhhhhhhhhhhhhhhKHJIIIHIKpqqtttIttttttttttttttttt
+      ttttttttttttttttttttqqpKIHIIIJHIIJKhhhhhhhhhhhhhhhhhhhhhhIhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhIhhhhhhhhhhhhhhhhhhKIJHIIJIKhpqqttIttttttttttttttttt
+      ttttttttttttttttttttttqKJHIIJIHIJIKhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhIhhhhhhhhhhhhhhhhhhKJIHIJIIKqqttttIttttttttttttttttt
+      ttttttttttttttttttttttqKJHIIJIHIJIKhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhKJIHIJIIKqqtttttttttttttttttttttt
+      ttttttttttttttttttttqqpKIIIHIIIJHIKhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhKIIIJHIIKhpqqtttttttttttttttttttt
+      ttttttttttttttttttttttqKIIIHIIIJHIKhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhKIIIJHIIKqqtttttttttttttttttttttt
+      tttttttttttttttttttttttKIIJHIIJIHIKhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhjhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhKIIJIHIJKqttttttttttttttttttttttt
+      ttttttttttttttttttttqqpKHIJIIHJIIIKhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhjjjjjjjjjjjjjjjjjjjjjjjjjhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhKIHJIIIHKhpqqtttttttttttttttttttt
+      tttttttttttttttttttttqqKHJIIIHIIIJKhhhhhhhhhhhhhhhhhhhhhhhhhhhjjjjjjjjJjjjjjjjjjjjjjjjjjjjjjjjjjjjjhhhhhhhhhhhhhhhhhhhhhhhhhhhhKIHIIIJHKpqqttttttttttttttttttttt
+      tttttttttttttttttttttttKHJIIIHIIIJKhhhhhhhhhhhhhhhhhhhhhhhjJjJjJjJjJjJjJjJjJjJjJjJjjjjjjjjjjjjjjjjjjjjjhhhhhhhhhhhhhhhhhhhhhhhhKIHIIIJHKtttttttttttttttttttttttt
+      ttttttttttttttttttttttqKJIHIJIIHJIKhhhhhhhhhhhhhhhhhhhhjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjjjjjjjjjjjjjjjjjjjjjhhhhhhhhhhhhhhhhhhhhhKJIIHJIIKqqtttttttttttttttttttttt
+      tttttttttttttttttttttqqKJIHIJIIHJIKhhhhhhhhhhhhhhhhJjJjJJJJJJJJJJJJJJJJJJJJJJJjJjJjJjJjJjJjjjjjjjjjjjjjjjjjjjhhhhhhhhhhhhhhhhhhKJIIHJIIKpqqttttttttttttttttttttt
+      tttttttttttttttttttttttKIIHJIIIHIIKhhhhhhhhhhhhhHHHHHJIJIJIJIJIJIJJJJJJJJJJJJJJJJjJjJjJjJjJjjjjjjjjjjjjjjjjjjjjhhhhhhhhhhhhhhhhKIIIHIIIKtttttttttttttttttttttttt
+      tttttttttttttttttttttttKIIIJHIIJIHKhhhhhhhhhhIHHHHHHHHHIJIJIJIJIJIJIJJJJJJJJJJJJJJJJjJjJjJjJjJjjjjjjjjjjjjjjjjjjjhhhhhhhhhhhhhhKHIIJIHIKqttttttttttttttttttttttt
+      tttttttttttttttttttttqqKIIJIHIJIIHKhhhhhhhhhIhIJHHHHHJIJIJIJIJIJIJIJIJJJJJJJJJJJJJJJJJJjJjJjJjJjJjjjjjjjjjjjjjjjjjjhhhhhhhhhhhhKHIJIIHJKpqqttttttttttttttttttttt
+      tttttttttttttttttttttttKIIJIHIJIIHKhhhhhhhhJjIJIJIJIJIJIJIJIJIJIJIJIJJJJJJJJJJJJJJJJJJJJjJjJjJjJjJjjjjjjjjjjjjjjjjjjjhhhhhhhhhhKHIJIIHJKqttttttttttttttttttttttt
+      tttttttttttttttttttttttKIHIIIJHIIJKhhhhhhhJjJjJjIjIjIjIjIjIjIjIjIjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjjjjjjjjjjjjjjjjjjjjhhhhhhhhKIJHIIJIKqttttttttttttttttttttttt
+      tttttttttttttttttttttqqKIHIIIJHIIJKihihJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjjjjjjjjjjjjjjjjjjjihihihKIJHIIJIKpqqttttttttttttttttttttt
+      ttttttttttttttttttttttqKJHIIJIHIJIKhihJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjjjjjjjjjjjjjjjjjjjihihiKJIHIJIIKqqtttttttttttttttttttttt
+      tttttttttttttttttttttttKJIIHJIIIHIKihJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjJjjjjjjjjjjjjjjjjjjjjhihKJIIIHIIKtttttttttttttttttttttttt
+      ttttttttttttttttttttttqKIIIHIIIJHIKhjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjhiKIIIJHIIKqqtttttttttttttttttttttt
+      ttttttttttttttttttttttqKIIIHIIIJHIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjhKIIIJHIIKqqtttttttttttttttttttttt
+      ttttttttttttttttttttttqKHIJIIHJIIIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIHJIIIHKqqtttttttttttttttttttttt
+      ttttttttttttttttttttqqpKHIJIIHJIIIKjjjjjjjjjjjjjjjjjjjjjjjjjjKKKKKKKjjjjjjjjjjjjjjjjjjjjjjjjjKKKKKKKjjjjjjjjjjjjjjjjjjjjjjjjjjjKIHJIIIHKhpqqtttttttttttttttttttt
+      tttttttttttttttttttqqpiKHJIIIHIIIJKjjjjjjjjjjjjjjjjjjjjjjjjKKOOOOOOOKKjjjjjjjjjjjjjjjjjjjjjKKOOOOOOOKKjjjjjjjjjjjjjjjjjjjjjjjjjKIHIIIJHKihpqqttttttttttttttttttt
+      tttttttttttttttttttttqqKIJHIIJIHIJKjjjjjjjjjjjjjjjjjjjjjjjKKOGGOOOOOOKKjjjjjjjjjjjjjjjjjjjKKOGGOOOOOOKKjjjjjjjjjjjjjjjjjjjjjjjjKIJIHIJIKpqqttttttttttttttttttttt
+      tttttttttttttttttttttqqKJIHIJIIHJIKjjjjjjjjjjjjjjjjjjjjjjjKOOOOhhhOOOOKjjjjjjjjjjjjjjjjjjjKOOOOhhhOOOOKjjjjjjjjjjjjjjjjjjjjjjjjKJIIHJIIKpqqttttttttttttttttttttt
+      tttttttttttttttttttqqpiKJIHIJIIHJIKjjjjjjjjjjjjjjjjjjjjjjKOOOOhhhhhOOOOKjjjjjjjjjjjjjjjjjKOOOOhhhhhOOOOKjjjjjjjjjjjjjjjjjjjjjjjKJIIHJIIKiipqqttttttttttttttttttt
+      tttttttttttttttttttttqqKIIIJHIIJIHKjjjjjjjjjjjjjjjjjjjjjjjKOOOhhhhhOOOKjjjjjjjjjjjjjjjjjjjKOOOhhhhhOOOKjjjjjjjjjjjjjjjjjjjjjjjjKHIIJIHIKpqqttttttttttttttttttttt
+      ttttttttttttttttttttttqKIIIJHIIJIHKjjjjjjjjjjjjjjjjjjjjjjjKKOOhhhhhOOKKjjjjjjjjjjjjjjjjjjjKKOOhhhhhOOKKjjjjjjjjjjjjjjjjjjjjjjjjKHIIJIHIKqqtttttttttttttttttttttt
+      tttttttttttttttttttqqpiKIIJIHIJIIHKjjjjjjjjjjjjjjjjjjjjjjjjKKOOhhhOOKKjjjjjjjjjjjjjjjjjjjjjKKOOhhhOOKKjjjjjjjjjjjjjjjjjjjjjjjjjKHIJIIHJKiipqqttttttttttttttttttt
+      ttttttttttttttttttttqqpKIHJIIIHIIIKjjjjjjjjjjjjjjjjjjjjjjjjjjKKKKKKKjjjjjjjjjjjjjjjjjjjjjjjjjKKKKKKKjjjjjjjjjjjjjjjjjjjjjjjjjjjKIIHIIIJKipqqtttttttttttttttttttt
+      tttttttttttttttttttttttKIHIIIJHIIJKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIJHIIJIKqttttttttttttttttttttttt
+      ttttttttttttttttttttqqpKIHIIIJHIIJKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIJHIIJIKjpqqtttttttttttttttttttt
+      ttttttttttttttttttttqqpKJIIHJIIIHIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKJIIIHIIKjpqqtttttttttttttttttttt
+      tttttttttttttttttttttttKJIIHJIIIHIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKJIIIHIIKqttttttttttttttttttttttt
+      ttttttttttttttttttttttqKIIIHIIIJHIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIIIJHIIKqqtttttttttttttttttttttt
+      ttttttttttttttttttttqqpKHIIJIHIJIIKjjjjjjjjjjjjjjjjjjjjjjjjjjjhhjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjhhjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIHIJIIHKjpqqtttttttttttttttttttt
+      ttttttttttttttttttttttqKHIJIIHJIIIKjjjjjjjjjjjjjjjjjjjjjjjjjjjhhhhhjhjjjjjjjjjjjjjjjjjjjjjjjhjhhhhhjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIHJIIIHKqqtttttttttttttttttttttt
+      ttttttttttttttttttttttqKHIJIIHJIIIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjhhhhhjjjjjjjjjjjjjjjjjjjjjjjhhhhhjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIHJIIIHKqqtttttttttttttttttttttt
+      ttttttttttttttttttttqqpKIJHIIJIHIJKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjhhhhhjjhjjjjjjjjjjjhjjhhhhhjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIJIHIJIKjpqqtttttttttttttttttttt
+      tttttttttttttttttttttqqKIJHIIJIHIJKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjhhhhhhhhhhhjhhhhhhhhhhhjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIJIHIJIKpqqttttttttttttttttttttt
+      tttttttttttttttttttttttKJIHIJIIHJIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjhhhhhhhhhhhhhhhhhjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKJIIHJIIKqttttttttttttttttttttttt
+      tttttttttttttttttttttqqKJIIIHIIIJHKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjhjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKHIIIJHIKpqqttttttttttttttttttttt
+      tttttttttttttttttttttqqKIIIJHIIJIHKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKHIIJIHIKpqqttttttttttttttttttttt
+      tttttttttttttttttttttttKIIIJHIIJIHKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKHIIJIHIKqttttttttttttttttttttttt
+      ttttttttttttttttttttttqKIHJIIIHIIIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIIHIIIJKqqtttttttttttttttttttttt
+      tttttttttttttttttttttqqKIHJIIIHIIIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIIHIIIJKpqqttttttttttttttttttttt
+      tttttttttttttttttttttttKIHIIIJHIIJKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIJHIIJIKqttttttttttttttttttttttt
+      tttttttttttttttttttttttKIJIHIJIIHJKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIJIIHJIKqttttttttttttttttttttttt
+      tttttttttttttttttttttqqKJIIHJIIIHIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKJIIIHIIKpqqttttttttttttttttttttt
+      tttttttttttttttttttttttKJIIHJIIIHIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKJIIIHIIKqttttttttttttttttttttttt
+      tttttttttttttttttttttttKHIIJIHIJIIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIHIJIIHKtttttttttttttttttttttttt
+      tttttttttttttttttttttqqKHIIJIHIJIIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIHIJIIHKpqqttttttttttttttttttttt
+      ttttttttttttttttttttttqKHIJIIHJIIIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIHJIIIHKqqtttttttttttttttttttttt
+      tttttttttttttttttttttttKIIHIIIJHIIKjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjKIIJHIIJKtttttttttttttttttttttttt
+      dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+      ccccccccccccccccccccccccaccccJcccccccccccccccccccccccccccccccccccccccccccccccaccccccccccccccccccccccccccccccccccccccccccccccccccccaJcccccccccccccccccccccccccccc
+      cccccccccccccccccccJJJJJJJJJJIJJJJJJJJJJcccaccccccccccccccccccccccccccccccccccccccccccccccccccccacccccccccccccccccccccccccccJJJJJJJIJJJJJJJccccccccccacccccccccc
+      bbbbbbbbbabbbbbbJJJIIIIIIIIIIIIIIIIIIIIIJJJbbbbbbbbbbbbbbbbbbbabbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbabbbbbbJJJIIIIIIIIIIIIIJJJbbbbbbbbbbbbbbbbbbb
+      cbbbbbbbbbbbbbJJJGHIIIGHIIIGHIIIGHIIIGHIIIJJJbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbJJJGHIIIGHIIIGHIIIJJJbbbbbbcbbbbbbbbbbb
+      bbbbbbbbcbbbbJJJJIIIIIIIIIIIIIIIIIIIIIIIIIJJJJbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbcJJJJIIIIIIIIIIIIIIIJJJJbbbbbbbbbbabbcbbb
+      bbbbbbbbbbbbbaJJJJJIIIIIIIIIIIIIIIIIIIIIJJJJJbbbbbbbbcbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbabJJJJIIIIIIIIIIIIIJJJJbbbbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbJJJJJJJJJIIIIIIIIIJJJJJJJJJbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbJJJJJJIIIIIIIJJJJJJbbbbbJbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbJbbJJJJJJJJJJJJJJJJJJJJJbbbbbbbbbbbabbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabcbbbbbbbbbbbbbbbbbJJJJJJJJJJJJJJJbJJIIIIIIIIIJJbbbbabb
+      bbbcbbbbbbJJIIIIIIIIIJJbbbbbbJbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbabbbbbbbJbbbbbbbJJIIIIIIIIIIIJJbbbbbb
+      bbbbbbbbbJJIIIIIIIIIIIJJbbbbbbbbbbbbabbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbJJJJJJJJJJJJJbbbbbbc
+      bbabbbbbbbJJJJJJJJJJJJJbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbacbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbJbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbJbbbbabbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbb
+      bbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbb
+      bbbbbbbbbbbbbbcbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbPPPbbbbbbbbbbbcbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbbbbbbbcbbbbbbbJbbbbbbbbbbbbbabbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcabbbbbbbbbbbbPPPPPbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbabbbbbbbbb
+      bbbbbbbbbbabbbbbbbbbbbbbJJIIIIIIIIIJJbbbbbbbbbbbbbbbbbbbbbbbbbbabbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbPKPKPbabbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbb
+      bcbbbbbbbbbbbbbbbbbbbbbJJIIIIIIIIIIIJJcbbbbPPPbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbPPPPPPPPPPbbbbbbbbJbbbbbbabbbbbbbbbbbbbcbbbbbbbbbb
+      bbbbbbbbbcbbbbbbbbbbbbbbJJJJJJJJJJJJJbbbbbPPPPPbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbabbbbbbbbbPPPbbbbbbcbJJIIIIIIIIIJJbbbbbbbbbbbbbbbbbbbabbcbb
+      bbbbbbbbbbbbbbabbcbbbbbbbbbbbbJbbbbbbbbbbbPKPKPbbbbbbbcbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbaJJIIIIIIIIIIIJJbbbbbbbbbbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbabbbbbbbbPPPPPPPPPPbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbJJJJJJJJJJJJJbcbbabbbbbbbbbbbbbbbbbbbb
+      bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbPPPbbbbbbabbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabcbbbbbbbbbbbbbbbbbbbbJbbbbbbbbbbbbbbbcbbbbbbbbbbbbbab
+      bbbbcbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbb
+      bbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbabbbbbbbbbbbbbbbb
+      bbbabbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbacbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbabbbbbbbbbbbbbbbbbbbbbcbbbbbbbbbbbbbbbbbbbbbbbbbbbb
