@@ -128,7 +128,9 @@ class SourceFile(BaseModel):
     # "bg_<theme>…" for backdrops), and a required terrain set.
     theme: str | None = None
     colors: dict[str, str] = Field(default_factory=dict)
-    palettes: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # Palette keys are single chars; YAML reads `1:` as an int, so accept
+    # any key here (the palette resolver str()s them).
+    palettes: dict[str, dict[Any, Any]] = Field(default_factory=dict)
     sheet: str = "misc"
     defaults: dict[str, Any] = Field(default_factory=dict)
     sprites: dict[str, dict[str, Any]] = Field(default_factory=dict)
@@ -480,7 +482,12 @@ def load_sources(resolver: Resolver) -> list[str]:
                 spec = SpriteSpec.model_validate(merged)
             except ValidationError as e:
                 raise BuildError(f"{origin}: {name}: {e}") from e
-            resolver.add(Entry(name, spec, spec.sheet or src.sheet, origin))
+            sheet = spec.sheet or src.sheet
+            # Theme backdrops share the backdrops sheet: one 160×96 frame
+            # on a tile sheet makes every contact-sheet row backdrop-tall
+            if src.theme and name.startswith("bg_") and not spec.sheet:
+                sheet = "backdrops"
+            resolver.add(Entry(name, spec, sheet, origin))
 
         for name, body in src.sprites.items():
             make(name, body or {}, path.name)

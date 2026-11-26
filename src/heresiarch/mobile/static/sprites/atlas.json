@@ -5,10 +5,260 @@
   "battle": "battle.png",
   "heroes": "heroes.png",
   "mobs": "mobs.png",
+  "theme_bamboo_thicket": "theme_bamboo_thicket.png",
+  "theme_giga_slime_lair": "theme_giga_slime_lair.png",
+  "theme_inner_sanctum": "theme_inner_sanctum.png",
+  "theme_mossy_path": "theme_mossy_path.png",
+  "theme_spirit_clearing": "theme_spirit_clearing.png",
+  "theme_the_pit": "theme_the_pit.png",
+  "theme_torii_descent": "theme_torii_descent.png",
   "tiles": "tiles.png",
   "ui": "ui.png"
  },
  "frames": {
+  "bamboo_thicket.decor_fleck": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 171,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.decor_litter": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 154,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.decor_shoot": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 137,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.exit_torii": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 120,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.floor_0": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 1,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.floor_1": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 18,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.floor_2": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 35,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.floor_3": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.stairs_down": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 86,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.stairs_up": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 103,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.void": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 69,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_0": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 188,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_1": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 205,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_10": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 103,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_11": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 120,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_12": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 137,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_13": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 154,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_14": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 171,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_15": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 188,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_2": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 222,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_3": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 239,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_4": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 1,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_5": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 18,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_6": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 35,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_7": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 52,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_8": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 69,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "bamboo_thicket.wall_9": {
+   "sheet": "theme_bamboo_thicket",
+   "x": 86,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
   "battle_alpha_slime_0": {
    "sheet": "battle",
    "x": 34,
@@ -189,10 +439,73 @@
    "ax": 16,
    "ay": 32
   },
+  "bg_bamboo_thicket": {
+   "sheet": "backdrops",
+   "x": 1,
+   "y": 98,
+   "w": 160,
+   "h": 96,
+   "ax": 0,
+   "ay": 0
+  },
+  "bg_giga_slime_lair": {
+   "sheet": "backdrops",
+   "x": 1,
+   "y": 195,
+   "w": 160,
+   "h": 96,
+   "ax": 0,
+   "ay": 0
+  },
+  "bg_inner_sanctum": {
+   "sheet": "backdrops",
+   "x": 1,
+   "y": 292,
+   "w": 160,
+   "h": 96,
+   "ax": 0,
+   "ay": 0
+  },
+  "bg_mossy_path": {
+   "sheet": "backdrops",
+   "x": 1,
+   "y": 389,
+   "w": 160,
+   "h": 96,
+   "ax": 0,
+   "ay": 0
+  },
   "bg_shrine_path": {
    "sheet": "backdrops",
    "x": 1,
    "y": 1,
+   "w": 160,
+   "h": 96,
+   "ax": 0,
+   "ay": 0
+  },
+  "bg_spirit_clearing": {
+   "sheet": "backdrops",
+   "x": 1,
+   "y": 486,
+   "w": 160,
+   "h": 96,
+   "ax": 0,
+   "ay": 0
+  },
+  "bg_the_pit": {
+   "sheet": "backdrops",
+   "x": 1,
+   "y": 583,
+   "w": 160,
+   "h": 96,
+   "ax": 0,
+   "ay": 0
+  },
+  "bg_torii_descent": {
+   "sheet": "backdrops",
+   "x": 1,
+   "y": 680,
    "w": 160,
    "h": 96,
    "ax": 0,
@@ -300,6 +613,249 @@
   "floor_3": {
    "sheet": "tiles",
    "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.decor_bones": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 171,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.decor_bubbles": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 154,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.decor_drip": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 188,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.exit_torii": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 137,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.floor_0": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 1,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.floor_1": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 18,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.floor_2": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 35,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.floor_3": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.stairs_down": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 103,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.stairs_up": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 120,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.void": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 86,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_0": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 69,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_1": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 86,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_10": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 239,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_11": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 1,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_12": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 18,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_13": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 35,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_14": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 52,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_15": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 69,
+   "y": 18,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "giga_slime_lair.wall_2": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 103,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_3": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 120,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_4": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 137,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_5": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 154,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_6": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 171,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_7": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 188,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_8": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 205,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "giga_slime_lair.wall_9": {
+   "sheet": "theme_giga_slime_lair",
+   "x": 222,
    "y": 1,
    "w": 16,
    "h": 16,
@@ -954,6 +1510,249 @@
    "ax": 8,
    "ay": 24
   },
+  "inner_sanctum.decor_andon": {
+   "sheet": "theme_inner_sanctum",
+   "x": 171,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.decor_incense": {
+   "sheet": "theme_inner_sanctum",
+   "x": 188,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.decor_offering": {
+   "sheet": "theme_inner_sanctum",
+   "x": 154,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.exit_torii": {
+   "sheet": "theme_inner_sanctum",
+   "x": 137,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.floor_0": {
+   "sheet": "theme_inner_sanctum",
+   "x": 1,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.floor_1": {
+   "sheet": "theme_inner_sanctum",
+   "x": 18,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.floor_2": {
+   "sheet": "theme_inner_sanctum",
+   "x": 35,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.floor_3": {
+   "sheet": "theme_inner_sanctum",
+   "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.stairs_down": {
+   "sheet": "theme_inner_sanctum",
+   "x": 103,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.stairs_up": {
+   "sheet": "theme_inner_sanctum",
+   "x": 120,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.void": {
+   "sheet": "theme_inner_sanctum",
+   "x": 86,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_0": {
+   "sheet": "theme_inner_sanctum",
+   "x": 69,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_1": {
+   "sheet": "theme_inner_sanctum",
+   "x": 86,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_10": {
+   "sheet": "theme_inner_sanctum",
+   "x": 239,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_11": {
+   "sheet": "theme_inner_sanctum",
+   "x": 1,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_12": {
+   "sheet": "theme_inner_sanctum",
+   "x": 18,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_13": {
+   "sheet": "theme_inner_sanctum",
+   "x": 35,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_14": {
+   "sheet": "theme_inner_sanctum",
+   "x": 52,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_15": {
+   "sheet": "theme_inner_sanctum",
+   "x": 69,
+   "y": 18,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "inner_sanctum.wall_2": {
+   "sheet": "theme_inner_sanctum",
+   "x": 103,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_3": {
+   "sheet": "theme_inner_sanctum",
+   "x": 120,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_4": {
+   "sheet": "theme_inner_sanctum",
+   "x": 137,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_5": {
+   "sheet": "theme_inner_sanctum",
+   "x": 154,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_6": {
+   "sheet": "theme_inner_sanctum",
+   "x": 171,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_7": {
+   "sheet": "theme_inner_sanctum",
+   "x": 188,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_8": {
+   "sheet": "theme_inner_sanctum",
+   "x": 205,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "inner_sanctum.wall_9": {
+   "sheet": "theme_inner_sanctum",
+   "x": 222,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
   "item_escape_ofuda": {
    "sheet": "ui",
    "x": 56,
@@ -1161,6 +1960,501 @@
    "ax": 8,
    "ay": 16
   },
+  "mossy_path.decor_fern": {
+   "sheet": "theme_mossy_path",
+   "x": 137,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.decor_glowcap": {
+   "sheet": "theme_mossy_path",
+   "x": 154,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.decor_mossrock": {
+   "sheet": "theme_mossy_path",
+   "x": 171,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.decor_puddle": {
+   "sheet": "theme_mossy_path",
+   "x": 188,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.exit_torii": {
+   "sheet": "theme_mossy_path",
+   "x": 120,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.floor_0": {
+   "sheet": "theme_mossy_path",
+   "x": 1,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.floor_1": {
+   "sheet": "theme_mossy_path",
+   "x": 18,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.floor_2": {
+   "sheet": "theme_mossy_path",
+   "x": 35,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.floor_3": {
+   "sheet": "theme_mossy_path",
+   "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.stairs_down": {
+   "sheet": "theme_mossy_path",
+   "x": 86,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.stairs_up": {
+   "sheet": "theme_mossy_path",
+   "x": 103,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.void": {
+   "sheet": "theme_mossy_path",
+   "x": 69,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_0": {
+   "sheet": "theme_mossy_path",
+   "x": 205,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_1": {
+   "sheet": "theme_mossy_path",
+   "x": 222,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_10": {
+   "sheet": "theme_mossy_path",
+   "x": 120,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_11": {
+   "sheet": "theme_mossy_path",
+   "x": 137,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_12": {
+   "sheet": "theme_mossy_path",
+   "x": 154,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_13": {
+   "sheet": "theme_mossy_path",
+   "x": 171,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_14": {
+   "sheet": "theme_mossy_path",
+   "x": 188,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_15": {
+   "sheet": "theme_mossy_path",
+   "x": 205,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_2": {
+   "sheet": "theme_mossy_path",
+   "x": 239,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_3": {
+   "sheet": "theme_mossy_path",
+   "x": 1,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_4": {
+   "sheet": "theme_mossy_path",
+   "x": 18,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_5": {
+   "sheet": "theme_mossy_path",
+   "x": 35,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_6": {
+   "sheet": "theme_mossy_path",
+   "x": 52,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_7": {
+   "sheet": "theme_mossy_path",
+   "x": 69,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_8": {
+   "sheet": "theme_mossy_path",
+   "x": 86,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "mossy_path.wall_9": {
+   "sheet": "theme_mossy_path",
+   "x": 103,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.decor_bells": {
+   "sheet": "theme_spirit_clearing",
+   "x": 171,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.decor_mushrooms": {
+   "sheet": "theme_spirit_clearing",
+   "x": 137,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.decor_wisp": {
+   "sheet": "theme_spirit_clearing",
+   "x": 154,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.exit_torii": {
+   "sheet": "theme_spirit_clearing",
+   "x": 120,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.floor_0": {
+   "sheet": "theme_spirit_clearing",
+   "x": 1,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.floor_1": {
+   "sheet": "theme_spirit_clearing",
+   "x": 18,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.floor_2": {
+   "sheet": "theme_spirit_clearing",
+   "x": 35,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.floor_3": {
+   "sheet": "theme_spirit_clearing",
+   "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.stairs_down": {
+   "sheet": "theme_spirit_clearing",
+   "x": 86,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.stairs_up": {
+   "sheet": "theme_spirit_clearing",
+   "x": 103,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.void": {
+   "sheet": "theme_spirit_clearing",
+   "x": 69,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_0": {
+   "sheet": "theme_spirit_clearing",
+   "x": 188,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_1": {
+   "sheet": "theme_spirit_clearing",
+   "x": 205,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_10": {
+   "sheet": "theme_spirit_clearing",
+   "x": 103,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_11": {
+   "sheet": "theme_spirit_clearing",
+   "x": 120,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_12": {
+   "sheet": "theme_spirit_clearing",
+   "x": 137,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_13": {
+   "sheet": "theme_spirit_clearing",
+   "x": 154,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_14": {
+   "sheet": "theme_spirit_clearing",
+   "x": 171,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_15": {
+   "sheet": "theme_spirit_clearing",
+   "x": 188,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_2": {
+   "sheet": "theme_spirit_clearing",
+   "x": 222,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_3": {
+   "sheet": "theme_spirit_clearing",
+   "x": 239,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_4": {
+   "sheet": "theme_spirit_clearing",
+   "x": 1,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_5": {
+   "sheet": "theme_spirit_clearing",
+   "x": 18,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_6": {
+   "sheet": "theme_spirit_clearing",
+   "x": 35,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_7": {
+   "sheet": "theme_spirit_clearing",
+   "x": 52,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_8": {
+   "sheet": "theme_spirit_clearing",
+   "x": 69,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "spirit_clearing.wall_9": {
+   "sheet": "theme_spirit_clearing",
+   "x": 86,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
   "stairs_down": {
    "sheet": "tiles",
    "x": 120,
@@ -1174,6 +2468,492 @@
    "sheet": "tiles",
    "x": 154,
    "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.decor_crystal": {
+   "sheet": "theme_the_pit",
+   "x": 154,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.decor_fungus": {
+   "sheet": "theme_the_pit",
+   "x": 171,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.decor_rubble": {
+   "sheet": "theme_the_pit",
+   "x": 188,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.exit_torii": {
+   "sheet": "theme_the_pit",
+   "x": 137,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.floor_0": {
+   "sheet": "theme_the_pit",
+   "x": 1,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.floor_1": {
+   "sheet": "theme_the_pit",
+   "x": 18,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.floor_2": {
+   "sheet": "theme_the_pit",
+   "x": 35,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.floor_3": {
+   "sheet": "theme_the_pit",
+   "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.stairs_down": {
+   "sheet": "theme_the_pit",
+   "x": 103,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.stairs_up": {
+   "sheet": "theme_the_pit",
+   "x": 120,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.void": {
+   "sheet": "theme_the_pit",
+   "x": 86,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_0": {
+   "sheet": "theme_the_pit",
+   "x": 69,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_1": {
+   "sheet": "theme_the_pit",
+   "x": 86,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_10": {
+   "sheet": "theme_the_pit",
+   "x": 239,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_11": {
+   "sheet": "theme_the_pit",
+   "x": 1,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_12": {
+   "sheet": "theme_the_pit",
+   "x": 18,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_13": {
+   "sheet": "theme_the_pit",
+   "x": 35,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_14": {
+   "sheet": "theme_the_pit",
+   "x": 52,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_15": {
+   "sheet": "theme_the_pit",
+   "x": 69,
+   "y": 18,
+   "w": 16,
+   "h": 24,
+   "ax": 8,
+   "ay": 24
+  },
+  "the_pit.wall_2": {
+   "sheet": "theme_the_pit",
+   "x": 103,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_3": {
+   "sheet": "theme_the_pit",
+   "x": 120,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_4": {
+   "sheet": "theme_the_pit",
+   "x": 137,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_5": {
+   "sheet": "theme_the_pit",
+   "x": 154,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_6": {
+   "sheet": "theme_the_pit",
+   "x": 171,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_7": {
+   "sheet": "theme_the_pit",
+   "x": 188,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_8": {
+   "sheet": "theme_the_pit",
+   "x": 205,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "the_pit.wall_9": {
+   "sheet": "theme_the_pit",
+   "x": 222,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.decor_chochin": {
+   "sheet": "theme_torii_descent",
+   "x": 171,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.decor_fox": {
+   "sheet": "theme_torii_descent",
+   "x": 137,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.decor_leaves": {
+   "sheet": "theme_torii_descent",
+   "x": 154,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.exit_torii": {
+   "sheet": "theme_torii_descent",
+   "x": 120,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.floor_0": {
+   "sheet": "theme_torii_descent",
+   "x": 1,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.floor_1": {
+   "sheet": "theme_torii_descent",
+   "x": 18,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.floor_2": {
+   "sheet": "theme_torii_descent",
+   "x": 35,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.floor_3": {
+   "sheet": "theme_torii_descent",
+   "x": 52,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.stairs_down": {
+   "sheet": "theme_torii_descent",
+   "x": 86,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.stairs_up": {
+   "sheet": "theme_torii_descent",
+   "x": 103,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.void": {
+   "sheet": "theme_torii_descent",
+   "x": 69,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_0": {
+   "sheet": "theme_torii_descent",
+   "x": 188,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_1": {
+   "sheet": "theme_torii_descent",
+   "x": 205,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_10": {
+   "sheet": "theme_torii_descent",
+   "x": 103,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_11": {
+   "sheet": "theme_torii_descent",
+   "x": 120,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_12": {
+   "sheet": "theme_torii_descent",
+   "x": 137,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_13": {
+   "sheet": "theme_torii_descent",
+   "x": 154,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_14": {
+   "sheet": "theme_torii_descent",
+   "x": 171,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_15": {
+   "sheet": "theme_torii_descent",
+   "x": 188,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_2": {
+   "sheet": "theme_torii_descent",
+   "x": 222,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_3": {
+   "sheet": "theme_torii_descent",
+   "x": 239,
+   "y": 1,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_4": {
+   "sheet": "theme_torii_descent",
+   "x": 1,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_5": {
+   "sheet": "theme_torii_descent",
+   "x": 18,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_6": {
+   "sheet": "theme_torii_descent",
+   "x": 35,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_7": {
+   "sheet": "theme_torii_descent",
+   "x": 52,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_8": {
+   "sheet": "theme_torii_descent",
+   "x": 69,
+   "y": 18,
+   "w": 16,
+   "h": 16,
+   "ax": 8,
+   "ay": 16
+  },
+  "torii_descent.wall_9": {
+   "sheet": "theme_torii_descent",
+   "x": 86,
+   "y": 18,
    "w": 16,
    "h": 16,
    "ax": 8,
