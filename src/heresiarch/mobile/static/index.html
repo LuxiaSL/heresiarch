@@ -1287,7 +1287,9 @@ function tframe(name) {
   return (th && frame(`${th}.${name}`)) || frame(name);
 }
 function firstFrame(...names) { for (const n of names) { const f = frame(n); if (f) return f; } return null; }
-// Draw a frame with its anchor (ax, ay) on pixel (px, py)
+// Draw a frame with its anchor (ax, ay) on pixel (px, py). Tiles pass
+// their bottom-centre (px+8, py+16), so frames taller than a tile (e.g.
+// a 16×24 pillar) rise into the row above, as art/README specifies.
 function blit(ctx, f, px, py, flip) {
   const img = DG.sheets[f.sheet];
   if (!img) return false;
@@ -1415,7 +1417,7 @@ function dgDrawTile(ctx, v, x, y, px, py) {
               || dgWalk(v, x - 1, y + 1) || dgWalk(v, x + 1, y + 1);
     if (art) {
       const f = (mask || diag) ? tframe("wall_" + mask) : tframe("void");
-      if (f && blit(ctx, f, px + (f.ax ?? 8), py + (f.ay ?? 16))) return;
+      if (f && blit(ctx, f, px + 8, py + 16)) return;
     }
     if (!mask) { ctx.fillStyle = PH.void; ctx.fillRect(px, py, TILE, TILE); return; }
     ctx.fillStyle = PH.wallTop; ctx.fillRect(px, py, TILE, TILE);
@@ -1432,17 +1434,17 @@ function dgDrawTile(ctx, v, x, y, px, py) {
   // walkable ground
   if (art) {
     const f = tframe("floor_" + (dgHash(x, y) & 3)) || tframe("floor_0");
-    if (f) blit(ctx, f, px + (f.ax ?? 8), py + (f.ay ?? 16));
+    if (f) blit(ctx, f, px + 8, py + 16);
     const over = c === ">" ? tframe("stairs_down") : c === "X" ? tframe("exit_torii")
       : c === "<" ? tframe("stairs_up") : null;
-    if (over) { blit(ctx, over, px + (over.ax ?? 8), py + (over.ay ?? 16)); return; }
+    if (over) { blit(ctx, over, px + 8, py + 16); return; }
     // Decor: deterministic per tile, plain floor only, drawn under actors
     const dec = v.decor || [];
     if (dec.length && v.decor_density > 0) {
       const hsh = dgHash(x * 7 + 3, y * 13 + 5);
       if ((hsh % 1000) / 1000 < v.decor_density) {
         const df = tframe(dec[(hsh >>> 10) % dec.length]);
-        if (df) blit(ctx, df, px + (df.ax ?? 8), py + (df.ay ?? 16));
+        if (df) blit(ctx, df, px + 8, py + 16);
       }
     }
     if (f) return;
