@@ -1,0 +1,421 @@
+# Zone 4 — Spirit Clearing: a hushed night glade. Pale spirit-moss
+# ground, wisteria canopy over slate embankments, wisps and mushroom
+# rings, a weathered stone torii. Drafted by art/... forkB script;
+# the YAML is the source of truth.
+theme: spirit_clearing
+sheet: theme_spirit_clearing
+colors:
+  sc_g1: "#f2fff6"
+  sc_g2: "#cfeedd"
+  sc_g3: "#a9d9c4"
+  sc_g4: "#7cb6a5"
+  sc_m1: "#dcffb0"
+  sc_m2: "#93e2a6"
+  sc_m3: "#4fae8c"
+  sc_bl1: "#f8e2ff"
+  sc_bl2: "#d6a8f6"
+  sc_bl3: "#9a6cd8"
+  sc_lf0: "#78c8ae"
+  sc_lf1: "#3f8c88"
+  sc_lf2: "#2a6670"
+  sc_lf3: "#1a4454"
+  sc_st1: "#e6f0f4"
+  sc_st2: "#adc6d2"
+  sc_st3: "#7c96b0"
+  sc_st4: "#525f86"
+  sc_ti1: "#f2f8fa"
+  sc_ti2: "#c8d8e4"
+  sc_ti3: "#94aac4"
+  sc_ti4: "#5e6e94"
+  sc_lav: "#c9b6f2"
+  sc_lav2: "#9c86da"
+  sc_w1: "#ffffff"
+  sc_w2: "#c4f6ff"
+  sc_w3: "#64d2f0"
+  sc_w4: "#2f8cc8"
+  sc_mu1: "#ffe0f2"
+  sc_mu2: "#f496cc"
+  sc_mu3: "#b4589c"
+  sc_wa1: "#c6f4ff"
+  sc_wa2: "#66c8ea"
+  sc_wa3: "#2e7cbc"
+  sc_n1: "#221a50"
+  sc_n2: "#33276e"
+  sc_n3: "#4c3c94"
+  sc_n4: "#7a66c0"
+  sc_n5: "#b8a6ea"
+
+palettes:
+  spirit_clearing:
+    extends: shrine
+    # ground ramp (pale spirit-moss)
+    "1": sc_g1
+    "2": sc_g2
+    "3": sc_g3
+    "4": sc_g4
+    # moss tufts
+    m: sc_m1
+    n: sc_m2
+    o: sc_m3
+    # canopy: wisteria blossom over deep teal leaves
+    a: sc_bl1
+    b: sc_bl2
+    c: sc_bl3
+    i: sc_lf0
+    j: sc_lf1
+    d: sc_lf2
+    e: sc_lf3
+    # slate embankment
+    w: sc_st1
+    x: sc_st2
+    y: sc_st3
+    z: sc_st4
+    # torii parts -> weathered spirit-stone
+    R: sc_ti1
+    S: sc_ti2
+    T: sc_ti3
+    U: sc_ti4
+    # extras
+    l: sc_lav
+    k: sc_lav2
+    f: sc_w1
+    t: sc_w2
+    u: sc_w3
+    v: sc_w4
+    N: sc_mu1
+    O: sc_mu2
+    X: sc_mu3
+    Y: sc_wa1
+    Z: sc_wa2
+    "5": sc_wa3
+    "6": sc_n1
+    "7": sc_n2
+    "8": sc_n3
+    "9": sc_n4
+    "0": sc_n5
+
+defaults:
+  palette: spirit_clearing
+  ax: 8
+  ay: 16
+
+sprites:
+  spirit_clearing.floor_0:
+    grid: |
+      2222222222222222
+      2222222232222222
+      2212222222222222
+      2222222222222122
+      2222222222222222
+      2222232222222222
+      2222222222222222
+      2222222222122222
+      2122222222222222
+      2222222222222222
+      2222222322222222
+      2222222222222232
+      2222122222222222
+      2222222222222222
+      2222222212222222
+      2222222222222222
+  spirit_clearing.floor_1:
+    grid: |
+      2222222222222222
+      2222222222222222
+      2212222222222222
+      222222222l222222
+      22222222lkl22222
+      222222222n222222
+      2222222222222222
+      2222222222222122
+      22l2222222222222
+      2lkl222222222222
+      22n2222223222222
+      2222222222222222
+      2222222222222l22
+      222222222222lkl2
+      2222222222222n22
+      2222222222222222
+  spirit_clearing.floor_2:
+    grid: |
+      2222222222222222
+      2222222222222222
+      2222222222222222
+      222222m222222222
+      22222mnmn2222222
+      2222nnnnnm222222
+      2222onnnno222222
+      22222oooo2222222
+      2222222222222222
+      2222222222222212
+      2222222222222222
+      2212222222222222
+      222222222222m222
+      22222222222nnm22
+      22222222222oon22
+      2222222222222222
+  spirit_clearing.floor_3:
+    grid: |
+      2222222222222222
+      2222222222222222
+      2222222222222222
+      222222wwww222222
+      22222wwwwxx22222
+      22222xwwxxy22222
+      222222xxyy222222
+      2222222222222222
+      2222222222222222
+      2ww2222222222222
+      wwwx222222222222
+      xxyy22222222ww22
+      2222222222wwwx22
+      2222222222xxyy22
+      2222222222222222
+      2222222222222222
+  spirit_clearing.void:
+    from: void
+    palette: spirit_clearing
+  spirit_clearing.wall_top:
+    export: false
+    grid: |
+      eeiijjeeeeiijjee
+      eiijjjjeeiijjjje
+      ijjjjjjdijjjjjjd
+      jjjjjaddjjjjjjdd
+      jjjjabadjjjjjddd
+      djjjbbcddjjjdddd
+      eddddbceedddddee
+      eeddeeceeeddeeee
+      jjeeeeiijjeeeeii
+      jjjeeiijjjjeeiij
+      jjjdijjjjjjdajjj
+      jjddjjjjjjdabajj
+      jdddjjjjjddbbcjj
+      dddddjjjddddbcjj
+      ddeeedddddeeecdd
+      eeeeeeddeeeeeedd
+  spirit_clearing.wall_face:
+    export: false
+    grid: |
+      KKKKKKKKKKKKKKKK
+      bcdbbcdcbdcbbcdc
+      zcwwzbwwwzcwwwzb
+      xxxyzwcxxyzwxxxy
+      yyyyzyyyyyzyyyyy
+      zzzzzzzzzzzzzzzz
+      wwzwwwwwwzwwwwww
+      xyzwxxxxyzwxxxxx
+      nyzyymnyyzyynmyy
+      onzonnoonzoonnoo
+      KKKKKKKKKKKKKKKK
+  spirit_clearing.wall_edge_n:
+    export: false
+    from: wall_edge_n
+    palette: spirit_clearing
+  spirit_clearing.wall_edge_e:
+    export: false
+    from: wall_edge_e
+    palette: spirit_clearing
+  spirit_clearing.wall_edge_w:
+    export: false
+    from: wall_edge_w
+    palette: spirit_clearing
+  spirit_clearing.stairs_down:
+    grid: |
+      2222222222222222
+      2222KKKKKKKK2222
+      22KKwwxwwxwwKK22
+      2KwxKKKKKKKKyxK2
+      2KxKVVVVVVVVKyK2
+      KwKVVVuVVVVVVKxK
+      KxKVVVVVVVuVVKyK
+      KwKVuVVzzzVVVKxK
+      KxKVVVzyyyzVVKyK
+      KyKVVzyxxxyzVKzK
+      2KyKVzxwwwxzKzK2
+      2KyzKKKKKKKKzzK2
+      22KKzzyzzyzzKK22
+      2222KKKKKKKK2222
+      22nn222222222n22
+      2222222222222222
+  spirit_clearing.stairs_up:
+    layers:
+      - sprite: spirit_clearing.floor_0
+      - sprite: stairs_up_part
+        palette: spirit_clearing
+  spirit_clearing.exit_torii:
+    layers:
+      - sprite: spirit_clearing.floor_0
+      - sprite: torii_part
+        palette: spirit_clearing
+  spirit_clearing.decor_mushrooms:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ......KKK.......
+      .....KNNOK......
+      ..KK.KONXK..KK..
+      .KNOKKKPKK.KNOK.
+      .KOXK.KPK..KOXK.
+      ..KPK.KQK...KPK.
+      ..KQK.......KQK.
+      ..sss.sss...sss.
+      ................
+      ................
+  spirit_clearing.decor_wisp:
+    grid: |
+      ................
+      ......K.........
+      .....KtK........
+      .....KtK..K.....
+      ....KtfuK.......
+      ...KtffftK......
+      ...KuffftK......
+      ...KutfftK......
+      ....KuttuK......
+      .....KuuK.......
+      ......KK........
+      ................
+      ................
+      ................
+      .....sss........
+      ................
+  spirit_clearing.decor_bells:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ......K.........
+      .....KlK...K....
+      ....KlklK.KlK...
+      .....KlK.KlklK..
+      ......n...KlK...
+      ......n....n....
+      ..K...n...n.....
+      .KlK..nn.n......
+      KlklK..nnn......
+      .KlK...on.......
+      ..n...ooo.......
+      ................
+  bg_spirit_clearing:
+    ax: 0
+    ay: 0
+    grid: |
+      deedeedeedeedeedeedeedeedeedeed66666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666deedeedeedeedeedeedeedeedeedeed
+      eedeedeedeedeedeedeedeedeedeede66666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666eedeedeedeedeedeedeedeedeedeede
+      edeedeedeedeedeedeedeedeedeed6e666666666666666666666666666666666666666666666666666f6666666666t666666666666666666666666666666666666deedeedeedeedeedeedeedeedeedee
+      deedeedeedeedeedeedeedeedeedefd6666666666666666666666666666666666666666666f6666666666666666666666666666666666666666666666666666666eedeedeedeedeedeedeedeedeedeed
+      bbjbbjbbjbbjbbjbbjbbjbbjbcjbc6c6666666666666666666t666666666666666666666666666666666666666666666666666666f666666666666666666666666cj6cjbcjbbjbbjbbjbbjbbjbbjbbjb
+      bbjbbjbbjbbjbbjbbjbbjbbjbcjb66c6666666666666666666666666666666666666666666666666666666666666666t6666666666666666666666666666666666cj6cjbcjbbjbbjbbjbbjbbjbbjbbjb
+      abjabjabjabjabjabjabjacja6ja66a6666666666666f6666666666666666666666666666666666666666666666666666666666666666666666666666666666666cj6cjacjacjabjabjabjabjabjabja
+      bbebbebbebbebbebbebbecceb6eb66c666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666t66666ce6ceccebcebbebbebbebbebbebbeb
+      bbebbebbebbebbebbebbeccec6eb666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666ttt666666ce6cec6ebcebbebbebbebbebbebbeb
+      bbebbebbebbebbebbebbeccec6ec666666666666666t666666666666666666666666666666666666666666666666666666666666666666666666666ttff6666666c666ec6ebcebbebbebbebbebbebbeb
+      bbebbebbebbebbebbebbeccec6ec666666666666666666666f66666666666666666666666666666666666666666666666666666666666666666666ttff66666666c666ec6ebcebbebbebbebbebbebbeb
+      bbebbebbebbebbebbecbe6cec66c666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666tfff666666666666e66ebcebbebbebbebbebbebbeb
+      abeabeabeabeabeabeabe6ce766a766676667666766676667666766676667666766676667666766676t676667666766676667666t666766676667tffff66766676t676e67eaceabeabeabeabeabeabea
+      bbebbebbebbebbebbecbe76e676767676767676767676767676767676767676767676767676767676767676767676767676767676767676767676tfff7676767676767e76eb7ebbebbebbebbebbebbeb
+      bbebbebbebbebbebbecbe77e77777777777777777f777777777777777777777777777777777777777777777777777777777777777777777777777tffff777777777777e77eb77bbebbebbebbebbebbeb
+      bbebbebbebbebbebbe7ce77e777777777777777777777t7777777777777777777777777f77777777777777777777777777777777777777777777ttffff777777777777e77eb77bcebbebbebbebbebbeb
+      bbebbebbebcebbebbe7ce77e777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777tffff7777777777777777c77bc7bbebbebbebbebbeb
+      bbebbebbebcebcebb77ce77e777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777tfffff777777777777777c77bc7cbecbebbebbebbeb
+      abeabeabeaceaceac77ce777777777777777777777777t77777777777777777777777777777777777777777777777777777777777777777777777tffffff77777777777t77a77ac7abeabeabeabeabea
+      bbebbebbebcebc7bc77c77f7777777777777777777777777777777777777f7777777777777t7777777777777777777777777777777777777777777tffffff7777777777777c77cc7cbecbebcebbebbeb
+      bbebbebbebcebc7cc77c77777777777777777777777777777777777777777777777777777t77777777777777777777777777777777777777777777ttffffffff7tt7777777777cc7cbecbebcebbebbeb
+      bbebbebcebcebc7cc77c77777777777777777777t777777777777777777777777777777777777777777777777777777777777777777777777777777ttffffffftt77777777777cc77ce7cebcebbebbeb
+      bbebbebcebcebc7cc777777777777jjjj7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777ttttttt7777777777777c777ce7cebcebcebbeb
+      bbebbebceb7ebc7cc77777777777jdddaj77777777777777777777777777777777777777777777777777777777777t777777777777777777777777777777tjjj777777777f7777777ce7ceccebcebbeb
+      abeabeacea7ea777c77777777777deeebdj77777777777777777777777777777t7777jjjjj777777777777t777777777777777777777777777777777777jjddaj7777777777777777c77ceaceaceabea
+      bbebbecceb7eb77777777777777jeeeebedj77777777777777777777777777777777jadddjj77777777777777777777777777777777777777777777777jjaeebdj777777777777777c77ceccebcebbeb
+      bbebbecceb87b7877787778777jjeeeebeeaj787778777877787778777877787778jdbeeejajj7877787jjjj778777877787778777877787778777877jijbeebedj77787778777877c87cec7ebcebbeb
+      bbecbeccec78c8787878787878ijeeeeceebaj787878787878787t787878787t787aebeeeebjdjj878jjdjaajj7t78787878787878787jjjj878787jjjjebeebeea87878787878787c78ce78ebcebbeb
+      bbecbec8ec88c888888888888jjeeeeeeeebbjj8888888888f8f888888888t8888jbebeeeebjeddjjjddejbbadj88888888888888888jjijdjjjjjjddjeebeeeeebj88888888888888888e88ebcebbeb
+      bbecbe88ec88c88888888888jjeeeeeeeeebbjaj8888888888888888888888888jdbeceeeebeeeedddeeeebbbed8888888888888888jdjjjeddaddaeeeeeceeeeebdj8888888888888888e88eb8ebbeb
+      abeace88ea88a88888888888djeeeeeeeeecbebjjjjjjjjjjjj88888888888888debeeeeeeceeeeeeeeeeebbbeej888888888f8888jdeeeeeeebeebeeeeeeeeeeeeed888888888888888je88ea8eabea
+      bbe8ce88e88888888888888jeeeeeeeeeeeccebjdddddaaadjij888888888888jeeceeeeeeceeeeeeeeeeecebeedj888888888888jdeeeeeeeebeebeeeeeeeeeeeeeej88888t888888jjdejjebjebceb
+      bbe8ce8jejjjjj88888888jdeeeeeeeeeeeceebeeeeeebbbejjaj88888888888deeceeeeeeceeeeeeeeeeeceeeeedj8888888888jdeeeeeeeeebeeeeeeeeeeeeeeeeejj8888888888jijeeddecdebceb
+      bbe8cejdedaddjjj88888jdeeeeeeeeeeeeeeeeeeeeeebbbeeebdj888888888jeeeceeeeeeeeeeeeeeeeeeceeeeeea8888888888deeeeeeeeeeceeeeeeeeeeeeeeeeeja888888888jjjjeeeeeceebceb
+      bbejcedeeebeejijjjjjjaeeeeeeeeeeeeeeeeeeeeeeebbbeeebedj8888888jaeeeeeeeeeeeeeeeeeeeeeeeeeeteebj88888888jeeeeeeeeeeeceeeeeeeeeeeeeeeeeebj8888888jdjeeeeeeeceebceb
+      bbejceeeeebeeejjdadddbeeeeeeeeeeeeeeeeeeeeeeeecceeebeedj88888jabeeeeeeeeeeeeeeeeeeeeeeeeetftebaj888888jaeeeeeeeeeeeceeeeeeeeeeeeeeeeeebjj8888jjdeeeeeeeeeceebceb
+      acjjceeeeebeeeeeebeeebeeeeeeeeeeeeeeeeeeeeeeeeeceeeceeedj888jjbbeeeeeeeeeeeeeeeeeeeeeeeeeufuebbaj8888jdbeeeeeeeeeeeeeeeeeeeeeeeeeeeeeebjdjjjjaaeeeeeeeeeeeeeacea
+      cceeeeeeeeceeeeeebeeebeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeedjjjdjbbeeeeeeeeeeeeeeeeeeeeeeeeeeueeebbdjjjjdebeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeadddbbeeeeeeeeeeeeeccec
+      cceeeeeeeeceeeeeebeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeadaeebceeeeeeteeeeeeeeeeeeeeeeeeeeeeebbejiadeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeeebbeeeeeeeeeeeeeceec
+      cceeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeebebeecceeeeetfteeeeeeeeeeeeeeeeeeeeeeceejjbeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeeeebeeeeeeeeeeeeeceec
+      eceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeebebeeeceeeeeufueeeeeeeeeeeeeeeeeeeeeeeeeeebeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeeeeceeeeeeeeeeeeeceee
+      eceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeebeeeeeeeeeeueeeeeeeeeeeeeeeeeeeeeeeeeeeebeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeceeeeeeeeeeeeeeeee
+      eceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeee
+      eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeceeeeeeeeeeeeeeeeeeeeee
+      eeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeteeeKeeeeeeeeeeeeKeceeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeee
+      eeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeetfteeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeee
+      eeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeufueeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKteeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeee
+      eeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeueeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeetfteeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeee
+      eeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeufueeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeee
+      eeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKueeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeee
+      eeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeKKKKKKKeeeeeeeeeeKeeeeeeeeeee
+      eeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeKKKKKKKeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeeeeeKeeeeeeeeKwwxxyKeeeeeeeeeeKeeeeeeeeeee
+      oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooKwwxxyKoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooKwwxxyKoooooooooooooooooooooo
+      oooooooooooooooooooooooooooooooooooooooooKKKKKKKoooooooooooKwwxxyKoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooKwwxxyKoooooooooooooooooooooo
+      oooooooooooooooooooooooooooooooooooooooooKwwxxyKoooooooooooKwwxxyKoooooooooooooooooooooooooooooooooooooooooooooooKKKKKKKoooooooooooKwwxxyKoooooooooooooooooooooo
+      nnnonnmnnnnnnnnnnnnnnnnnnnnnnmnnnnonnnnnnKwwxxyKnnnnmnnnnnnPPPPPPPnnnnnnnnnmnnnnnnnnnnnnnnnnnnnnonmnnnnnnnnnnnnnnKwwxxyKnmnnnnnonnnKwwxxyKnnnnnnmnnnnnnnnnnnnnon
+      nnnnnnnonnnnnnnnnnnnnnmnnnnnnnnnnnnnnnonnKwwxxyKnnnnnnnnnnnKwwPxyKnnmonnnnnnnnnnnnnnnnnnnnnmnnnKKKKKKKnnnnnnnnnnnKwwxxyKnnnnnnnnnnnKwwxxyKnnnnnnnnnnnnnnnnnnnnnn
+      nnnnnnnnnnnonnnmnnnnnnnKKKKKKKnnnnnnnnmnnKwwxxyKnnnnnnnnnnnKwwQxyKnnnnnnnonnnnnnnnnnmnnnnnnnnnnKwwxxyKnnonnmnnnnnKwwxxyKnnnnnnnnnnmKwwxxyKnnnnnnnnnnnnnnnmnnnnnn
+      nnnnnnnnmnnnnnnonnnnnnnKtwxxyKnmnnnnnnnnnKwwxxyKnnnnnnmnnnnKwwxxyKnnnnnnnnnnnmnnnnnnnnnnnnnnnnnKwwxxyKnnnnnnonnnnPPPPPPPnnnmnnnnnnnKwwxxyKnonnnnnnmnnnnnnnnnnnnn
+      nmnnnnnnnnnnnnnnnnnonnntftxxyKnnnnnnnnnnnKwwxxyKnnonnnnnnnnKwwxxyKnnnnmnnnnnnnnnnonnnnnnnnnnnmnKwwxxyKnnnnnnnnnnoKwwPxyKnnnnnnnnnnnKwwxxyKnmnnnonnnnnnnnnnnnnnnn
+      nnnnnnnnnnnnnnnnnmnnnnnufuxxyKnnnnnnnnnnmKwwxxyKnnnnnnonnnnKwwxxyKnnnnnnnnnnnnnnnnnnnomnnnnnnnnKwwxxyKnnnnnnnmnnnKwwQxyKnnnnnnnnnnnKwwxxtKnnnnnnnnnonnnnnnnmnnnn
+      nnnnnnnnnnmnnnnnnnnnnnnPuPPPPPnnnmnnnnnnnKwwxxyKnnnnnnnnmnoKwwxxyKnnnnnnnnnnnnnmnnnnnnnnnonnnnnKwwxxyKmnnnnnnnnnnKwwxxyKonnnnmnnnnnKwwxtftnnnnnnnnnnmnnonnnnnnnn
+      onnmnnnnnnnnnnnnnnnnnnnKwwPxyKnonnnnnnnnnKwwxxyKnmnnnnnnnnnKwwxxyKnnnnnnmnnnnnnnnnnnnnnnnnnnnonKwwxxyKnnnnnnnnnnnKwwxxyKnnnnonnnnnnKwwxufunnnmnnnnnnnnnnnnnonnnn
+      nnnnonnnnnnnnnnnnnnmnnnKwwQxyKnnnnnonnnnnKwwxxyKnnnnnnnnnnnKwwxxyKonnnnnnnnnnnnnnnnnnnnnmnnnnnnKwwxxyKnnnnnnnnnmnKwwxxyKnnnnnnnnonnKwwxxuKnnnnnnnnnnnnnnnnnnnmno
+      nnnnnnnnonnnmnnnnnnnnnnKwwxxyKnnnnnmnnnonKwwxxyKnnnnnnnnnnmKwwxxyKnnnnonnnnnnnnnnmnnnnnnnnnnnnnKwwxxyKnnmnnnnnnnnKwwxxyKnnnnnnnmnnnKwwxxyKnnnnnnnnnnnnmnnnnnnnnn
+      nnnnnmnnnnnnonnnnnnnnnnKwwxxyKnnnnnnnnnnnKwwxxyKnnnmnnnnnnnKwwxxyKnnnnnnnnmnnnnnnnnnnnnnnnnnnnnKwwxxyKnnnonnnnnnnKwwxxyKmnnnnnnnnnnKwwxxyKnnnnnmnnnnnnnnnnnnnnnn
+      nnnnnnnnnnnnnnnnonnnnmnKwwxxyKnnnnnnnnnnnKwwxxyKnnnnnnnnn32KwwxxyK23232323232323232323232323232KwwxxyK23nnnnnonnnKwwxxyKnnnnnnnnnnnKwwxxyKnnonnnnnnnnnnnnnnnnnnm
+      nnnnnnnnnnnnnnmnnnnnonnKwwxxyKnnnnnnnmnnnKwwxxyK32323232323KwwxxyK32323232323232323232323232323KwwxxyK32323232323KwwxxyKnnnnnnnnnmnKwwxxyKnnnnnnonnnnnnnmnnnnnnn
+      nnnnnnnmnnnnnnnnnnnnnnnKwwxxyKmnnnnnnnnnnKnwxoyK23232323232KwwxxyK22222222222222222222222222222KnwxoyK23232323232KwwxxyKnnmnnnnnnnnKnwxoyKnnnnnnnmnnonnnnnnnnnnn
+      mnnnnnnnnnnnnnnnnnnnnnnKnwxoyKnnnnnn32323KKKKKKK32222222222KnwxoyK22222222222222222222222222222KKKKKKK22222222223KnwxoyK32323nnnnnnKKKKKKKmnnnnnnnnnnnnnonnnnnnn
+      nonnnnnnnnnnnnnnmnnnnnnKKKKKKKn3232323232323222222222222222KKKKKKK22222222222222222222222222222222222222222222222KKKKKKK2323232323nmnnnnnnnnnnnnnnnnnnnnnnmnonnn
+      nnnnnonnnmnnnnnnnnnnnnnnnnnn323232323232222222222222222222222222222222222222222222222222222222222222222222222222222222222232323232323nnnnnnnnnnnnnnmnnnnnnnnnnnn
+      nnmnnnnnnonnnnnnnnnnnnnnn323232323222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222323232323nnnnmnnnnnnnnnnnnnnnnnnn
+      nnnnnnnnnnnnnonnnnmnnn323232323222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222323232323nnnnnnnnnnnnnnnnnmnnn
+      nnnnnnnnnnnmnnnnnonn2323232323222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222223232323232onnnnnnnmnnnnnnnnnn
+      nnnnmnnnnnnnnnnnnn32323232322222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222323232323nnonnnnnnnnnnnnnn
+      nnnnnnnnnnnnnnnnn32323232322222222222222222222222222222222222222222KKKKKKKKKKKKK5KKKKKKKKKKKKK22222222222222222222222222222222222222222323232323nnnnnonnnnnnnnmn
+      nnnnnnnnnnnnnmnn323232323222222222222222222222222222222222222KKKKK555555ZZZZZZZZZZZZZZZZZ555555KKKKK222222222222222222222222222222222222323232323nnnnnnmnonnnnnn
+      nnonnnmnnnnnnnn323232323222222222222222222222222222222222KKKK5555ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZf5f5fKKK222222222222222222222222222222222323232323nnnnnnnnnnnonn
+      nnnnnnonnnnnnnn232323232222222222222222222222222222222KKKK555ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZfZf555KKKK222222222222222222222222222222232323232nnnnnnnnnnnnnn
+      nnnnnnnnnnonnnn32323232222222222222222222222222222222KKK555ZZZZZZZZZZZZZZYZZYZZYZZYZZYZZYZZZZZZZfZfZfZ555KKK22222222222222222222222222222223232323nnnnnnnmnnnnnn
+      nnnnnnnnmnnnnno23232323222222222222222222222222222222KK555ZZZZZZZZZZZYZZYZZYZZYZZYZZYZZYZZYZZZZZZfZfZZZ555KK22222222222222222222222222222232323232mnnnnnnnnnnnnn
+      nmnnnnnnnnnnnnn32323232322222222222222222222222222222K555ZZZZZZZZZZZYZZYZZYZZYZZYZZYZZYZZYZZYZZZfZfZfZZZ555K22222222222222222222222222222323232323nnnnnnnnnnnnnn
+      nnnnnnnnnnnnnnnn3232323232222222222222222222222222222KK555ZZZZZZZZZZZZYZZYZZYZZYZZYZZYZZYZZYZZZZZfZfZZZ555KK2222222222222222222222222222323232323nonnnnnnnnmnnnn
+      nnnnnnnnnnmnnnnnn323232323222222222222222222222222222KKK555ZZZZZZZZZZZZZYZZYZZYZZYZZYZZYZZZZZZZZfZfZfZ555KKK222222222222222222222222222323232323nnnnmnonnnnnnnnn
+      nnnmnnnnnnnnnnnnnn323232323222222222222222222222222222KKKK555ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZfZf555KKKK222222222222222222222222222323232323nnnnnnnnnnnonnnnn
+      nnnonnnnnnnnnnnnnnnm2323232323222222222222222222222222222KKKK5555ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ5555KKKK2222222222222222222222222223232323232nnnnnnnnnnnnnnnnmon
+      nnnnnnnonnnnmnnnnnnnnn323232323222222222222222222222222222222KKKKK555555ZZZZZZZZZZZZZZZZZ555555KKKKK222222222222222222222222222222323232323nnnnnnnnnnnmnnnnnnnnn
+      nnnnnmnnnnnonKKKnnnnnnnnn323232323222222222222222222222222222222222KKKKKKKKKKKKK5KKKKKKKKKKKKK222222222222222222222222222222222323232323nnnnnnnmnnnnnnnnnnnnnnnn
+      nnnnnnnnnnnnnNOXnnnnnmnnnnnn323232323232222222222222222222222222222222222222222222222222222222222222222222222222222222222232323232323nnnmnnKKKnnnnnnnnnnnnnnnnnm
+      nnnnnnnnnnnnnnPnnnnonnnnnnnnnnn323232323232322222222222222222222222222222222222222222222222222222222222222222222222223232323232323nnnnnnnnnNOXnonnnnnnnnmnnnnnnn
+      nnnnnnnmnnnnnnnnnnnnnnnonnnnnnmnnnnn32323232323232222222222222222222222222222222222222222222222222222222222222223232323232323nnnnnnnnnnnnnnnPnnnnmnonnnnnnnnnnnn
+      mnnnnnnnnnnnnnnnnnnnnnnmnnnonKKKnnnnnnnnn3232323232323232322222222222222222222222222222222222222222222232323232323232323onnnnnnnnnnnnnnnnnmnnnnnnnnnnnnonnnnnnnn
+      onnnnnnnnnnnnnnnmnnnnnnnnnnnnNOXnnnnnnnmnnnnnnnn32323232323232323232323232323232323232323232323232323232323232323nnnnnnnnnnnoKKKnnnmnnnnnnnnnnnnnnnnnnnnnnmonnnn
+      nnnnonnnnmnnnnnnnnnnnnnnnnnnnnPnmnnonnnnnnnnnnnnnnnKKKnmn32323232323232323232323232323232323232323232323nnnnnnnnnnnnnnnnnnnnmNOXonnnnnnnnnnnnnnnnnnmnnnnnnnnnnno
+      nnmnnnnnonnnnnnnnnnnnnnnnmnnnnnnnnnnnnnonnnnnnnnmnnNOXnnnnnnnnnnnnnnnnomnnnnnnnnnnnnnnnnnnnnnnmnnnnnnonnnnnnnnnnnnnnnmnnnnnnnnPnnnnnonnnnnnnmnnnnnnnnnnnnnnnnnnn
+
+autotile:
+  - prefix: "spirit_clearing.wall_"
+    base: spirit_clearing.wall_top
+    palette: spirit_clearing
+    order: [4, 1, 2, 8]
+    bits:
+      4:
+        - sprite: spirit_clearing.wall_face
+          at: [0, 5]
+      1:
+        - sprite: spirit_clearing.wall_edge_n
+      2:
+        - sprite: spirit_clearing.wall_edge_e
+          at: [14, 0]
+      8:
+        - sprite: spirit_clearing.wall_edge_w
