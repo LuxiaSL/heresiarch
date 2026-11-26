@@ -1,0 +1,467 @@
+# Zone 2 — Mossy Path. Damp, overgrown: moss-carpeted rock walls with
+# dangling roots over a mossy cliff face; sage earth floors with moss,
+# sunk flagstones and puddles; glowing teal caps. Drafted by
+# heresiarch theme fork A (procedural layout, hand-tuned motifs).
+theme: mossy_path
+sheet: theme_mossy_path
+defaults:
+  palette: mossy_path
+  ax: 8
+  ay: 16
+
+colors:
+  mp_void: "#0a1212"
+  mp_e1: "#eceabe"
+  mp_e2: "#d6d4a2"
+  mp_e3: "#b6b682"
+  mp_e4: "#8a8e5e"
+  mp_m1: "#b6e68c"
+  mp_m2: "#78c470"
+  mp_m3: "#468e5c"
+  mp_f1: "#e8efe2"
+  mp_f2: "#c4cfbe"
+  mp_f3: "#94a394"
+  mp_t1: "#c8fff0"
+  mp_t2: "#6ee0cc"
+  mp_t3: "#2a9c98"
+  mp_c1: "#a6eca0"
+  mp_c2: "#5cc47c"
+  mp_c3: "#2e9468"
+  mp_c4: "#1a6256"
+  mp_c5: "#0f3a3c"
+  mp_r1: "#dfe6d2"
+  mp_r2: "#a9b8a2"
+  mp_r3: "#768c7a"
+  mp_r4: "#4a5e56"
+  mp_o1: "#c88a52"
+  mp_o2: "#8a5430"
+  mp_o3: "#563020"
+  mp_v1: "#f6a682"
+  mp_v2: "#dc664c"
+  mp_v3: "#a63c3e"
+  mp_v4: "#ffbd94"
+  mp_fog1: "#effff6"
+  mp_fog2: "#cdf2e2"
+  mp_fog3: "#a2dccb"
+  mp_fog4: "#74b8ae"
+  mp_fern1: "#9ae07a"
+  mp_fern2: "#4fa65a"
+
+palettes:
+  mossy_path:
+    K: ink
+    V: mp_void
+    s: shadow
+    "1": mp_e1
+    "2": mp_e2
+    "3": mp_e3
+    "4": mp_e4
+    m: mp_m1
+    n: mp_m2
+    o: mp_m3
+    p: mp_f1
+    q: mp_f2
+    r: mp_f3
+    t: mp_t1
+    u: mp_t2
+    W: mp_t3
+    a: mp_c1
+    b: mp_c2
+    c: mp_c3
+    d: mp_c4
+    e: mp_c5
+    w: mp_r1
+    x: mp_r2
+    y: mp_r3
+    z: mp_r4
+    A: mp_o1
+    B: mp_o2
+    C: mp_o3
+    R: mp_v1
+    S: mp_v2
+    T: mp_v3
+    U: mp_v4
+    G: gold1
+    H: gold2
+    I: gold3
+    J: gold4
+    P: paper1
+    Q: paper2
+    D: mp_fog1
+    E: mp_fog2
+    F: mp_fog3
+    L: mp_fog4
+    g: mp_fern1
+    h: mp_fern2
+
+sprites:
+  mossy_path.floor_0:
+    grid: |
+      2222222223222322
+      2223322222322222
+      2223222222222222
+      2222222232222222
+      2222222332222222
+      2222222222232222
+      2222122222222222
+      3222222222223322
+      2221222222223222
+      2222223322222222
+      2222222212222222
+      2223232222222222
+      222nm22222232222
+      222on22222222222
+      2222222222222312
+      2222222222222222
+  mossy_path.floor_1:
+    grid: |
+      2212222222222222
+      2222332222222322
+      2222222222222222
+      2222222222222222
+      2222222222222222
+      22222mmn22222222
+      2222mnnno2323222
+      22232noo22223222
+      2222222222222222
+      2222322132222222
+      2222222222332222
+      2222222222222221
+      22222222222nm222
+      22322222122on222
+      2222222222232222
+      2222222222222222
+  mossy_path.floor_2:
+    grid: |
+      2222213222222222
+      2222212223222222
+      2222222222222222
+      2222222222222222
+      212222222ppq2322
+      22222223pqqqr222
+      222222222qrr2222
+      2322322122222231
+      2222222222222322
+      2222222222222222
+      2222222222222222
+      222nm22232222222
+      222on22122232222
+      2232222222222222
+      2222222223223222
+      2223122122222222
+  mossy_path.floor_3:
+    grid: |
+      2222122222222222
+      2222222222222222
+      2222222222222223
+      322222222222nm22
+      221222222232on22
+      3222222222222223
+      3222222221122232
+      2222222222322222
+      3222222122222222
+      2222233333222222
+      2122334333322222
+      2323233343222222
+      2233222222223222
+      2222222222222221
+      2222222222222223
+      2222222222222222
+  mossy_path.void:
+    grid: |
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+      VVVVVVVVVVVVVVVV
+  mossy_path.wall_top:
+    export: false
+    grid: |
+      dbbbdddcccyyyycd
+      bbcccccccddyyybb
+      ccccccccdddyyybb
+      cccccdddddyyyyyc
+      eeedddddddddeeee
+      xxxxxxxxxxxxezxx
+      ccyyyyyyybbbdbcc
+      ccdyyyyybbbcdccc
+      cddyyyyybcccdccc
+      ddyyyyyyycccdddd
+      yyyyyyyyyyyyezyy
+      eeeebbbeeeeeeeee
+      xbbbbbcccczxxxxx
+      cbbcccccccdyyybb
+      ccdccccccddybbbc
+      cddcccddddzybccc
+  mossy_path.wall_face:
+    export: false
+    grid: |
+      KKKKKKKKKKKKKKKK
+      cccccccccccccccc
+      dccdccdccdccdccd
+      ycyBcwcwwcBycycy
+      wcwBCxcxxdBCcwdw
+      xdxBxocxxxBxdxxx
+      xxoxBCdzzzzBCxxx
+      zzzzBwwwwwwBzzzz
+      yyxxxoxxxxxBCxxx
+      yyzzzzzzzzzzzzzz
+      KKKKKKKKKKKKKKKK
+  mossy_path.wall_edge_n:
+    export: false
+    grid: |
+      KKKKKKKKKKKKKKKK
+      a.aa..aa.aaa..a.
+  mossy_path.wall_edge_e:
+    export: false
+    grid: |
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+      eK
+  mossy_path.wall_edge_w:
+    export: false
+    grid: |
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+      K
+  mossy_path.stairs_down:
+    layers:
+      - sprite: mossy_path.floor_0
+      - sprite: stairs_part
+        palette: mossy_path
+  mossy_path.stairs_up:
+    layers:
+      - sprite: mossy_path.floor_0
+      - sprite: stairs_up_part
+        palette: mossy_path
+  mossy_path.exit_torii:
+    layers:
+      - sprite: mossy_path.floor_3
+      - sprite: torii_part
+        palette: mossy_path
+  mossy_path.decor_fern:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ......K.........
+      .....KgK...K....
+      ..K..KgK..KgK...
+      .KgK.KghK.KgK...
+      .KghKKghKKghK...
+      ..KghKghKghK..K.
+      ...KghghghK..KgK
+      ....KhhhhK..KghK
+      .....KhhK..KghK.
+      ......KK...KhK..
+      .....ssssssssss.
+      ................
+  mossy_path.decor_glowcap:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ..........KKK...
+      .........KttuK..
+      ...KKKK..KuuWK..
+      ..KtttuK..KPK...
+      .KtuuuuWK.KPK...
+      .KKuuWWKK.KQK...
+      ...KPPK...sss...
+      ...KPQK.........
+      ...sssss........
+      ................
+  mossy_path.decor_mossrock:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      .....KKKKK......
+      ...KKmmnnnKK....
+      ..KmmnnnnnooK...
+      ..KwxnnnooxyK...
+      ..KxxxyyyyyzK...
+      ...KKyyyzzKK....
+      ...sssssssss....
+      ................
+  mossy_path.decor_puddle:
+    grid: |
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ................
+      ....333333......
+      ..33uuttuu33....
+      .3uuttuuuWWu3...
+      .3uuuuuuWWWu3...
+      ..33uuWWWuu33...
+      ....33333333....
+      ................
+      ................
+  bg_mossy_path:
+    ax: 0
+    ay: 0
+    grid: |
+      nmEEEEKnmBBnBBnmBCCKEnmEEEEEnmKABoCnmEEEEEnmLLLFEnmEEEEEnmEEEELnmFEEEEnmEEEEEnmEEEEEnmEEEEEnmELLLFnmEEEEEnmEEEEEnmLFEEEnmEEEKAnmCKEEEnmEEEEEnmBnBBBnmBBCCKnmEEEE
+      nEEEEEKnBBBBBBnBBoCKEnEEEEEEnEKABCCnEEEEEEnELLLFEnEEEEEEnEEEEELnLFEEEEnEEEEEEnEEEEEEnEEEEEEnEELLLFnEEEEEEnEEEEEEnLLFEEEnEEEEKAnnCKEEEnEEEEEEnABBBBBnBoBCCKnEEEEE
+      nEEEEEKnBBBBnBnBBCCKEnEEEEEEnEKABConEEEEEEnELLLFEnEEEEEEnEEEEELnLFEEEEnEEEEEEnEEEEEEnEEEEEEnEELLLFnEEEEEEnEEEEEEnLLFEEEnEEEEKAnCCKEEEnEEEEEEnABBnBBnBBBCCKnEEEEE
+      nmEEEEKnmBBBBBnmBCoKEnmEEEEEnmKABCCnmEEEEEnmLLLFEnmEEEEEnmEEEELnmFEEEEnmEEEEEnmEEEEEnmEEEEEnmELLLFnmEEEEEnmEEEEEnmLFEEEnmEEEKAnmnKEEEnmEEEEEnmBBBBBnmBoCCKnmEEEE
+      oEEEEEKnBBBBBnoBBCCKEnEEEEEEoEKABCCnEEEEEEoELLLFEnEEEEEEoEEEEELnLFEEEEoEEEEEEnEEEEEEoEEEEEEnEELLLFoEEEEEEnEEEEEEoLLFEEEnEEEEKAoCCKEEEnEEEEEEoABBBnBnBBBCCKoEEEEE
+      oEEEEEKnnBBBBBoBBCCKEnEEEEEEoEKABCCnEEEEEEoELLLFEnEEEEEEoEEEEELnLFEEEEoEEEEEEnEEEEEEoEEEEEEnEELLLFoEEEEEEnEEEEEEoLLFEEEnEEEEKAoCCKEEEnEEEEEEoABBBBBnBBBoCKoEEEEE
+      EEEEFFKnmBBBBBnBBCCKFnmEEEEEEEKABCCnmEEEEEEFLLLFEnmEEEEEFFFFFELnmFEEEFFFEEEEEnmEEEFFFFEEEEEnmELLLFFFEEEEEnmEFFFELLLFEEEnmFFFKABCCKEEEnmFFFFEKABBBBnnmBBCCKEEEEEE
+      EEEEFFKnBnBBBBBBBCCKFnEEEEEEEEKnBCCnEEEEEEEFLLLFEnEEEEEEFFFFFELnLFEEEFFFEEEEEnEEEEFFFFEEEEEnEELLLFFFEEEEEnEEFFFELLLFEEEnEFFFKABCCKEEEnFFFFFEKnBBBBBnBBBCoKEEEEEE
+      EEEEFFKnBBBBBBBnBCCKFnEEEEEEEEKABCCnEEEEEEEFLLLFEnEEEEEEFFFFFELnLFEEEFFFEEEEEnEEEEFFFFEEEEEnEELLLFFFEEEEEnEEFFFELLLFEEEnEFFFKnBCCKEEEnFFFFFEKABBBBBnBBBCCKEEEEEE
+      EEEEFFKnmBnBBBBBBCCKFnmEEEEEEEKAnCCnmEEEEEEFLLLFEnmEEEEEFFFFFELnmFEEEFFFEEEEEnmEEEFFFFEEEEEnmELLLFFFEEEEEnmEFFFELLLFEEEnmFFFKABCCKEEEnmFFFFEKAnBBBBnmBBCCKEEEEEE
+      EEEEFFKnBBBBBBBBnCCKFnEEEEEEEEKABCCnEEEEEEEFLLLFEnEEEEEEFFFFFELnLFEEEFFFEEEEEnEEEEFFFFEEEEEnEELLLFFFEEEEEnEEFFFELLLFEEEnEFFFKAnCCKEEEnFFFFFEKABBBBBnnBBCCKEEEEEE
+      EEEEFFKoBBBnBBBBBCCKFoEEEEEEEEKABnCoEEEEEEEFLLLFEoEEEEEEFFFFFELoLFEEEFFFEEEEEoEEEEFFFFEEEEEoEELLLFFFEEEEEoEEFFFELLLFEEEoEFFFKABCCKEEEoFFFFFEKABnBBBoBBBCCKEEEEEE
+      EEEEFFKomBBBBBBBBnCKFomEEEEEEEKABCComEEEEEEFLLLFEomEEEEEFFFFFELomFEEEFFFEEEEEomEEEFFFFEEEEEomELLLFFFEEEEEomEFFFELLLFEEEomFFFKABnCKEEEomFFFFEKABBBBBomnBCCKEEEEEE
+      EEEEFFKABBBBnBBBBCCKFFEEEEEEEEKABCnKEEEEEEEFLLLFEEEEEEEEFFFFFELLLFEEEFFFEEEEEEEEEEFFFFEEEEEEEELLLFFFEEEEEEEEFFFELLLFEEEEEFFFKABCCKEEEEFFFFFEKABBnBBBBBBCCKEEEEEE
+      EEEEFFKoBBBBBBBBBCnKFFEEEEEEEEKABCCKEEEEEEEFLLLFEEEEEEEEFFFFFELLLFEEEFFFEEEEEEEEEEFFFFEEEEEEEELLLFFFEEEEEEEEFFFELLLFEEEEEFFFKABCnKEEEEFFFFFEKABBBBBBBBnCCKEEEEEE
+      EDEDFFKABBBBBnBBBCCKFFEDEDEDEDKABCCKEDEDEDEFLLLFEDEDEDEDFFFFFDLLLFEDEFFFEDEDEDEDEDFFFFEDEDEDEDLLLFFFEDEDEDEDFFFDLLLFEDEDEFFFKABCCKEDEDFFFFFDKABBBnBBBBBCCKEDEDED
+      DDDDFFKAoBBBBBBBBCCKFFDDDDDDDDKABCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCCKDDDDFFFFFDKABBBBBBBBBnCKDDDDDD
+      DDDDFFKABBBBBBnBBCCKFFDDDDDDDDKABCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCCKDDDDFFFFFDKABBBBnBBBBCCKDDDDDD
+      DDDDFFKABoBBBBBBBCCKFFDDDDDDDDKnBCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCCKDDDDFFFFFDKoBBBBBBBBBCnKDDDDDD
+      DDDDFFKABBBBBBBnBCCKFFDDDDDDDDKABCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKoBCCKDDDDFFFFFDKABBBBBnBBBCCKDDDDDD
+      DDDDFFKABBoBBBBBBCCKFFDDDDDDDDKAnCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCCKDDDDFFFFFDKAoBBBBBBBBCCKDDDDDD
+      DDDDFFKABBBBBBBBnCCKFFDDDDDDDDKABCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKAoCCKDDDDFFFFFDKABBBBBBnBBCCKDDDDDD
+      DDDDFFKABBBoBBBBBCCKFFDDDDDDDDKABnCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCCKDDDDFFFFFDKABoBBBBBBBCCKDDDDDD
+      DDDDFFKABBBBBBBBBnCKFFDDDDDDDDKABCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABoCKDDDDFFFFFDKABBBBBBBnBCCKDDDDDD
+      DDDDFFKABBBBoBBBBCCKFFDDDDDDDDKABCnKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCCKDDDDFFFFFDKABBoBBBBBBCCKDDDDDD
+      DDDDFFKnBBBBBBBBBCnKFFDDDDDDDDKABCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCoKDDDDFFFFFDKABBBBBBBBnCCKDDDDDD
+      DDDDFFKABBBBBoBBBCCKFFDDDDDDDDKABCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCCKDDDDFFFFFDKABBBoBBBBBCCKDDDDDD
+      DDDDFFKAnBBBBBBBBCCKFFDDDDDDDDKABCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCCKDDDDFFFFFDKABBBBBBBBBnCKDDDDDD
+      DDDDFFKABBBBBBoBBCCKFFDDDDDDDDKABCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCCKDDDDFFFFFDKABBBBoBBBBCCKDDDDDD
+      DDDDFFKABnBBBBBBBCCKFFDDDDDDDDKoBCCKDDDDDDDFLLLFDDDDDDDDFFFFFDLLLFDDDFFFDDDDDDDDDDFFFFDDDDDDDDLLLFFFDDDDDDDDFFFDLLLFDDDDDFFFKABCCKDDDDFFFFFDKnBBBBBBBBBCnKDDDDDD
+      DDDDLLKABBBBBBBoBCCKLLDDDDDDDDKABCCKDDDDDDDLLLLFDDDDDDDDLLLLLDLLLFDDDLLLDDDDDDDDDDLLLLDDDDDDDDLLLFLLDDDDDDDDLLLDLLLFDDDDDLLLKnBCCKDDDDLLLLLDKABBBBBoBBBCCKDDDDDD
+      DDDDLLKABBnBBBBBBCCKLLDDDDDDDDKAoCCKDDDDDDDLLLLFDDDDDDDDLLLLLDLLLFDDDLLLDDDDDDDDDDLLLLDDDDDDDDLLLFLLDDDDDDDDLLLDLLLFDDDDDLLLKABCCKDDDDLLLLLDKAnBBBBBBBBCCKDDDDDD
+      DDDDLLKABBBBBBBBoCCKLLDDDDDDDDKABCCKDDDDDDDLLLLFDDDDDDDDLLLLLDLLLFDDDLLLDDDDDDDDDDLLLLDDDDDDDDLLLFLLDDDDDDDDLLLDLLLFDDDDDLLLKAnCCKDDDDLLLLLDKABBBBBBoBBCCKDDDDDD
+      DEDELLKABBBnBBBBBCCKLLDEDEDEDEKABoCKDEDEDEDLLLLFDEDEDEDELLLLLELLLFDEDLLLDEDEDEDEDELLLLDEDEDEDELLLFLLDEDEDEDELLLELLLFDEDEDLLLKABCCKDEDELLLLLEKABnBBBBBBBCCKDEDEDE
+      EEEELLKABBBBBBBBBoCKLLEEEEEEEEKABCCKEEEEEEELLLLFEEEEEEEELLLLLELLLFEEELLLEEEEEEEEEELLLLEEEEEEEELLLFLLEEEEEEEELLLELLLFEEEEELLLKABnCKEEEELLLLLEKABBBBBBBoBCCKEEEEEE
+      EEEELLKABBBBnBBBBCCKLLEEEEEEEEKABCoKEEEEEEELLLLFEEEEEEEELLLLLELLLFEEELLLEEEEEEEEEELLLLEEEEEEEELLLFLLEEEEEEEELLLELLLFEEEEELLLKABCCKEEEELLLLLEKABBnBBBBBBCCKEEEEEE
+      EEEELLKnBBBBBBBBBCoKLLEEEEEEEEKABCCKEEEEEEELLLLFEEEEEEEELLLLLELLLFEEELLLEEEEEEEEEELLLLEEEEEEEELLLFLLEEEEEEEELLLELLLFEEEEELLLKABCnKEEEELLLLLEKABBBBBBBBoCCKEEEEEE
+      EEEELLKABBBBBnBBBCCKLLEEEEEEEEKABCCKEEEEEEELLLLFEEEEEEEELLLLLELLLFEEELLLEEEEEEEEEELLLLEEEEEEEELLLFLLEEEEEEEELLLELLLFEEEEELLLKABCCKEEEELLLLLEKABBBnBBBBBCCKEEEEEE
+      EEEELLKAnBBBBBBBBCCKLLEEEEEEEEKABCCKEEEEEEELLLLFEEEEEEEELLLLLELLLFEEELLLEEEEEEEEEELLLLEEEEEEEELLLFLLEEEEEEEELLLELLLFEEEEELLLKABCCKEEEELLLLLEKABBBBBBBBBoCKEEEEEE
+      EEEELLKABBBBBBnBBCCKLLEEEEEEEEKABCCKEEEEEEELLLLFEEEEEEEELLLLLELLLFEEELLLEEEEEEEEEELLLLEEEEEEEELLLFLLEEEEEEEELLLELLLFEEEEELLLKABCCKEEEELLLLLEKABBBBnBBBBCCKEEEEEE
+      EEEELLKABnBBBBBBBCCKLLEEEEEEEEKnBCCKEEEEEEELLLLFEEEEEEEELLLLLELLLFEEELLLEEEEEEEEEELLLLEEEEEEEELLLFLLEEEEEEEELLLELLLFEEEEELLLKABCCKEEEELLLLLEKnBBBBBBBBBCoKEEEEEE
+      EEEELLKABBBBBBBnBCCKLLEEEEEEEEKABCCKEEEEEEELLLLFEEEEEEEELLLLLELLLFEEELLLEEEEEEEEEELLLLEEEEEEEELLLFLLEEEEEEEELLLELLLFEEEEELLLKnBCCKEEEELLLLLEKABBBBBnBBBCCKEEEEEE
+      EEEELLKABBnBBBBBBCCKLLEEEEEEEEKAnCCKEEEEEEELLLLFEEEEEEEELLLLLELLLFEEELLLEEEEEEEEEELLLLEEEEEEEELLLFLLEEEEEEEELLLELLLFEEEEELLLKABCCKEEEELLLLLEKAnBBBBBBBBCCKEEEEEE
+      EFEFLLKABBBBBBBBnCCKLLEFEFEFEFKABCCKEFEFEFELLLLFEFEFEFEFLLLLLFLLLFEFELLLEFEFEFEFEFLLLLEFEFEFEFLLLFLLEFEFEFEFLLLFLLLFEFEFELLLKAnCCKEFEFLLLLLFKABBBBBBnBBCCKEFEFEF
+      FFFFLLKABBBnBBBBBCCKLLFFFFFFFFKABnCKFFFFFFFLLLLFFFFFFFFFLLLLLFLLLFFFFLLLFFFFFFFFFFLLLLFFFFFFFFLLLFLLFFFFFFFFLLLFLLLFFFFFFLLLKABCCKFFFFLLLLLFKABnBBBBBBBCCKFFFFFF
+      FFFFLLKABBBBBBBBBnCKLLFFFFFFFFKABCCKFFFFFFFLLLLFFFFFFFFFLLLLLFLLLFFFFLLLFFFFFFFFFFLLLLFFFFFFFFLLLFLLFFFFFFFFLLLFLLLFFFFFFLLLKABnCKFFFFLLLLLFKABBBBBBBnBCCKFFFFFF
+      FFFFLLKABBBBnBBBBCCKLLFFFFFFFFKABCnKFFFFFFFLLLLFKKKKFFFFLLLLLFLLLFFFFLLLFFFFFFFFFFLLLLFFFFFFFFLLLFLLFFFFFFFFKKKKLLLFFFFFFLLLKABCCKFFFFLLLLLFKABBnBBBBBBCCKFFFFFF
+      FFFFLLKoBBBBBBBBBCnKLLFFFFFFFFKABCCKFFFFFFFLLLKKnnmmKKFFLLLLLFLLLFFFFLLLFFFFFFFFFFLLLLFFFFFFFFLLLFLLFFFFFFKKnnmmKKLFFFFFFLLLKABCnKFFFFLLLLLFKABBBBBBBBnCCKFFFFFF
+      FFFFLLKABBBBBnBBBCCKLLFFFFFFFFKABCCKFFFFFFFLLKnnmmnnnoKFLLLLLFLLLFFFFLLLFFFFFFFFFFLLLLFFFFFFFFLLLFLLFFFFFKnnmmnnnoKFFFFFFLLLKABCCKFFFFLLLLLFKABBBnBBBBBCCKFFFFFF
+      FFFFLLKAoBBBBBBBBCCKLLFFFFFFFFKABCCKFFFFFFFLKKKKKKKKKKKKLLLLLFLLLFFFFLLLFFFFFFFFFFLLLLFFFFFFFFLLLFLLFFFFKKKKKKKKKKKKFFFFFLLLKABCCKFFFFLLLLLFKABBBBBBBBBnCKFFFFFF
+      FFFFLLKABBBBBBnBBCCKLLFFFFFFFFKABCCKFFFFFFFLLLLKxwwyKFFFLLLLLFLLLFFFFLLLFFFFFFFFFFLLLLFFFFFFFFLLLFLLFFFFFFFKxwwyKLLFFFFFFLLLKABCCKFFFFLLLLLFKABBBBnBBBBCCKFFFFFF
+      FFFFLLKABoBBBBBBBCCKLLFFFFFFFFKnBCCKFFFFFFFLLLLKuttuKFFFLLLLLFLLLFFFFLLLFFFFFFFFFFLLLLFFFFFFFFLLLFLLFFFFFFFKuttuKLLFFFFFFLLLKABCCKFFFFLLLLLFKoBBBBBBBBBCnKFFFFFF
+      ccccccKABBBBBBBnBCCKbccccccbccKABCCKcccccbccLLLKuttuKccbccccccLLLFcccbccnnmpppnqqqrqqqonncbcccLLLFccccccbccKuttuKLLFccbcccccKoBCCKccbccccccbKABBBBBnBBBCCKcccccc
+      cbccccKABBoBBBBBBCCKccbccccccbKAnCCKbccccccbLLLKyyzzKccccbccccLLLFcccccnnmrrrrrrrrrrrrronnccbcLLLFcbccccccbKyyzzKLLFccccbcccKABCCKccccbcccccKAoBBBBBBBBCCKcbcccc
+      cccbccKABBBBBBBBnCCKccccbcccccKABCCKccbccccccbKKKKKKKKcccccbccccccbcccnnmppppppppppppppponncccbccccccbccccKKKKKKKKcbccccccbcKAoCCKccccccbcccKABBBBBBnBBCCKcccbcc
+      cccccbKABBBoBBBBBCCKccccccbcccKABnCKccccbccccccbKxyKccbccccccbccccccbnnmrrrrrrrrrrrrrrrrronnccccbccccccbccccKxyKcccccbccccccKABCCKcbccccccbcKABoBBBBBBBCCKcccccb
+      bcccccKABBBBBBBBBnCKcbccccccbcKABCCKccccccbcccccKxyKccccbccccccbccccnnmppppppppppppppppppponncccccbccccccbccKxyKbccccccbccccKABoCKcccbccccccKABBBBBBBnBCCKbccccc
+      ccbcccKABBBBoBBBBCCKcccbccccccKABCnKcbccccccbcccKxyKccccccbccccccbcnnmqqqqrrpppprqqqqrrqqqqonnccccccbccccccbKxyKccbccccccbccKABCCKcccccbccccKABBoBBBBBBCCKccbccc
+      ccccbcKnBBBBBBBBBCnKcccccbccccKABCCKcccbccccccbcKxyKcbccccccbcccccnnmqqqqqrppppprqqqqqrqqqqqonnbccccccbcccccKxyKccccbccccccbKABCoKbccccccbccKABBBBBBBBnCCKccccbc
+      ccccccKABBBBBoBBBCCKbccccccbccKABCCKcccccbcccccKxxyzKccbcccdcdbccnnmrrrrrrrrrrrrrrrrrrrrrrrrronndbccccccbccKxxyzKccdccbcccccKABCCKccbccccccbKABBBoBBBBBCCKcccccd
+      cbcccdKAnBBBBBBBBCCKccbdcccccbKABCCKbccccccbccKwxxyyzKcccbccccccnnmppppppppppppppppppppppppppponnccbccccdcKwxxyyzKccccccbcccKABCCKcdccbccdccKABBBBBBBBBnCKcbcccc
+      cccbccKABBBBBBoBBCCKccccbccdccKABCCKccbccccccbKKKKKKKKdccccbcccnnmpprnqqqqqqrrqqqqqrnpppppprrqqonncccbccccKKKKKKKKcbccccccbcKABCCKccccccbcccKABBBBoBBBBCCKcccbcc
+      cccccbKABnBBBBBBBCCKccccccbcccKoBCCKccccbccdcccbcddcccbdcccccbnnmpprnrqqqqqrrrqqqqqnrrppppprrnqqonnccccbccccccbcccccdbcdccccKABCCKcbccccccbcKnBBBBBBBBBCnKccdccb
+      bcccccKABBBBBBBoBCCKcbccccdcdcKABCCKccccccbccccccbccccccbccccnnmpprnrqqqqqqrrnqqqqqrrrppppppnrrqqonnccdccbccccccbccccccbcccdKnBCCKdccbccccccKABBBBBoBBBCCKbccccd
+      ccbcccKABBnBBBBBBCCKcccbccccccKAoCCKcbccccccbccccccbccccccbcnnmrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrronnccccccbccccccbcdccccbccKABCCKcccccbccccKAnBBBBBBBBCCKccbccc
+      ccccbcKABBBBBBBBoCCKcccccbccccKABCCKcccbcdccccbccdcccbcccccnnmppppppppppppppppppppppppppppppppppppponnbcccdccbccccccbccccccbKAnCCKbccccccbccKABBBBBBoBBCCKccdcbc
+      ccccccKABBBnBBBBBCCKbccccccbccKABoCKcccccbccccccbccccccbccnnmrqqqqqrrnqqqqqrrrppppprnrqqqqqrrrqqqqqnonncbccccccbcccdccbcccccKABCCKccbccccccbKABnBBBBBBBCCKcccccc
+      cbccccKABnBBBnBBBoCKcdbccccccbKABnCKbccccccbccccccbccccccnnmrqqqqqqrnqqqqqqrrppppppprrqqqqqqrnqqqqqqronnccbcdccccbcccdccbcccKoBnCKccccbcccccKnBBBnBBBoBCCKcbcccc
+      cccbccKAnBBBnBBBoCCKccccbdccccKAnCoKccbccccccbcdccccbcccnnmrqqqqqqrnrqqqqqqrrppppppprrqqqqqqqrrqqqqqqronncccbdcccccbccccccbdKABCnKccccccbcccKABBnBBBoBBCnKcccbcc
+      dccccbKnBBBnBBBoBCoKccccccbcccKnBCCKccccbccccccbccccccbnnmrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrronnccccbccccccbccccdcKABnnKcbccccccbcKABnBBBoBBonCKcccdcd
+      bcccccKABBnBBnoBBCnKcbccccccbcKABCnKccccccbccccccbdcccnnmppppppppppppppppppppppppppppppppppppppppppppppponncccccbccccccbccccKAnCCKcccbccccccKAnBBnoBBBnCCKbccccc
+      ccbcccKAnnBBBoBBBnCKcccbccccccKABnCKcbccccccbccccccbcnnmqqqnrrpppppppnrrqqqqqqqnrrqqqqqqqnrrpppppppnrrqqqonnccdcccbccccccbccKnBCCKcccccbccccKnBBBoBBBnBoCKccbccd
+      ccccbcKAnBBBoBnBnCCKcccccbccccKAnCCKcccbcdccccbcccccnnmqqqnrrpppppppprrqqqqqqqqrrrqqqqqqqqrrpppppppprrrqqqonnbccccdcbccccccbKABCnKbccccccbccKABBoBnBnBBCnKccccbc
+      ccccccKnBnBoBBBnBCCKbccccccbccKnBCCKcccccbccccccbccnnmqqqqrrpppppppprrrqqqqqqqqrrrqqqqqqqqrrnpppppppprnqqqqonncbdcccccbcccccKABnCKccbccccccbKnBoBBBnBBBnoKcccccc
+      cbccccKABBoBBBnnBCnKccbcdcccdbKABCoKbccccccbcccccnnmrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrronncbccccccbcccKnnCCKccccbcccccKAoBBBnnBBnCCKcbcccc
+      cccbccKABonBBnBBBnCKccccbdccccKAnoCKccbccccccbccnnmppppppppppppppppppppppppppppppppppppppppppppppppppppppppppponnccbccccccbcKnBCCKccccccbcccKonBBnBBBnBCCKcccdcc
+      cccccbKAoBBBnBBBnCCKcdccccbcccKAoCCKccccbccccccnnmrppppppppnrqqqqqqqqnrqqqqqqqqnrrpppppppprrqqqqqqqqrrqqqqqqqqronncccbccccccKAnCoKcbccccccbcKABBnBBBnBBCoKcccccb
+      bcccccKoBBBnBBBnBCCKcbccccccbcKoBnCKccccccddccnnmrppppppppnrqqqqqqqqqrrqqqqqqqqrrrpppppppprrqqqqqqqqqrrqqqqqqqqronndcccbccccKABoCKcccbcdcccdKABnBBBnBBBoCKbccccc
+      ddbcccKABBnBBBnBBnoKcccdccccccKABCnKcbccccccbnnmrppppppppnrrqqqqqqqqrrrqqqqqqqqrrrpppppppprrnqqqqqqqqrnrqqqqqqqqnonncccccdcdKAonCKcccccbccccKAnBBBnBBnoCCKccbccc
+      ccccbcKABnBBnnBBBoCKcccccbccccKABnnKcccbcccdnnmrppppppppprrqqqqqqqqqrrqqqqqqqqqrrnpppppppppnrqqqqqqqqqrrqqqqqqqqqronnccccccbKoBCCKbccccccbccKnBBnnBBBoBCCKccdcbc
+      ccccccKonBBBnBBBoCnKbcdccccdccKAnCCKcccccdcnnmrppppppppprrqqqqqqqqqqrrqqqqqqqqqrnrppppppppprrqqqqqqqqqqrrqqqqqqqqqronnbcccccKABCnKccbccccccbKABBnBBBoBnCnKcccccc
+      cbccccKnBBBnBnBoBCCKccbccccccdKnBCCKbcccccnnmrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrronncbcccKABnCKccccbcccccKABnBnBoBBBnCKddcccc
+      ccdbccKAoBnBBBoBBCnKccccbcccccKABCnKccbccnnmppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppponnccbcKAnCCKccccccbcccKAnBBBoBBBnnCKcccbcc
+      cccdcbKABnBBBonBBnCKccccccddccKABnCKccccnnmqqqqqrrqqqqqqqqqqrrnpppppppppprrqqqqqqqqqqqrnqqqqqqqqqqrrrpppppppppprnqqqqqonndccKnBCCKcbccccccbcKnBBBonBBnBCCKcccccd
+      bcccccKAnoBBoBBBnCCKcbdcdcccbcKnnCCKcccnnmqqqqqrrqqqqqqqqqqqrnppppppppppprrqqqqqqqqqqqnrqqqqqqqqqqqrrppppppppppprrqqqqqonnccKABCnKdccbccccccKoBBoBBBnBBCnKbdcccc
+      ccbcccKnBBBoBBBnBCCKcccbccdcccKnBCCKcdnnmqqqqqrrqqqqqqqqqqqrnrppppppppppprrqqqqqqqqqqqrrqqqqqqqqqqqrnrppppppppppprrqqqqqonncKoBnCKcccccbccccKABoBBBnBBBnCKccbccc
+      ccccbcKABBoBBBnBBCnKcccccbccccKAnCoKcnnmqqqqqrrrqqqqqqqqqqqnrppppppppppprrnqqqqqqqqqqqrrrqqqqqqqqqqqrrppppppppppprnrqqqqqonnKAnCCKbccccccdccKAoBBBnBBBnCCKccccbc
+      ccccccKABoBBBnBBnnCKbccccccbccKABoCKnnmqqqqqrrrqqqqqqqqqqqnrrppppppppppprnrqqqqqqqqqqqrrnqqqqqqqqqqqrrrppppppppppprrrqqqqqonKnoCCKccbccccccbKoBBBnBBnnBCCKccddcd
+      cbccccKAoBBonBBBnCCKccbccccccbKAonCKnmrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrroKABCoKccccbdccccKABonBBBnBBCoKcbcccc
+      cccbCCCoBBBnBBBnBnCCCCccbcccCCCoBCCCCCppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppCCCABoCCCCcccdbcCCCABnBBBnBnBoCCCCcbcc
+      cCCCcbccccccbccccccbccCCCCCCcccdcnnmqqCCCqqqqqqrrpppppppppppnrqqqqqqqqqqqrrqqqqqqqqqqqrrppppppppppprnqqqqqqqqqqqrrqqqqqCCCqqqonncccbCCCCCCbccccccbccccccbcccCCCb
+      CccccccbccccccbccccccbcCCCCcbcccnnmqqqqqqCCqqqqrrppppppppppprrqqqqqqqqqqqrnqqqqqqqqqqqrrpppppppppppnrqqqqqqqqqqqrrqqqCCqqqqqqqonnccccCCCCccdbcccdccbccccccbccccC
+      ccbcccghcbccccccbghccccbccccghdnnmqqqqqghqqqqqrrppghppppppprrghqqqqqqqqqghrqqqqqqqqghqrrppppppghpppprrqqqghqqqqqqnrqghqqqqqqqqqghncccdcbccghccbccccccghcccccbccc
+      ccccgghchccbdccgghbhcccccbgghchnmqqqqgghqhqqqrrpgghphppppppgghqhqqqqqqgghrhqqqqqqgghqhrnppppgghphppprrqgghqhqqqqqqgghqhqqqqqqgghohncccccgghchcccbccgghchccccccgg
+      hcgghcbcchhhcgghcccdhhhcgghbcnnhhhqgghqqqqhhhrgghpppphhhpgghqqqqhhhqgghqqrqhhhqgghqqqqhhhpgghpppphhhpgghqqqqhhhqgghrqqqhhhqgghqqqohhhcgghccbchhhcgghcccchhhcgghc
+      ghhhccccbccghhhbccccccghhhccnnmqqghhhqqqqqqqghhhpppppppghhhrqqqqqqghhhqqrrqqqghhhqqqqqqrghhhpppppppghhhqqqqqqqghhhqnrqqqqghhhqqqqqonghhhcccccbcghhhcbcccdcghhhcc
+
+autotile:
+  - prefix: "mossy_path.wall_"
+    base: mossy_path.wall_top
+    palette: mossy_path
+    order: [4, 1, 2, 8]
+    bits:
+      4:
+        - sprite: mossy_path.wall_face
+          at: [0, 5]
+      1:
+        - sprite: mossy_path.wall_edge_n
+      2:
+        - sprite: mossy_path.wall_edge_e
+          at: [14, 0]
+      8:
+        - sprite: mossy_path.wall_edge_w
