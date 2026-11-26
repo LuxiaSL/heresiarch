@@ -67,6 +67,55 @@ _DELTAS: dict[Direction, tuple[int, int]] = {
 }
 
 
+class LayoutParams(BaseModel):
+    """Floor-generator knobs for one dungeon theme. Defaults = zone 1's
+    shrine path (rectangular rooms on a 3×3 cell grid)."""
+
+    width: int = Field(default=40, ge=16, le=80)
+    height: int = Field(default=28, ge=12, le=60)
+    grid_cols: int = Field(default=3, ge=2, le=6)
+    grid_rows: int = Field(default=3, ge=2, le=6)
+    room_min_w: int = Field(default=4, ge=3)
+    room_min_h: int = Field(default=3, ge=3)
+    room_max_w: int = Field(default=10, ge=3)
+    room_max_h: int = Field(default=7, ge=3)
+    room_chance: float = Field(default=0.7, ge=0.0, le=1.0)
+    min_rooms: int = Field(default=4, ge=2)
+    extra_edge_chance: float = Field(default=0.2, ge=0.0, le=1.0)
+    # Shape: rect rooms, round clearings, or a per-room mix
+    room_shape: Literal["rect", "round", "mixed"] = "rect"
+    corridor_width: int = Field(default=1, ge=1, le=2)
+    # Organic edges: chance each wall tile touching a room is dug out
+    edge_jitter: float = Field(default=0.0, ge=0.0, le=0.6)
+    # Interior pillars on an odd lattice (never disconnects a room)
+    pillar_density: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _ranges(self) -> LayoutParams:
+        if self.room_max_w < self.room_min_w or self.room_max_h < self.room_min_h:
+            raise ValueError("room max size must be >= min size")
+        if self.min_rooms > self.grid_cols * self.grid_rows:
+            raise ValueError("min_rooms exceeds the number of grid cells")
+        return self
+
+
+class DungeonTheme(BaseModel):
+    """How a zone's floors look and are shaped (data/region_*/dungeon_themes).
+
+    ``id`` doubles as the art prefix: the client draws ``<id>.<frame>``
+    (e.g. ``mossy_path.wall_5``) and falls back to the base frame, so a
+    theme can override as much or as little art as it likes.
+    """
+
+    id: str
+    name: str = ""
+    notes: str = ""
+    layout: LayoutParams = Field(default_factory=LayoutParams)
+    backdrop: str = "shrine_path"     # battle backdrop frame: bg_<backdrop>
+    decor: list[str] = Field(default_factory=list)  # frame names scattered on floors
+    decor_density: float = Field(default=0.0, ge=0.0, le=0.3)
+
+
 class Room(BaseModel):
     """Axis-aligned rectangle of floor. Inclusive of x..x+w-1, y..y+h-1."""
 
@@ -132,6 +181,7 @@ class FloorState(BaseModel):
     turn: int = 0
     is_boss_floor: bool = False
     next_entity_seq: int = 0     # monotonically increasing entity id source
+    theme: str = "shrine_path"   # DungeonTheme id the floor was built with
 
     # --- Tile queries -------------------------------------------------
 

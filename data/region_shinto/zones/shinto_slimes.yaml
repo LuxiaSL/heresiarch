@@ -15,6 +15,7 @@
 
 - id: zone_01
   name: Shrine Entrance
+  dungeon_theme: shrine_path
   zone_level: 1
   enemy_level_range: [1, 2]
   region: shinto_slimes
@@ -57,6 +58,7 @@
 # No more fodder slime — every enemy here is a step up.
 - id: zone_02
   name: Mossy Path
+  dungeon_theme: mossy_path
   zone_level: 3
   enemy_level_range: [3, 5]
   region: shinto_slimes
@@ -102,6 +104,7 @@
 # alongside familiar slimes so the player learns one thing at a time.
 - id: zone_03
   name: Bamboo Thicket
+  dungeon_theme: bamboo_thicket
   zone_level: 5
   enemy_level_range: [5, 8]
   region: shinto_slimes
@@ -144,6 +147,7 @@
 # Zone 4: Mix of zone 2-3 enemies. Split Slime added in Chunk D.
 - id: zone_04
   name: Spirit Clearing
+  dungeon_theme: spirit_clearing
   zone_level: 8
   enemy_level_range: [8, 11]
   region: shinto_slimes
@@ -181,6 +185,7 @@
 # Zone 5: Full mix + Leech Slime + buffed Tengu (added in Chunk D)
 - id: zone_05
   name: Torii Descent
+  dungeon_theme: torii_descent
   zone_level: 11
   enemy_level_range: [11, 15]
   region: shinto_slimes
@@ -218,6 +223,7 @@
 # Zone 6: Hardest pre-endless. Full pool, dense compositions.
 - id: zone_06
   name: Inner Sanctum
+  dungeon_theme: inner_sanctum
   zone_level: 15
   enemy_level_range: [15, 20]
   region: shinto_slimes
@@ -256,6 +262,7 @@
 # or push straight into the Giga Slime Lair.
 - id: the_pit
   name: The Pit
+  dungeon_theme: the_pit
   zone_level: 20
   enemy_level_range: [18, 28]
   region: shinto_slimes
@@ -289,6 +296,7 @@
 # Zone 7: Final zone. Giga Slime Lair.
 - id: zone_07
   name: Giga Slime Lair
+  dungeon_theme: giga_slime_lair
   zone_level: 25
   enemy_level_range: [25, 33]
   region: shinto_slimes

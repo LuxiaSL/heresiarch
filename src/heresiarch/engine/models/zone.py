@@ -70,6 +70,7 @@ class ZoneTemplate(BaseModel):
     endless_max_level: int = 0
     # Dungeon layer (map mode). 0 floors = auto from encounter count.
     dungeon_floors: int = 0
+    dungeon_theme: str = "shrine_path"  # data/region_*/dungeon_themes/<id>.yaml
     floor_loot: FloorLootTable = Field(default_factory=FloorLootTable)
     floor_guarantees: list[FloorGuarantee] = Field(default_factory=list)
 

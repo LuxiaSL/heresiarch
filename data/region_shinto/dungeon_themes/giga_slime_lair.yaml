@@ -1,0 +1,14 @@
+# Zone 7 — the lair: round, slick, ooze-bitten caves.
+id: giga_slime_lair
+name: Giga Slime Lair
+notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
+backdrop: shrine_path
+decor: []
+decor_density: 0.0
+layout:
+  room_shape: round
+  room_min_w: 6
+  room_min_h: 5
+  room_max_w: 11
+  room_max_h: 8
+  edge_jitter: 0.3

@@ -113,3 +113,36 @@ Slime templates: `fodder_slime`, `slime`, `swime`, `mystic_slime`, `chunky_slime
 - **Draw order.** Draw floor and walls first. Then draw decor and items. Then draw actors sorted by tile row, so a hero south of a slime overlaps it.
 - **Walk cycle.** Play frames 0, 1, 0, 2. Mobs alternate 0 and 1 at about 2–3 Hz.
 - `ui_alert` sits one tile above a pack that has spotted the party. `ui_cursor` bobs above the battle target.
+
+## Dungeon themes (one look per zone)
+
+Every zone names a **dungeon theme**. A theme has two halves, and each half is its own file, so several people (or agents) can work on different themes without touching shared files:
+
+| Half | File | What it holds |
+|---|---|---|
+| Data | `data/region_<r>/dungeon_themes/<id>.yaml` | `layout` (generator knobs), `decor` (frame names to scatter on floors), `decor_density`, `backdrop` (battle backdrop id) |
+| Art | `art/src/themes/<id>.yaml` | its own `colors`/`palettes`, its own `sheet`, and sprites |
+
+**How art resolves.** The client draws `<id>.<frame>` when it exists and falls back to the base frame (zone 1's art) when it doesn't. A theme file can override the whole terrain set or just a few pieces. Battle backdrops are `bg_<backdrop>`. Decor names in the data file are looked up the same way: `decor_moss_0` resolves to `<id>.decor_moss_0`, then to `decor_moss_0`.
+
+**Rules for a theme art file** (`build.py` enforces them):
+- Top-level `theme: <id>`, and a `sheet:` of its own (e.g. `theme_<id>`).
+- Every sprite name, helper parts included, starts with `<id>.`, or with `bg_<id>` for a backdrop.
+- Colour and palette names must not clash with `palettes.yaml` or other themes. Prefix them, e.g. `moss_leaf1`, palette `mossy_path`.
+- A theme file must define the full terrain set: `<id>.floor_0..3`, `<id>.wall_0..15` (the `autotile` block with `prefix: "<id>.wall_"` is the easy way), `<id>.void`, `<id>.stairs_down`, `<id>.stairs_up`, `<id>.exit_torii`. A `bg_<id>` backdrop (160×96) is strongly encouraged. Set `backdrop: <id>` in the data file to use it.
+
+**Layout knobs** (`LayoutParams` in `src/heresiarch/engine/dungeon/models.py`):
+
+| Knob | What it does |
+|---|---|
+| `width`, `height` | Floor size in tiles |
+| `grid_cols`, `grid_rows` | The cell grid: one room or junction per cell |
+| `room_min_w/h`, `room_max_w/h` | Room size range |
+| `room_chance`, `min_rooms` | How many cells get rooms |
+| `extra_edge_chance` | Extra loops between rooms |
+| `room_shape` | `rect`, `round` (clearings) or `mixed` |
+| `corridor_width` | 1 or 2 |
+| `edge_jitter` | Ragged, organic room edges, 0–0.6 |
+| `pillar_density` | Columns inside rooms (never disconnecting) |
+
+**Preview.** Every build writes `art/preview/theme_<id>.png`: a real generated floor using the theme's layout, drawn with its tiles and decor under the client's rules, plus its battle backdrop. Look at it after every change.

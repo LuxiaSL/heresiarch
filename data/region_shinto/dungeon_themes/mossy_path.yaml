@@ -1,0 +1,10 @@
+# Zone 2 — overgrown: rooms soften at the edges, moss creeps in.
+id: mossy_path
+name: Mossy Path
+notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
+backdrop: shrine_path
+decor: [decor_grass_0, decor_grass_1, decor_grass_2]
+decor_density: 0.08
+layout:
+  room_shape: mixed
+  edge_jitter: 0.25

@@ -123,6 +123,12 @@ class AutotileSpec(BaseModel):
 class SourceFile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Theme files (art/src/themes/<id>.yaml) are self-contained: their own
+    # colours/palettes, every sprite named "<theme>.<frame>" (or
+    # "bg_<theme>…" for backdrops), and a required terrain set.
+    theme: str | None = None
+    colors: dict[str, str] = Field(default_factory=dict)
+    palettes: dict[str, dict[str, Any]] = Field(default_factory=dict)
     sheet: str = "misc"
     defaults: dict[str, Any] = Field(default_factory=dict)
     sprites: dict[str, dict[str, Any]] = Field(default_factory=dict)
@@ -147,13 +153,25 @@ def parse_hex(value: str, where: str) -> RGBA:
     return (int(rgb[0:2], 16), int(rgb[2:4], 16), int(rgb[4:6], 16), alpha)
 
 
-def load_palettes(path: Path) -> dict[str, dict[str, RGBA]]:
+def theme_files() -> list[Path]:
+    return sorted((SRC_DIR / "themes").glob("*.yaml"))
+
+
+def load_palettes(path: Path, extra: list[Path] | None = None) -> dict[str, dict[str, RGBA]]:
     raw = yaml.safe_load(path.read_text())
     if not isinstance(raw, dict):
         raise BuildError(f"{path}: expected a mapping")
-    colors_raw: dict[str, str] = raw.get("colors", {}) or {}
+    colors_raw: dict[str, str] = dict(raw.get("colors", {}) or {})
+    pal_raw: dict[str, dict[str, Any]] = dict(raw.get("palettes", {}) or {})
+    # Theme files may bring their own colours/palettes; names must not clash
+    for tpath in extra or []:
+        traw = yaml.safe_load(tpath.read_text()) or {}
+        for key, target in (("colors", colors_raw), ("palettes", pal_raw)):
+            for name, v in (traw.get(key) or {}).items():
+                if name in target:
+                    raise BuildError(f"{tpath.name}: {key[:-1]} {name!r} already defined elsewhere")
+                target[name] = v
     colors = {name: parse_hex(v, f"{path.name}: colors.{name}") for name, v in colors_raw.items()}
-    pal_raw: dict[str, dict[str, Any]] = raw.get("palettes", {}) or {}
 
     resolved: dict[str, dict[str, RGBA]] = {}
 
@@ -424,10 +442,13 @@ def _expand_for(for_: dict[str, list[Any]]) -> Iterable[dict[str, Any]]:
         yield vars_
 
 
-def load_sources(resolver: Resolver) -> None:
+def load_sources(resolver: Resolver) -> list[str]:
+    """Load every sprite source; returns the theme ids found."""
     files = sorted(p for p in SRC_DIR.glob("*.yaml") if p.name != "palettes.yaml")
+    files += theme_files()
     if not files:
         raise BuildError(f"no sprite sources in {SRC_DIR}")
+    themes: list[str] = []
     for path in files:
         raw = yaml.safe_load(path.read_text()) or {}
         try:
@@ -435,7 +456,19 @@ def load_sources(resolver: Resolver) -> None:
         except ValidationError as e:
             raise BuildError(f"{path.name}: {e}") from e
 
+        if src.theme:
+            if src.theme in themes:
+                raise BuildError(f"{path.name}: theme {src.theme!r} defined twice")
+            themes.append(src.theme)
+
         def make(name: str, body: dict[str, Any], origin: str) -> None:
+            if src.theme and not (
+                name.startswith(f"{src.theme}.") or name.startswith(f"bg_{src.theme}")
+            ):
+                raise BuildError(
+                    f"{origin}: {name!r} — sprites in theme file must be named "
+                    f"'{src.theme}.<frame>' or 'bg_{src.theme}…'"
+                )
             merged = {**src.defaults, **body}
             # A file-default palette is for parsing grids. On a derived
             # sprite it would repaint every cell and undo `swap`, so it
@@ -464,6 +497,14 @@ def load_sources(resolver: Resolver) -> None:
                 if at.palette:
                     body["palette"] = at.palette
                 make(f"{at.prefix}{mask}", body, f"{path.name} (autotile {at.prefix})")
+    return themes
+
+
+THEME_REQUIRED: list[str] = (
+    [f"floor_{i}" for i in range(4)]
+    + [f"wall_{m}" for m in range(16)]
+    + ["void", "stairs_down", "stairs_up", "exit_torii"]
+)
 
 
 # ---------------------------------------------------------------------------
@@ -737,14 +778,106 @@ def write_previews(placed: dict[str, list[Placed]], atlas: dict[str, Any]) -> li
 
 
 # ---------------------------------------------------------------------------
+# Theme previews: a REAL generated floor per dungeon theme
+# ---------------------------------------------------------------------------
+
+def _i32(v: int) -> int:
+    v &= 0xFFFFFFFF
+    return v - (1 << 32) if v & 0x80000000 else v
+
+
+def _dg_hash(x: int, y: int) -> int:
+    """Same as the client's dgHash (JS int32 multiply-xor, >>> 0)."""
+    return (_i32(x * 73856093) ^ _i32(y * 19349663)) & 0xFFFFFFFF
+
+
+def write_theme_previews(placed: dict[str, list[Placed]], atlas: dict[str, Any]) -> list[Path]:
+    """Render each data theme (data/region_*/dungeon_themes) on a real
+    generated floor with the client's rules: themed frame → base fallback,
+    8-neighbour wall rule, decor scatter, plus its battle backdrop."""
+    try:
+        from heresiarch.engine.dungeon.generator import PackSpec, generate_floor
+        from heresiarch.engine.dungeon.models import DungeonTheme
+    except ImportError as e:  # art build outside the project env
+        print(f"theme previews skipped (engine not importable: {e})")
+        return []
+    frames = {p.name: p.img for items in placed.values() for p in items}
+    data_root = REPO_ROOT / "data"
+    written: list[Path] = []
+    for tpath in sorted(data_root.glob("region_*/dungeon_themes/*.yaml")):
+        theme = DungeonTheme(**(yaml.safe_load(tpath.read_text()) or {}))
+        floor = generate_floor(
+            11, 1, 2,
+            [PackSpec(0, ("slime",)), PackSpec(1, ("swime",)), PackSpec(2, ("mystic_slime",))],
+            boss=None, layout=theme.layout, theme=theme.id,
+        )
+        g = floor.tiles
+
+        def tf(name: str) -> str | None:
+            for cand in (f"{theme.id}.{name}", name):
+                if cand in frames:
+                    return cand
+            return None
+
+        def walk(x: int, y: int) -> bool:
+            return 0 <= y < len(g) and 0 <= x < len(g[y]) and g[y][x] != "#"
+
+        img = Image.new("RGBA", (floor.width * TILE, floor.height * TILE), (7, 7, 11, 255))
+        for y in range(floor.height):
+            for x in range(floor.width):
+                c = g[y][x]
+                if c == "#":
+                    m = (1 if walk(x, y - 1) else 0) | (2 if walk(x + 1, y) else 0) \
+                        | (4 if walk(x, y + 1) else 0) | (8 if walk(x - 1, y) else 0)
+                    diag = any(walk(x + dx, y + dy) for dx in (-1, 1) for dy in (-1, 1))
+                    name = tf(f"wall_{m}") if (m or diag) else tf("void")
+                    if name:
+                        _blit(img, frames, atlas, name, x, y)
+                    continue
+                name = tf(f"floor_{_dg_hash(x, y) & 3}") or tf("floor_0")
+                if name:
+                    _blit(img, frames, atlas, name, x, y)
+                over = {">": "stairs_down", "X": "exit_torii", "<": "stairs_up"}.get(c)
+                if over and tf(over):
+                    _blit(img, frames, atlas, tf(over), x, y)  # type: ignore[arg-type]
+                    continue
+                if theme.decor and theme.decor_density > 0:
+                    h = _dg_hash(x * 7 + 3, y * 13 + 5)
+                    if (h % 1000) / 1000 < theme.decor_density:
+                        d = tf(theme.decor[(h >> 10) % len(theme.decor)])
+                        if d:
+                            _blit(img, frames, atlas, d, x, y)
+        for e in floor.entities:
+            sprite = f"mob_{e.enemy_template_ids[0]}_0" if e.enemy_template_ids else "ui_item_bag"
+            if sprite in frames:
+                _blit(img, frames, atlas, sprite, e.x, e.y)
+        _blit(img, frames, atlas, "hero_onmyoji_down_0", floor.player_x, floor.player_y)
+
+        scale = 2
+        floor_img = img.resize((img.width * scale, img.height * scale), Image.NEAREST)
+        bg_name = f"bg_{theme.backdrop}" if f"bg_{theme.backdrop}" in frames else "bg_shrine_path"
+        bg = frames[bg_name]
+        bg_img = bg.resize((bg.width * 3, bg.height * 3), Image.NEAREST)
+        W = max(floor_img.width, bg_img.width)
+        out = Image.new("RGBA", (W, 20 + floor_img.height + 8 + bg_img.height), (20, 14, 30, 255))
+        d = ImageDraw.Draw(out)
+        d.text((6, 4), f"theme {theme.id} - {theme.name}  (backdrop: {bg_name})",
+               fill=(255, 240, 200, 255), font=_font(11))
+        out.alpha_composite(floor_img, (0, 20))
+        out.alpha_composite(bg_img, (0, 20 + floor_img.height + 8))
+        path = PREVIEW_DIR / f"theme_{theme.id}.png"
+        out.save(path)
+        written.append(path)
+    return written
 
 
 def build(check_only: bool) -> int:
-    palettes = load_palettes(SRC_DIR / "palettes.yaml")
+    palettes = load_palettes(SRC_DIR / "palettes.yaml", extra=theme_files())
     resolver = Resolver(palettes)
-    load_sources(resolver)
+    themes = load_sources(resolver)
 
-    missing = [n for n in required_frames() if n not in resolver.entries or not resolver.entries[n].spec.export]
+    required = required_frames() + [f"{t}.{n}" for t in themes for n in THEME_REQUIRED]
+    missing = [n for n in required if n not in resolver.entries or not resolver.entries[n].spec.export]
     if missing:
         raise BuildError(
             f"atlas contract: {len(missing)} required frame(s) missing:\n  " + "\n  ".join(missing)
@@ -756,6 +889,7 @@ def build(check_only: bool) -> int:
         return 0
     atlas = write_outputs(placed)
     previews = write_previews(placed, atlas)
+    previews += write_theme_previews(placed, atlas)
     print(f"wrote {n_frames} frames, {len(placed)} sheets -> {OUT_DIR}")
     for p in previews:
         print(f"preview: {p}")

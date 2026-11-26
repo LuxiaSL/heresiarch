@@ -23,23 +23,18 @@ from heresiarch.engine.dungeon.models import (
     TILE_WALL,
     EntityKind,
     FloorState,
+    LayoutParams,
     MapEntity,
     Placement,
     Room,
 )
 from heresiarch.engine.dungeon.rules import reveal_around_player
 
-FLOOR_WIDTH: int = 40
-FLOOR_HEIGHT: int = 28
-GRID_COLS: int = 3
-GRID_ROWS: int = 3
-ROOM_MIN_W: int = 4
-ROOM_MIN_H: int = 3
-ROOM_MAX_W: int = 10
-ROOM_MAX_H: int = 7
-ROOM_CHANCE: float = 0.7
-MIN_ROOMS: int = 4
-EXTRA_EDGE_CHANCE: float = 0.2
+# Geometry defaults live on LayoutParams (dungeon/models.py); each zone's
+# DungeonTheme can override them. Kept as names for older call sites.
+_DEFAULT_LAYOUT = LayoutParams()
+FLOOR_WIDTH: int = _DEFAULT_LAYOUT.width
+FLOOR_HEIGHT: int = _DEFAULT_LAYOUT.height
 
 
 @dataclass(frozen=True)
@@ -79,17 +74,21 @@ def _carve(grid: list[list[str]], x: int, y: int) -> None:
             grid[y][x] = TILE_FLOOR
 
 
-def _carve_h(grid: list[list[str]], x0: int, x1: int, y: int) -> None:
+def _carve_h(grid: list[list[str]], x0: int, x1: int, y: int, width: int = 1) -> None:
     for x in range(min(x0, x1), max(x0, x1) + 1):
-        _carve(grid, x, y)
+        for k in range(width):
+            _carve(grid, x, y + k)
 
 
-def _carve_v(grid: list[list[str]], y0: int, y1: int, x: int) -> None:
+def _carve_v(grid: list[list[str]], y0: int, y1: int, x: int, width: int = 1) -> None:
     for y in range(min(y0, y1), max(y0, y1) + 1):
-        _carve(grid, x, y)
+        for k in range(width):
+            _carve(grid, x + k, y)
 
 
-def _connect(rng: random.Random, grid: list[list[str]], a: _Cell, b: _Cell) -> None:
+def _connect(
+    rng: random.Random, grid: list[list[str]], a: _Cell, b: _Cell, width: int = 1,
+) -> None:
     """Carve a Z-shaped corridor between two grid-adjacent cells."""
     ax, ay = a.anchor
     bx, by = b.anchor
@@ -100,56 +99,73 @@ def _connect(rng: random.Random, grid: list[list[str]], a: _Cell, b: _Cell) -> N
         # leave each footprint on its own row, meet at the mid column
         ly = rng.randint(left.top, left.bottom)
         ry = rng.randint(right.top, right.bottom)
-        _carve_h(grid, left.right, mid, ly)
-        _carve_v(grid, ly, ry, mid)
-        _carve_h(grid, mid, right.left, ry)
+        _carve_h(grid, left.right, mid, ly, width)
+        _carve_v(grid, ly, ry, mid, width)
+        _carve_h(grid, mid, right.left, ry, width)
     else:
         top, bottom = (a, b) if a.row < b.row else (b, a)
         lo, hi = top.bottom + 1, bottom.top - 1
         mid = rng.randint(lo, hi) if lo <= hi else (ay + by) // 2
         tx = rng.randint(top.left, top.right)
         bx2 = rng.randint(bottom.left, bottom.right)
-        _carve_v(grid, top.bottom, mid, tx)
-        _carve_h(grid, tx, bx2, mid)
-        _carve_v(grid, mid, bottom.top, bx2)
+        _carve_v(grid, top.bottom, mid, tx, width)
+        _carve_h(grid, tx, bx2, mid, width)
+        _carve_v(grid, mid, bottom.top, bx2, width)
+
+
+def _in_round(room: Room, x: int, y: int) -> bool:
+    """Ellipse inscribed in the room rect (round clearings)."""
+    rx, ry = room.w / 2, room.h / 2
+    cx, cy = room.x + rx - 0.5, room.y + ry - 0.5
+    return ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1.08
 
 
 def _build_layout(
-    rng: random.Random, width: int, height: int,
+    rng: random.Random, layout: LayoutParams,
 ) -> tuple[list[list[str]], list[Room]]:
+    width, height = layout.width, layout.height
+    cols, rows = layout.grid_cols, layout.grid_rows
     grid = [[TILE_WALL] * width for _ in range(height)]
-    cw = width // GRID_COLS
-    ch = height // GRID_ROWS
-    n_cells = GRID_COLS * GRID_ROWS
+    cw = width // cols
+    ch = height // rows
+    n_cells = cols * rows
 
-    # Decide which cells get rooms (at least MIN_ROOMS)
+    # Decide which cells get rooms (at least min_rooms)
     order = list(range(n_cells))
     rng.shuffle(order)
-    room_cells = {i for i in order if rng.random() < ROOM_CHANCE}
+    room_cells = {i for i in order if rng.random() < layout.room_chance}
     for i in order:
-        if len(room_cells) >= MIN_ROOMS:
+        if len(room_cells) >= layout.min_rooms:
             break
         room_cells.add(i)
 
     cells: list[_Cell] = []
     rooms: list[Room] = []
+    round_rooms: list[bool] = []
     for idx in range(n_cells):
-        col, row = idx % GRID_COLS, idx // GRID_COLS
+        col, row = idx % cols, idx // cols
         # 1-tile margin inside the cell, plus the outer map wall
         x0, x1 = col * cw + 2, (col + 1) * cw - 2
         y0, y1 = row * ch + 2, (row + 1) * ch - 2
         if idx in room_cells:
-            max_w = max(ROOM_MIN_W, min(ROOM_MAX_W, x1 - x0 + 1))
-            max_h = max(ROOM_MIN_H, min(ROOM_MAX_H, y1 - y0 + 1))
-            w = rng.randint(ROOM_MIN_W, max_w)
-            h = rng.randint(ROOM_MIN_H, max_h)
+            max_w = max(layout.room_min_w, min(layout.room_max_w, x1 - x0 + 1))
+            max_h = max(layout.room_min_h, min(layout.room_max_h, y1 - y0 + 1))
+            w = rng.randint(min(layout.room_min_w, max_w), max_w)
+            h = rng.randint(min(layout.room_min_h, max_h), max_h)
             rx = rng.randint(x0, max(x0, x1 - w + 1))
             ry = rng.randint(y0, max(y0, y1 - h + 1))
             room = Room(x=rx, y=ry, w=w, h=h)
             rooms.append(room)
+            is_round = layout.room_shape == "round" or (
+                layout.room_shape == "mixed" and rng.random() < 0.5
+            )
+            round_rooms.append(is_round)
             for yy in range(ry, ry + h):
                 for xx in range(rx, rx + w):
-                    _carve(grid, xx, yy)
+                    if not is_round or _in_round(room, xx, yy):
+                        _carve(grid, xx, yy)
+            if is_round:
+                _carve(grid, *room.center)  # tiny ellipses keep their heart
             cells.append(_Cell(
                 col, row, room, room.center,
                 rx, rx + w - 1, ry, ry + h - 1,
@@ -161,16 +177,16 @@ def _build_layout(
 
     # Spanning tree over the 4-neighbour cell grid (randomized DFS)
     def neighbours(i: int) -> list[int]:
-        col, row = i % GRID_COLS, i // GRID_COLS
+        col, row = i % cols, i // cols
         out = []
         if col > 0:
             out.append(i - 1)
-        if col < GRID_COLS - 1:
+        if col < cols - 1:
             out.append(i + 1)
         if row > 0:
-            out.append(i - GRID_COLS)
-        if row < GRID_ROWS - 1:
-            out.append(i + GRID_COLS)
+            out.append(i - cols)
+        if row < rows - 1:
+            out.append(i + cols)
         return out
 
     edges: set[tuple[int, int]] = set()
@@ -190,13 +206,78 @@ def _build_layout(
     # Extra loops
     for i in range(n_cells):
         for n in neighbours(i):
-            if n > i and (i, n) not in edges and rng.random() < EXTRA_EDGE_CHANCE:
+            if n > i and (i, n) not in edges and rng.random() < layout.extra_edge_chance:
                 edges.add((i, n))
 
     for a, b in sorted(edges):
-        _connect(rng, grid, cells[a], cells[b])
+        _connect(rng, grid, cells[a], cells[b], layout.corridor_width)
 
+    # Round rooms' corridor ends may stop at the rect edge outside the
+    # ellipse: the Z corridors start ON the footprint, so dig each round
+    # room's row/column spans between its centre and any corridor stub.
+    for room, is_round in zip(rooms, round_rooms):
+        if is_round:
+            _reconnect_round(grid, room)
+
+    if layout.edge_jitter > 0:
+        _jitter_edges(rng, grid, rooms, layout.edge_jitter)
+    if layout.pillar_density > 0:
+        _place_pillars(rng, grid, rooms, layout.pillar_density)
     return grid, rooms
+
+
+def _reconnect_round(grid: list[list[str]], room: Room) -> None:
+    """Dig straight from the room centre to any floor on its rect border
+    that sits outside the ellipse (a corridor that arrived at the rect)."""
+    cx, cy = room.center
+    for x in range(room.x, room.x + room.w):
+        for y in (room.y, room.y + room.h - 1):
+            if grid[y][x] != TILE_WALL and not _in_round(room, x, y):
+                _carve_v(grid, y, cy, x)
+                _carve_h(grid, x, cx, cy)
+    for y in range(room.y, room.y + room.h):
+        for x in (room.x, room.x + room.w - 1):
+            if grid[y][x] != TILE_WALL and not _in_round(room, x, y):
+                _carve_h(grid, x, cx, y)
+                _carve_v(grid, y, cy, cx)
+
+
+def _jitter_edges(
+    rng: random.Random, grid: list[list[str]], rooms: list[Room], p: float,
+) -> None:
+    """Dig random wall tiles hugging rooms: organic edges. Only ever adds
+    floor next to existing floor, so connectivity can't break."""
+    h, w = len(grid), len(grid[0])
+    dig: list[tuple[int, int]] = []
+    for room in rooms:
+        for y in range(room.y - 1, room.y + room.h + 1):
+            for x in range(room.x - 1, room.x + room.w + 1):
+                if not (1 < x < w - 2 and 1 < y < h - 2) or grid[y][x] != TILE_WALL:
+                    continue
+                if any(grid[y + dy][x + dx] != TILE_WALL
+                       for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                    if rng.random() < p:
+                        dig.append((x, y))
+    for x, y in dig:
+        grid[y][x] = TILE_FLOOR
+
+
+def _place_pillars(
+    rng: random.Random, grid: list[list[str]], rooms: list[Room], p: float,
+) -> None:
+    """Pillars on an odd lattice strictly inside rooms, each with all 8
+    neighbours floor. Lattice spacing keeps pillars apart, so the floor
+    around them stays one connected piece."""
+    for room in rooms:
+        for y in range(room.y + 1, room.y + room.h - 1, 2):
+            for x in range(room.x + 1, room.x + room.w - 1, 2):
+                if (x, y) == room.center:
+                    continue
+                if all(
+                    grid[y + dy][x + dx] == TILE_FLOOR
+                    for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                ) and rng.random() < p:
+                    grid[y][x] = TILE_WALL
 
 
 def bfs_distances(
@@ -234,12 +315,14 @@ def generate_floor(
     boss: PackSpec | None = None,
     items: list[FloorItemSpec] | None = None,
     has_stairs: bool = True,
-    width: int = FLOOR_WIDTH,
-    height: int = FLOOR_HEIGHT,
+    layout: LayoutParams | None = None,
+    theme: str = "shrine_path",
 ) -> FloorState:
     """Generate one floor. Deterministic for a given argument set."""
+    layout = layout or _DEFAULT_LAYOUT
+    width, height = layout.width, layout.height
     rng = random.Random(seed)
-    grid, rooms = _build_layout(rng, width, height)
+    grid, rooms = _build_layout(rng, layout)
 
     occupied: set[tuple[int, int]] = set()
 
@@ -354,6 +437,7 @@ def generate_floor(
         entities=entities,
         is_boss_floor=boss is not None,
         next_entity_seq=seq,
+        theme=theme,
     )
     reveal_around_player(floor)
     return floor

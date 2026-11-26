@@ -1,0 +1,17 @@
+# Zone 3 — dense and maze-like: many small rooms, lots of loops.
+id: bamboo_thicket
+name: Bamboo Thicket
+notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
+backdrop: shrine_path
+decor: [decor_bamboo, decor_grass_0]
+decor_density: 0.06
+layout:
+  grid_cols: 4
+  grid_rows: 3
+  room_min_w: 3
+  room_max_w: 7
+  room_max_h: 5
+  room_chance: 0.75
+  min_rooms: 6
+  extra_edge_chance: 0.4
+  edge_jitter: 0.12

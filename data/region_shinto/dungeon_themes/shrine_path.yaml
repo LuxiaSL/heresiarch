@@ -1,0 +1,10 @@
+# Zone 1 — the reference look: warm stone paths, cedar-hedge walls over
+# ishigaki stone, rectangular rooms on a 3×3 cell grid. Its art is the
+# unprefixed base frame set every other theme falls back to.
+id: shrine_path
+name: Shrine Entrance
+notes: "Tutorial grounds. Tidy, readable, warm."
+backdrop: shrine_path
+decor: [decor_lantern, decor_grass_0, decor_grass_1, decor_grass_2]
+decor_density: 0.04
+layout: {}

@@ -927,3 +927,68 @@ def test_healing_next_to_alerted_pack_gets_you_ambushed(dsession: GameSession) -
     s.use_consumable("minor_potion", mc)
     assert s.phase == Phase.COMBAT
     assert s.combat_opening[0] == "ambush"
+
+
+# ----------------------------------------------------------------------
+# Dungeon themes (per-zone layout + art prefix)
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("seed", range(25))
+def test_every_shipped_theme_is_connected(game_data: GameData, seed: int) -> None:
+    for tid, theme in game_data.dungeon_themes.items():
+        packs = [PackSpec(i, ("slime",)) for i in range(3)]
+        floor = generate_floor(seed, 1, 2, packs, layout=theme.layout, theme=tid)
+        reach = set(bfs_distances(floor.tiles, (floor.player_x, floor.player_y)))
+        assert _walkable(floor) <= reach, (tid, seed)
+        assert floor.theme == tid
+        assert len(floor.tiles) == theme.layout.height
+        assert len(floor.tiles[0]) == theme.layout.width
+
+
+def test_every_zone_names_a_real_theme(game_data: GameData) -> None:
+    for zone in game_data.zones.values():
+        assert zone.dungeon_theme in game_data.dungeon_themes, zone.id
+
+
+def test_zone_floor_carries_its_theme(dsession: GameSession) -> None:
+    dsession.enter_zone("zone_01")
+    assert _floor(dsession).theme == "shrine_path"
+
+
+def test_pillars_and_round_rooms_shape_the_floor() -> None:
+    from heresiarch.engine.dungeon.models import LayoutParams
+
+    pillars = LayoutParams(pillar_density=1.0, room_min_w=7, room_min_h=5,
+                           room_max_w=9, room_max_h=7)
+    floor = generate_floor(3, 1, 1, [], layout=pillars)
+    inner_walls = sum(
+        1 for r in floor.rooms
+        for y in range(r.y + 1, r.y + r.h - 1)
+        for x in range(r.x + 1, r.x + r.w - 1)
+        if floor.tiles[y][x] == "#"
+    )
+    assert inner_walls > 0
+    round_ = LayoutParams(room_shape="round", room_min_w=7, room_min_h=6,
+                          room_max_w=9, room_max_h=8)
+    floor = generate_floor(3, 1, 1, [], layout=round_)
+    corners = [floor.tiles[r.y][r.x] for r in floor.rooms]
+    assert corners.count("#") >= len(floor.rooms) // 2  # rect corners cut away
+
+
+def test_layout_params_validate() -> None:
+    from pydantic import ValidationError
+
+    from heresiarch.engine.dungeon.models import LayoutParams
+
+    with pytest.raises(ValidationError):
+        LayoutParams(room_min_w=8, room_max_w=5)
+    with pytest.raises(ValidationError):
+        LayoutParams(grid_cols=2, grid_rows=2, min_rooms=5)
+
+
+def test_unknown_theme_fails_validation(game_data: GameData) -> None:
+    zones = dict(game_data.zones)
+    zones["zone_03"] = zones["zone_03"].model_copy(update={"dungeon_theme": "nope"})
+    gd = game_data.model_copy(update={"zones": zones})
+    assert any("nope" in e for e in gd.validate_cross_references())

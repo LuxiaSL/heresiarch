@@ -1281,6 +1281,11 @@ function dgLoadAtlas() {
     .catch(() => { DG.atlasState = "none"; });
 }
 function frame(name) { return DG.atlas && DG.atlas.frames[name]; }
+// Theme art: "<theme>.<name>" first, then the base (zone 1) frame
+function tframe(name) {
+  const th = DG.view && DG.view.theme;
+  return (th && frame(`${th}.${name}`)) || frame(name);
+}
 function firstFrame(...names) { for (const n of names) { const f = frame(n); if (f) return f; } return null; }
 // Draw a frame with its anchor (ax, ay) on pixel (px, py)
 function blit(ctx, f, px, py, flip) {
@@ -1409,7 +1414,7 @@ function dgDrawTile(ctx, v, x, y, px, py) {
     const diag = dgWalk(v, x - 1, y - 1) || dgWalk(v, x + 1, y - 1)
               || dgWalk(v, x - 1, y + 1) || dgWalk(v, x + 1, y + 1);
     if (art) {
-      const f = (mask || diag) ? frame("wall_" + mask) : frame("void");
+      const f = (mask || diag) ? tframe("wall_" + mask) : tframe("void");
       if (f && blit(ctx, f, px + (f.ax ?? 8), py + (f.ay ?? 16))) return;
     }
     if (!mask) { ctx.fillStyle = PH.void; ctx.fillRect(px, py, TILE, TILE); return; }
@@ -1426,11 +1431,20 @@ function dgDrawTile(ctx, v, x, y, px, py) {
   }
   // walkable ground
   if (art) {
-    const f = frame("floor_" + (dgHash(x, y) & 3)) || frame("floor_0");
+    const f = tframe("floor_" + (dgHash(x, y) & 3)) || tframe("floor_0");
     if (f) blit(ctx, f, px + (f.ax ?? 8), py + (f.ay ?? 16));
-    const over = c === ">" ? frame("stairs_down") : c === "X" ? frame("exit_torii")
-      : c === "<" ? frame("stairs_up") : null;
+    const over = c === ">" ? tframe("stairs_down") : c === "X" ? tframe("exit_torii")
+      : c === "<" ? tframe("stairs_up") : null;
     if (over) { blit(ctx, over, px + (over.ax ?? 8), py + (over.ay ?? 16)); return; }
+    // Decor: deterministic per tile, plain floor only, drawn under actors
+    const dec = v.decor || [];
+    if (dec.length && v.decor_density > 0) {
+      const hsh = dgHash(x * 7 + 3, y * 13 + 5);
+      if ((hsh % 1000) / 1000 < v.decor_density) {
+        const df = tframe(dec[(hsh >>> 10) % dec.length]);
+        if (df) blit(ctx, df, px + (df.ax ?? 8), py + (df.ay ?? 16));
+      }
+    }
     if (f) return;
   }
   ctx.fillStyle = (dgHash(x, y) & 1) ? PH.floor : PH.floor2;
@@ -1711,7 +1725,7 @@ function battleStage() {
   const c = S.combat;
   if (!c || DG.atlasState !== "ready") return "";
   // The stage IS the backdrop frame, scaled to the app width (5:3)
-  const bg = frame("bg_shrine_path");
+  const bg = frame(`bg_${c.backdrop || "shrine_path"}`) || frame("bg_shrine_path");
   const appW = Math.max(200, (document.getElementById("app")?.clientWidth || 360) - 4);
   let bgStyle = "";
   if (bg && DG.sheets[bg.sheet]) {

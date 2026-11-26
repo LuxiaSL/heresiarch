@@ -1,0 +1,17 @@
+# Zone 4 — a few wide round clearings joined by thin paths.
+id: spirit_clearing
+name: Spirit Clearing
+notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
+backdrop: shrine_path
+decor: [decor_grass_0, decor_grass_1, decor_lantern]
+decor_density: 0.05
+layout:
+  grid_cols: 3
+  grid_rows: 2
+  room_min_w: 7
+  room_min_h: 6
+  room_max_w: 12
+  room_max_h: 10
+  room_shape: round
+  min_rooms: 4
+  room_chance: 0.85

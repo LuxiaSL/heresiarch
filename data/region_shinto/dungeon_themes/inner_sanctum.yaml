@@ -1,0 +1,16 @@
+# Zone 6 — halls of columns: big rectangular rooms full of pillars.
+id: inner_sanctum
+name: Inner Sanctum
+notes: "First-pass layout by heresiarch-10; art pending (falls back to shrine_path)."
+backdrop: shrine_path
+decor: [decor_lantern]
+decor_density: 0.02
+layout:
+  grid_cols: 3
+  grid_rows: 2
+  room_min_w: 7
+  room_min_h: 5
+  room_max_w: 12
+  room_max_h: 9
+  pillar_density: 0.55
+  min_rooms: 4

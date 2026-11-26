@@ -13,6 +13,7 @@ from heresiarch.engine.models.enemies import EnemyTemplate
 from heresiarch.engine.models.items import Item
 from heresiarch.engine.models.jobs import JobTemplate
 from heresiarch.engine.models.loot import EnemyLootTable
+from heresiarch.engine.dungeon.models import DungeonTheme
 from heresiarch.engine.models.region_map import AsciiMap
 from heresiarch.engine.models.town import TownTemplate
 from heresiarch.engine.models.zone import ZoneTemplate
@@ -29,6 +30,7 @@ class GameData(BaseModel):
     towns: dict[str, TownTemplate] = {}
     zones: dict[str, ZoneTemplate] = {}
     maps: dict[str, AsciiMap] = {}
+    dungeon_themes: dict[str, DungeonTheme] = {}
 
     def validate_cross_references(self) -> list[str]:
         """Check that all ID references resolve. Returns list of errors."""
@@ -123,6 +125,14 @@ class GameData(BaseModel):
                     errors.append(
                         f"Zone '{zone_id}' unlock requires unknown item '{req.item_id}'"
                     )
+            if (
+                zone.dungeon_theme
+                and self.dungeon_themes
+                and zone.dungeon_theme not in self.dungeon_themes
+            ):
+                errors.append(
+                    f"Zone '{zone_id}' uses unknown dungeon theme '{zone.dungeon_theme}'"
+                )
             finds = [*zone.floor_loot.entries, *zone.floor_guarantees]
             for entry in finds:
                 if entry.item_id is not None and entry.item_id not in self.items:
@@ -313,6 +323,22 @@ def load_maps(directory: Path) -> dict[str, AsciiMap]:
     return maps
 
 
+def load_dungeon_themes(directory: Path) -> dict[str, DungeonTheme]:
+    """One theme per YAML file (so parallel theme work never collides)."""
+    themes: dict[str, DungeonTheme] = {}
+    if not directory.exists():
+        return themes
+    for path in sorted(directory.glob("*.yaml")):
+        data = _load_yaml(path)
+        if data is None:
+            continue
+        theme = DungeonTheme(**data)
+        if theme.id in themes:
+            raise ValueError(f"Duplicate dungeon theme id '{theme.id}' ({path.name})")
+        themes[theme.id] = theme
+    return themes
+
+
 def load_towns(directory: Path) -> dict[str, TownTemplate]:
     """Load all town YAML files from a directory.
 
@@ -350,12 +376,14 @@ def load_all(data_dir: Path) -> GameData:
     zones: dict[str, ZoneTemplate] = {}
     maps: dict[str, AsciiMap] = {}
     towns: dict[str, TownTemplate] = {}
+    dungeon_themes: dict[str, DungeonTheme] = {}
 
     for region_dir in sorted(data_dir.glob("region_*")):
         if region_dir.is_dir():
             zones.update(load_zones(region_dir / "zones"))
             maps.update(load_maps(region_dir / "maps"))
             towns.update(load_towns(region_dir / "towns"))
+            dungeon_themes.update(load_dungeon_themes(region_dir / "dungeon_themes"))
 
     game_data = GameData(
         jobs=jobs,
@@ -366,6 +394,7 @@ def load_all(data_dir: Path) -> GameData:
         towns=towns,
         zones=zones,
         maps=maps,
+        dungeon_themes=dungeon_themes,
     )
 
     errors = game_data.validate_cross_references()

@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 from heresiarch.engine.dungeon.generator import FloorItemSpec, PackSpec, generate_floor
 from heresiarch.engine.dungeon.models import (
     RETREAT_TILES,
+    DungeonTheme,
     TILE_ENTRY,
     TILE_EXIT,
     Direction,
@@ -156,15 +157,22 @@ class DungeonDirector:
         n = self.gl.rng.randint(ENDLESS_MIN_ENEMIES, ENDLESS_MAX_ENEMIES)
         return PackSpec(None, tuple(self.gl.rng.choice(pool) for _ in range(n)))
 
+    def _theme(self, zone: ZoneTemplate) -> DungeonTheme:
+        """The zone's theme; unknown/missing ids fall back to defaults."""
+        theme = self.gl.game_data.dungeon_themes.get(zone.dungeon_theme)
+        return theme or DungeonTheme(id=zone.dungeon_theme or "shrine_path")
+
     def _build_floor(
         self, run: RunState, zone: ZoneTemplate, zs: ZoneState, floor_number: int,
     ) -> FloorState:
         seed = self.gl.rng.getrandbits(31)
         items = self._roll_items(run, zone, zs, floor_number)
+        theme = self._theme(zone)
+        look = {"layout": theme.layout, "theme": theme.id}
 
         if zone.is_endless:
             packs = [self._endless_pack(zone) for _ in range(DUNGEON_ENDLESS_PACKS_PER_FLOOR)]
-            return generate_floor(seed, floor_number, 0, packs, items=items)
+            return generate_floor(seed, floor_number, 0, packs, items=items, **look)
 
         if zs.is_cleared:
             non_boss = [i for i, e in enumerate(zone.encounters) if not e.is_boss]
@@ -176,7 +184,7 @@ class DungeonDirector:
                     for _ in range(DUNGEON_OVERSTAY_PACKS_PER_FLOOR)
                 )
             ]
-            return generate_floor(seed, floor_number, 0, packs, items=items)
+            return generate_floor(seed, floor_number, 0, packs, items=items, **look)
 
         plan = floor_plan(zone)
         total = len(plan)
@@ -199,7 +207,7 @@ class DungeonDirector:
                 packs.extend(PackSpec(i, _template_ids(zone, i)) for i in bosses[1:])
         return generate_floor(
             seed, floor_number, total, packs,
-            boss=boss, items=items, has_stairs=not is_last,
+            boss=boss, items=items, has_stairs=not is_last, **look,
         )
 
     # ------------------------------------------------------------------

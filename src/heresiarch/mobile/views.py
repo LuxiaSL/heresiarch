@@ -136,6 +136,8 @@ class CombatEventView(BaseModel):
 
 class CombatView(BaseModel):
     round_number: int
+    backdrop: str = "shrine_path"  # battle backdrop frame: bg_<backdrop>
+    theme: str = "shrine_path"
     # How the fight opened on the map (dungeon mode): "first_strike" /
     # "ambush" / "" plus a one-line description. Shown before round 1.
     opening: str = ""
@@ -330,6 +332,9 @@ class DungeonView(BaseModel):
 
     zone_id: str
     zone_name: str
+    theme: str = "shrine_path"           # art prefix: frames "<theme>.<name>"
+    decor: list[str] = Field(default_factory=list)  # frames to scatter on floor
+    decor_density: float = 0.0
     floor_number: int
     total_floors: int = 0     # 0 = unbounded (overstay / endless)
     turn: int = 0
@@ -741,8 +746,16 @@ def build_combat_view(session: GameSession) -> CombatView | None:
 
     names = _combatant_names(session)
     opening, opening_text = session.combat_opening
+    backdrop, theme_id = "shrine_path", "shrine_path"
+    zone = session.game_data.zones.get(run.current_zone_id or "")
+    if zone is not None:
+        th = session.game_data.dungeon_themes.get(zone.dungeon_theme)
+        if th is not None:
+            backdrop, theme_id = th.backdrop, th.id
     return CombatView(
         round_number=combat.round_number,
+        backdrop=backdrop,
+        theme=theme_id,
         opening=opening,
         opening_text=opening_text,
         players=[
@@ -1108,9 +1121,13 @@ def build_dungeon_view(session: GameSession) -> DungeonView | None:
     ]
     step = session.last_step
     tile = floor.tile(floor.player_x, floor.player_y)
+    theme = session.game_data.dungeon_themes.get(floor.theme)
     return DungeonView(
         zone_id=run.current_zone_id,
         zone_name=zone.name if zone else run.current_zone_id,
+        theme=floor.theme,
+        decor=list(theme.decor) if theme else [],
+        decor_density=theme.decor_density if theme else 0.0,
         floor_number=floor.floor_number,
         total_floors=floor.total_floors,
         turn=floor.turn,
